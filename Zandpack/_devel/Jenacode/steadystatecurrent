@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan 31 10:48:21 2023
+
+@author: aleksander
+
+Here 12.24 from AP Jauho & H.Haug is used.
+
+
+"""
+
+import sys
+import os
+import numpy as np
+import joblib as jl
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.Quasiparticle    import SteadyState
+from scipy.integrate import simpson
+from tqdm import tqdm
+
+args = sys.argv[1:]
+print('steadystatecurrent Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'ik': '0',            # k-point
+           'kT_0' :  '0.025',
+           'kT_1' :  '0.025',
+           'mu_0' :  '0.0',
+           'mu_1' :  '0.0',
+           'Nlead': '2',
+           'xkT'  : '10',
+           'eta'  : '1e-3',
+           'file':'TDT'
+           }
+
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+Mu_0  = np.array([float(options['mu_'+str(i)]) for i in range(int(options['Nlead']))])
+KT_0  = np.array([float(options['kT_'+str(i)]) for i in range(int(options['Nlead']))])
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Bias    import dH, bias
+from Initial import t0, t1, hbar#, Arrs
+
+def dH_k(t,sigma):
+    return dH(t,sigma)[int(options['ik'])]
+
+Ham     = np.load(options['file']+'/Arrays/H_Ortho.npy')[int(options['ik'])]
+DM0     = np.load(options['file']+'/Arrays/DM_Ortho.npy')#[int(options['ik'])]
+SEs     = from_saved_file(options['file'] + '/Arrays', ik = int(options['ik']))
+EqCalc  = SteadyState(Ham, SEs)
+
+J,E     = EqCalc.Current(float(options['eta']), dH = dH_k(t0,DM0), 
+                         mu_i = Mu_0, kT_i = KT_0)
+
+print(J,E)
+ 
+
+
+
+
+

@@ -1,0 +1,875 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri May 27 12:00:31 2022
+
+@author: aleksander
+"""
+import numpy as np
+from mpi4py import MPI
+import os, sys, inspect
+import Zandpack.k0nfig as config
+from Zandpack.TimedependentTransport import Q_nb
+from Zandpack.mpi_RK4pars_dev import A, B, CT, CH, RK_N, idxholder, hnew_func
+from Zandpack.mpi_splitter import (
+    partition_scheme3,
+    get_sources_scheme2,
+    find_max_orbital_idx_per_lead,
+)
+from Zandpack.mpi_funcs import MM, TERR2_sig, TERR2_psi, TERR2_omg
+from Zandpack.mpi_funcs import (
+    step_fourth_sig,
+    step_fourth_psi,
+    step_fourth_omg,
+)
+from Zandpack.mpi_funcs import _multiply, OuterSubtraction_hard_opti
+from Zandpack.docstrings import DocString_MPI_implementation as docstring
+from Zandpack.mpi_timer import TimeBot
+from time import time, sleep
+
+SourceCode = inspect.getsource
+# Initial Navigation to directory given
+args = sys.argv[1:]
+original_folder = os.getcwd()
+ChDir = False
+Check = ["Dir" in v for v in args]
+# MPI stardard import
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+if sum(Check) > 1:
+    if rank == 0:
+        print("Dont specify several directories. Stopping processes")
+        print("\n\n\n")
+    assert 1 == 0
+if True in Check:
+    i = Check.index(True)
+    if "=" not in args[i]:
+        if rank == 0:
+            print("Specify path like this: ")
+            print("Dir = /path/to/somewhere/ ")
+            print("Stopping processes")
+            print("\n\n\n")
+
+        assert 1 == 0
+
+    path = args[0].replace(" ", "").split("=")[1]
+    os.chdir(path)
+    new_folder = os.getcwd()
+    sys.path.append(new_folder)
+
+# Initial Handling of keywords given
+
+from Initial import Arrs as D
+from Initial import (
+    t0,
+    t1,
+    stepsize,
+    print_timings,
+    usesave,
+    saveevery,
+    name,
+    eps,
+    hbar,
+    n_dm_compress,
+    save_PI,
+)
+from Initial import checkpoints, save_checkpoints, LoadFromFull
+
+checkpoints = np.array(checkpoints)
+checkpoints = checkpoints[checkpoints > t0]
+checkpoints = checkpoints[checkpoints < t1]
+checkpoint_bookkeeper = np.zeros(len(checkpoints), dtype=int)
+from Bias import dH, bias, dissipator
+
+# Shorthands
+nax = np.newaxis
+DT = np.complex128
+
+
+def CZ(s):
+    return np.zeros(s, dtype=DT)
+
+
+# Readins from saved folder, imported from "Initial"
+NK = D["H_Ortho"].shape[0]
+NO = D["H_Ortho"].shape[-1]
+NL = D["psi_shape"][1]
+NX = D["psi_shape"][2]
+NOT = D["omg_shape"][3]
+
+# Bookkeeping MPI
+src = get_sources_scheme2(size)
+# Upper cutoff for nonzero eigenvalues per lead
+noT_lead = find_max_orbital_idx_per_lead(D["GG_P"], D["GL_P"], D["zero_tol"])
+ROLE_INFO = partition_scheme3(rank, size, NK, NL, NX, noT_lead)
+ROLE = ROLE_INFO[0]
+tag_count = 10
+Worker_tags = []
+Worker_idx = []
+for v in src:
+    Worker_idx += [partition_scheme3(v, size, NK, NL, NX, noT_lead)[1:]]
+    Worker_tags += [tag_count]
+    tag_count += 1
+if rank == 0:
+    print(src)
+# Timer
+_Timer  = TimeBot(ROLE, print_timings)  # simple timing class
+PI_dest = []
+PI_splits = np.array_split(np.arange(1,size),config.N_pi_summers)
+
+
+def start_print():
+    print(docstring)
+    print("\nMASTER PROCESS STARTED\n")
+    print("Running on " + str(size) + " nodes")
+    print("Using Tolerance: " + str(eps))
+    print("Using Folder: " + str(name))
+    print("Using PI version:", str(config.PI_VERSION))
+    print("Using Parallel PI:", str(config.PARALLEL_PI))
+    print(
+        "Using Parallel outer subtraction:",
+        str(config.NUMBA_OUTER_SUBTRACTION_PARALLEL),
+    )
+    print("Lazy Omega: " + str(config.MPI_LAZY_OMEGA))
+    print("OMP_NUM_THREADS: " + str(os.environ["OMP_NUM_THREADS"]))
+    try:
+        print("NUMBA_NUM_THREADS: " + str(os.environ["NUMBA_NUM_THREADS"]))
+    except:
+        print("NUMBA_NUM_THREADS: UNKNOWN")
+    print("Folder Path: " + os.getcwd())
+    print("Propagation algorithm: Adaptive Runge-Kutta " + config.RK_Method)
+    print("NumPy Config:")
+    np.show_config()
+    print("\n")
+    print("Args: " + str(args))
+    print("Source-scheme:\n")
+    print("Master Node: " + str(rank))
+    print("Worker Nodes: " + str(src)[1:-1])
+    print("Index splitting: ")
+    for i, widx in enumerate(Worker_idx):
+        print("Worker Node " + str(src[i]) + " has indecies:")
+        print("k-indices: ")
+        print(widx[0])
+        print("lead-indices: ")
+        print(widx[1])
+        print("pole-indices: ")
+        print(widx[2])
+        print("eig-indices: ")
+        print(widx[3])
+        print("\n")
+
+    print("\n")
+    print("Zand program sourcecode location: \n", __file__)
+    print("\n")
+    print("Timedependent Bias:")
+    print(SourceCode(bias))
+    print("\n")
+    print("Timedependent part of Hamiltonian dH:")
+    print(SourceCode(dH))
+    print("\n")
+    print("Dissipator ")
+    print(SourceCode(dissipator))
+    print("\n\n")
+    print("hbar = " + str(hbar))
+    print("\n\n")
+    print("Will save checkpoints: ", save_checkpoints)
+    print("Checkpoints: ")
+    print(checkpoints, " \n")
+    print("Using previous save: ", usesave)
+    print("\n\nStart of Run!")
+
+
+# Function for density matrix EOM
+def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
+    start_print()
+    filename = name + ".MASTER"
+    with open(filename, "w") as file:
+        file.write("\nfile for Master node\n\n")
+
+    # Stepsize updater, hnew(eps, TE)
+    # eps: error-tolerance
+    # TE : calculated error
+    def hnew(hin, TEin):
+        return hnew_func(hin, TE, eps)
+
+    H0 = D["H_Ortho"]
+    Ht = CZ(H0.shape)
+    # Possibly load in saved files
+    if usesave == False:
+        sig0 = D["DM_Ortho"].copy()
+        t0 = T0
+        h = stepsize
+    else:
+        try:
+            sig0 = np.load(name + "_save/" + "last_sig.npy")
+        except:
+            print("Using /Arrays/DM_Ortho.npy!")
+            sig0 = D["DM_Ortho"]
+
+        try:
+            t0 = float(np.load(name + "_save/" + "last_time.npy"))
+            h = float(np.load(name + "_save/" + "last_stepsize.npy"))
+        except:
+            t0 = 0.0 + T0
+            h = 0.0 + stepsize
+
+    # Arrays to place values of various intermediate samplings in the Runge-Kutta-method
+    tmp_sig = D["DM_Ortho"].copy()
+    tmp_PI = CZ((NK, NL, NO, NO))
+    SIGS = CZ((RK_N + 1,) + tmp_sig.shape)
+    Delta_a = np.zeros(NL)
+    global_psi = CZ((NK, NL, NX, NOT, NO))
+    # Initial Values for sigma
+    SIGS[-1] = sig0
+    del sig0
+    # Arrays to assemble PI and PSI in.
+    # the MPI4py needs them to be preallocated.
+    PI_buff = []
+    for v in Worker_idx:
+        #             local nk     # local na  orb orb
+        PI_buff += [CZ((len(v[0]), len(v[1]), NO, NO))]
+    PSI_buff = []
+    for v in Worker_idx:
+        #             local nk     # local na  local nx     orb  orb
+        PSI_buff += [CZ((len(v[0]), len(v[1]), len(v[2]), len(v[3]), NO))]
+
+    # Create save directory
+    try:
+        os.mkdir(name + "_save")
+    except:
+        pass
+
+    files = os.listdir(name + "_save")
+    for f in files:
+        if f[0:2] == "DM":
+            os.remove(name + "_save/" + f)
+    TIME_START = time()
+    step_count = 0
+    currents = [[] for i in range(NL)]
+    DM = [SIGS[-1].copy()]
+    times = [t0]
+    PI_holder = []
+    list_request = [None for i in range(len(src))]
+    worker_errors = [np.zeros(2) for i in range(len(src))]
+    while t0 < t1:
+        Step_Fourth = (
+            0  # 0 or 1. 0 repeats same step with lesser stepsize, 1 propagates
+        )
+        _Timer.reset()
+        _Timer.time(["Main Loop"])
+        while Step_Fourth == 0:
+            dt = A * h
+            for i in range(RK_N):
+                _Timer.time(["Initial Matrix Multiplication"])
+                _idx_i = idxholder[
+                    i
+                ]  # Indexing for computing intermediate result, see mpi_funcs.py
+                if i == 0:
+                    tmp_sig[:, :, :] = SIGS[-1]
+                else:
+                    MM(
+                        SIGS[_idx_i].transpose(1, 2, 3, 0),
+                        B[i, _idx_i],
+                        tmp_sig,
+                    )
+                _Timer.time(
+                    ["Initial Matrix Multiplication", "System creation at ts"]
+                )
+                # system parameters at the time ts
+                ts = t0 + dt[i]
+                Ht = H0 + dH(ts, tmp_sig)
+                for _not_i in range(NL):
+                    Delta_a[_not_i] = bias(ts, _not_i)
+                _Timer.time(
+                    ["System creation at ts", "Broadcast System at ts"]
+                )
+                # Broadcast system parameters to worker nodes
+                h = comm.bcast(h, root=0)
+                ts = comm.bcast(ts, root=0)
+                comm.Bcast(Ht, root=0)
+                comm.Bcast(tmp_sig, root=0)
+                comm.Bcast(Delta_a, root=0)
+                _Timer.time(["Broadcast System at ts", "Commutator for sigma"])
+                # While the worker nodes compute, the master node computes
+                # the RHS of the sigma EOM.
+                #    Commutator simplifies when H(t) and sigma are hermitian
+                #                                           hbar multiplied with here, gets divided with later
+                D_tmp_sig  = Ht @ tmp_sig
+                D_tmp_sig -= D_tmp_sig.transpose(0, 2, 1).conj()
+                D_tmp_sig *= -1j
+                D_tmp_sig -= hbar * dissipator(ts, tmp_sig)
+                ###D_tmp_sig = -1j*(HS - HS.transpose(0,2,1).conj()) - hbar*dissipator(ts, tmp_sig)
+                _Timer.time(["Commutator for sigma", "Assemble global Psi"])
+                # Collect PSI parts, assemble and resend to nodes
+                for kk in range(len(src)):
+                    widx = Worker_idx[kk]
+                    wtag = Worker_tags[kk]
+                    comm.Recv(PSI_buff[kk], source=src[kk], tag=wtag)
+                    # print(np.sum(PSI_buff[kk]))
+                    # nk, lead, pole, eig slices and assigning
+                    global_psi[
+                        widx[0][:, None, None, None],
+                        widx[1][None, :, None, None],
+                        widx[2][None, None, :, None],
+                        widx[3][None, None, None, :],
+                        :] = PSI_buff[kk]
+                _Timer.time(["Assemble global Psi", "Broadcast global Psi"])
+                comm.Bcast(global_psi, root=0)
+                _Timer.time(["Broadcast global Psi", "Recieve PI"])
+                # Reset PI and Collect work
+                tmp_PI[:, :, :, :] = 0.0
+                # Summing over subsets of Poles here, if these have been split
+                for kk in range(len(src)):
+                    widx = Worker_idx[kk]
+                    wtag = Worker_tags[kk]
+                    list_request[kk] = comm.Irecv(
+                        PI_buff[kk], source=src[kk], tag=wtag
+                    )
+                done_workers = []
+                lensrc = len(src)
+                while len(done_workers) < lensrc:
+                    for kk, req in enumerate(list_request):
+                        if req.test()[0] and kk not in done_workers:
+                            widx = Worker_idx[kk]
+                            wtag = Worker_tags[kk]
+                            # PI here is really Q = PI + PI^T
+                            tmp_PI[
+                                widx[0][:, None], widx[1][None, :], :, :
+                            ] += PI_buff[kk]
+                            done_workers += [kk]
+
+                list_request[0].Waitall(list_request)
+                _Timer.time(["Recieve PI", "Calculate Currents"])
+                if i == 0:  # Calculate currents from Q
+                    for elec_count in range(NL):
+                        currents[elec_count] += [
+                            np.trace(
+                                tmp_PI[:, elec_count], axis1=1, axis2=2
+                            ).real
+                            / hbar
+                        ]
+                    if save_PI:
+                        # Save COPY of PI. tmp_PI object is continuously getting modified.
+                        PI_holder += [tmp_PI.copy()]
+                _Timer.time(["Calculate Currents", "Sigma EOM"])
+                # Sigma EOM, commutator done already:
+                # Note we are using Q_nb instead of PI in the worker nodes.
+                # tmp_PI name used for not having to rename arrays. the current
+                # calculation as just the trace have been updated also.
+                Q_sum = tmp_PI.sum(axis=1)
+                D_tmp_sig += Q_sum
+                D_tmp_sig *= h / hbar
+                SIGS[i, :, :, :] = D_tmp_sig[:, :, :]
+                _Timer.time(["Sigma EOM"])
+            _Timer.time(["Collect Error"])
+            TE2_1 = TERR2_sig(SIGS[0:RK_N], CT)
+            for kk in range(len(src)):
+                comm.Recv(
+                    worker_errors[kk], source=src[kk], tag=Worker_tags[kk]
+                )
+            _Timer.time(["Collect Error", "Calculate Error"])
+            TE = (TE2_1 + sum(sum(worker_errors))) ** 0.5
+            Step_Fourth = 1 if TE < eps else 0
+            if Step_Fourth == 0:
+                for elec_count in range(NL):
+                    currents[elec_count] = currents[elec_count][:-1]
+                if save_PI:
+                    PI_holder = PI_holder[:-1]
+            _Timer.time(["Calculate Error", "Broadcast Succes or Failure"])
+            Step_Fourth = comm.bcast(Step_Fourth, root=0)
+            _Timer.time(["Broadcast Succes or Failure", "Update Stepsize"])
+            old_h = 0.0 + h
+            h = hnew(h, TE)
+            _Timer.time(["Update Stepsize"])
+        _Timer.time(["Main Loop"])
+        _Timer.time(["Save State"])
+
+        pass_checkpoint_and_not_saved = (t0 > checkpoints) * (
+            checkpoint_bookkeeper == 0
+        )
+        if save_checkpoints and pass_checkpoint_and_not_saved.any():
+            np.save(name + "_save/" + "last_sig", SIGS[-1])
+            np.save(name + "_save/" + "last_time", t0)
+            np.save(name + "_save/" + "last_stepsize", old_h)
+            idx = np.where(pass_checkpoint_and_not_saved)[0][0]
+            checkpoint_bookkeeper[idx] = 1
+
+        _Timer.time(["Save State"])
+        _Timer.time(["Update Sigma"])
+        step_fourth_sig(SIGS, CH)
+        _Timer.time(["Update Sigma"])
+        _Timer.time(["Intermediate Save"])
+        t0 += h
+        DM += [SIGS[-1].copy()]
+        times += [t0 + 0.0]
+        step_count += 1
+        _Timer.time(["Intermediate Save"])  # , skip_next = [True])
+        _Timer.time(["Full Save"])
+        if np.mod(step_count, saveevery) == 0 and step_count >= saveevery:
+            np.save(
+                name + "_save/DM" + str(step_count),
+                np.array(DM[::n_dm_compress]).astype(np.complex64),
+            )
+            dm_times = np.array(times[-len(DM) :])
+            if len(dm_times) > len(DM):
+                dm_times = dm_times[1:]
+            np.save(
+                name + "_save/DMt" + str(step_count), dm_times[::n_dm_compress]
+            )
+            if save_PI:
+                np.save(
+                    name + "_save/PIa" + str(step_count),
+                    np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
+                )
+
+            np.save(name + "_save/times" + str(step_count), times[-len(DM) :])
+            for k, c in enumerate(currents):
+                np.save(
+                    name
+                    + "_save/"
+                    + "current_"
+                    + str(k)
+                    + "_"
+                    + str(step_count),
+                    c[-len(DM) :],
+                )
+            DM = []
+            PI_holder = []
+
+            print(
+                "t="
+                + str(np.round(t0, 3))
+                + " | #steps="
+                + str(step_count)
+                + " | eps="
+                + str(format(TE, ".3e"))
+            )
+            for k, c in enumerate(currents):
+                _cur = np.array(c[-1])
+                _bias = Delta_a[k]
+                print(
+                    "    Bias_"
+                    + str(k)
+                    + ": "
+                    + str(np.round(_bias, 6))
+                    + "   | J_"
+                    + str(k)
+                    + ": "
+                    + str(np.round(_cur, 6))[1:-1]
+                    + "| Total: "
+                    + str(np.round(sum(c[-1]), 6))
+                )
+        _Timer.time(["Full Save"], skip_next=[True])
+        mystring = _Timer.generate_timings()
+        if print_timings:
+            with open(filename, "a") as file:
+                file.write(mystring)
+    TIME_STOP = time()
+    print("RUNTIME: ", TIME_STOP - TIME_START)
+    comm.bcast(None, root=0)
+    return
+
+
+# Function for Psi and Omega EOM.
+def Worker(role_info):
+    assert "Worker" in role_info[0]
+    dot_prod_zero_tol = 1e-8
+    try:
+        dot_prod_zero_tol = float(os.environ["dot_prod_zero_tol"])
+    except:
+        pass
+
+    filename = name + "." + role_info[0]
+    with open(filename, "w") as file:
+        file.write("\nfile for " + role_info[0] + " node\n\n")
+        file.write("\ndot-product zero tol:" + str(dot_prod_zero_tol))
+        file.write("\nrole_info \n")
+        for v in role_info:
+            file.write(str(v) + "\n")
+
+    h, ts = 0.0, 0.0
+    k_idx = role_info[1]
+    nk = len(k_idx)
+    lead_idx = role_info[2]
+    nl = len(lead_idx)
+    pole_idx = role_info[3]
+    nx = len(pole_idx)
+    eig_idx = role_info[4]
+    neig = len(eig_idx)
+
+    def pickout(Arr):
+        return np.ascontiguousarray(
+            Arr[
+                k_idx[:, None, None, None],
+                lead_idx[None, :, None, None],
+                pole_idx[None, None, :, None],
+                eig_idx[None, None, None, :],
+            ]
+        )
+
+    number = int(role_info[0].replace("Worker", ""))
+    if usesave == False:
+        psi0 = pickout(CZ(D["psi_shape"]))
+        # omg0    = pickout(CZ(D['omg_shape']))
+        omg0 = pickout(CZ((NK, NL, NX, neig, NL, NX, NOT)))
+    elif usesave and LoadFromFull:
+        psi0 = pickout(np.load(name + "_save/" + "last_psi.npy"))
+        omg0 = pickout(np.load(name + "_save/" + "last_omg.npy"))
+    elif usesave and LoadFromFull == False:
+        psi0 = np.load(name + "_save/" + "last_Psi_" + role_info[0] + ".npy")
+        omg0 = np.load(name + "_save/" + "last_Omg_" + role_info[0] + ".npy")
+        assert psi0.shape[0] == len(k_idx)
+        assert psi0.shape[1] == len(lead_idx)
+        assert psi0.shape[2] == len(pole_idx)
+        assert omg0.shape[0] == len(k_idx)
+        assert omg0.shape[1] == len(lead_idx)
+        assert omg0.shape[2] == len(pole_idx)
+
+    global_psi = CZ((NK, NL, NX, NOT, NO))
+    psi_tilde = CZ((nk, NL, NX, NOT, NO))
+    global_sig = CZ((NK, NO, NO))
+    global_Ht = CZ((NK, NO, NO))
+    Delta_a = np.zeros(NL)
+    local_error = np.zeros(2)
+    tmp_psi = CZ((nk, nl, nx, neig, NO))
+    tmp_omg = CZ((nk, nl, nx, neig, NL, NX, NOT))
+    tmp_PI = CZ((nk, nl, NO, NO))
+    # tmp_upper_Q = CZ((nk, nk, NO*(NO+1)))
+    PSIS = CZ((RK_N + 1,) + tmp_psi.shape)
+    OMGS = CZ((RK_N + 1,) + (nk, nl, nx, neig, NL, NX, NOT))
+
+    PSIS[-1] = psi0[:, :, :, :, :]
+    OMGS[-1] = omg0[:, :, :, :, :, :, :]
+    del psi0, omg0
+    Ixi = pickout(D["Ixi"]).copy()  # For PI calculation
+    Ixi_all = D["Ixi"][k_idx, :, :, :NOT].copy()  # For Omega calculation
+    xi = pickout(D["xi"])[
+        :, :, :, eig_idx
+    ].copy()  # for Psi and Omega calculation
+
+    all_xi_1 = D["xi"][k_idx, :, :, :NOT] / hbar**2  # Psi calc
+    GL_P = pickout(D["GL_P"]).copy()
+    diff_GGP_GLP = pickout(D["diff_GGP_GLP"]).copy()
+    diff_GGM_GLM_all = D["diff_GGM_GLM"][k_idx][:, :, :, :NOT].copy()
+    Xpp = pickout(D["Xpp"]).copy()
+    Xpm_all = D["Xpm"][k_idx, :, :, :NOT].copy()
+    for i in range(Xpp.shape[-1]):
+        assert np.allclose(Xpp[:, :, :, i], Xpp[:, :, :, 0])
+    for i in range(Xpm_all.shape[-1]):
+        assert np.allclose(Xpm_all[:, :, :, i], Xpm_all[:, :, :, 0])
+    all_xi_shape = (nk, NL * NX * NOT, -1)
+    om_shape = (nk, nl * nx * neig, NL * NX * NOT)
+    alloc_psi_1 = CZ(tmp_psi.shape)
+    alloc_omg_1 = CZ((nk, NL * NX * NOT, NO))
+    alloc_omg_2_shape = (nk, nl * nx * neig, NX * NOT)
+
+    alloc_omg_3 = CZ((nk, nl * nx * neig, NO))
+    alloc_omg_4 = CZ((nk, nl * nx * neig, NL * NX * NOT))
+    orbidx_xi_nonzero = np.where(
+        (np.abs(xi) > dot_prod_zero_tol).any(axis=(0, 1, 2, 3))
+    )[0]
+    orbidx_Ixi_all_nonzero = np.where(
+        (np.abs(Ixi_all) > dot_prod_zero_tol).any(axis=(0, 1, 2, 3))
+    )[0]
+    orbidx_alpha = [
+        np.where(
+            (np.abs(Ixi_all[:, _ia, :, :]) > dot_prod_zero_tol).any(
+                axis=(0, 1, 2)
+            )
+        )[0]
+        for _ia in range(NL)
+    ]
+
+    with open(filename, "a") as file:
+        file.write("idx_xi: " + str(orbidx_xi_nonzero) + "\n")
+        file.write(
+            "idx_xi fraction: "
+            + str(
+                np.abs(xi[:, :, :, :, orbidx_xi_nonzero]).sum()
+                / np.abs(xi).sum()
+            )
+            + "\n"
+        )
+        file.write("idx_Ixi: " + str(orbidx_Ixi_all_nonzero) + "\n")
+        file.write(
+            "idx_Ixi fraction: "
+            + str(
+                np.abs(xi[:, :, :, :, orbidx_Ixi_all_nonzero]).sum()
+                / np.abs(xi).sum()
+            )
+            + "\n"
+        )
+        for _ia in range(NL):
+            file.write(
+                "idx_Ixi, lead "
+                + str(_ia)
+                + " is "
+                + str(orbidx_alpha[_ia])
+                + "!\n"
+            )
+            file.write(
+                "idx_Ixi, lead "
+                + str(_ia)
+                + ", fraction: "
+                + str(
+                    np.abs(Ixi_all[:, _ia, :, :, orbidx_alpha[_ia]]).sum()
+                    / np.abs(Ixi_all[:, _ia]).sum()
+                )
+                + "\n"
+            )
+
+    alloc_psi_2 = CZ((nk, nl * nx * neig, len(orbidx_Ixi_all_nonzero)))
+    all_xi_1 = all_xi_1[:, :, :, :, orbidx_Ixi_all_nonzero].copy()
+    all_xi_shape_2 = (nk, NL * NX * NOT, alloc_psi_2.shape[-1])
+    psi_shape_2 = (nk, nl, nx, neig, alloc_psi_2.shape[-1])
+
+    alligned_arrs_1 = [
+        CZ((nk, nl * nx * neig, len(orbidx_alpha[_ia]))) for _ia in range(NL)
+    ]
+    alligned_arrs_2 = [
+        CZ((nk, NX * NOT, len(oidx))).transpose(0, 2, 1).copy()
+        for oidx in orbidx_alpha
+    ]
+    alligned_arr_3 = CZ((nk, nl * nx * neig, len(orbidx_xi_nonzero)))
+    alligned_arr_4 = (
+        CZ((nk, NL * NX * NOT, len(orbidx_xi_nonzero)))
+        .transpose(0, 2, 1)
+        .copy()
+    )
+    # Unchanging arrays
+    _multiply(
+        diff_GGM_GLM_all.reshape(nk, NL * NX * NOT, 1),
+        Ixi_all.reshape(nk, NL * NX * NOT, NO),
+        out=alloc_omg_1,
+    )
+    _multiply(
+        diff_GGP_GLP.reshape(nk, nl * nx * neig, 1),
+        xi.reshape(nk, nl * nx * neig, NO),
+        alloc_omg_3,
+    )
+    dPsi_const = _multiply(np.expand_dims(GL_P, 4), xi)
+    for _ia in range(NL):
+        _vals = alloc_omg_1[:, _ia * NX * NOT : (_ia + 1) * NX * NOT]
+        alligned_arrs_2[_ia][:, :, :] = _vals[
+            :, :, orbidx_alpha[_ia]
+        ].transpose(0, 2, 1)
+        assert alligned_arrs_2[_ia].flags["OWNDATA"] == True
+    alligned_arr_3[:, :, :] = alloc_omg_3[:, :, orbidx_xi_nonzero]
+    assert alligned_arr_3.flags["OWNDATA"] == True
+
+    with open(filename, "a") as file:
+        import psutil
+
+        process = psutil.Process(os.getpid())
+        file.write(
+            "\n\nAllocated total initial memory usage: "
+            + str(process.memory_info().rss / 1024**2)
+            + " MiB\n\n"
+        )
+        file.write("dPSI - array shape: " + str(PSIS.shape))
+        file.write("\ndOMG - array shape: " + str(OMGS.shape))
+        del process, psutil
+
+    while True:
+        Step_Fourth = 0
+        _Timer.reset()
+        _Timer.time(["Main Loop"])
+        while Step_Fourth == 0:
+            for i in range(RK_N):
+                _Timer.time(["Recieve System at ts"])
+                _idx_i = idxholder[i]
+                h = comm.bcast(h, root=0)
+                if h is None:
+                    return
+                ts = comm.bcast(ts, root=0)
+                if i == 0:
+                    _t0_ = 0.0 + ts
+                comm.Bcast(global_Ht, root=0)
+                comm.Bcast(global_sig, root=0)
+                comm.Bcast(Delta_a, root=0)
+                _Timer.time(
+                    ["Recieve System at ts", "Make Xpp, Xpm, tmp_sig & tmp_Ht"]
+                )
+                loc_delta = Delta_a[lead_idx]
+                Xpp_delta = Xpp + loc_delta[nax, :, nax, nax]
+                Xpm_all_delta = Xpm_all + Delta_a[nax, :, nax, nax]
+                tmp_sig = global_sig[k_idx]
+                tmp_Ht = global_Ht[k_idx]
+                _Timer.time(
+                    [
+                        "Make Xpp, Xpm, tmp_sig & tmp_Ht",
+                        "Initial Matrix Multiplication",
+                    ]
+                )
+                if i == 0:
+                    tmp_psi[:, :, :, :, :] = PSIS[-1]
+                    tmp_omg[:, :, :, :, :, :, :] = OMGS[-1]
+                else:
+                    MM(
+                        PSIS[_idx_i].transpose(1, 2, 3, 4, 5, 0),
+                        B[i, _idx_i],
+                        tmp_psi,
+                    )
+                    MM(
+                        OMGS[_idx_i].transpose(1, 2, 3, 4, 5, 6, 7, 0),
+                        B[i, _idx_i],
+                        tmp_omg,
+                    )
+                _Timer.time(
+                    [
+                        "Initial Matrix Multiplication",
+                        "Send back Psi and recieve Global Psi",
+                    ]
+                )
+                # Send back current psi
+                comm.Send(tmp_psi, dest=0, tag=Worker_tags[number])
+                # Recieve full build
+                comm.Bcast(global_psi, root=0)
+                _Timer.time(
+                    [
+                        "Send back Psi and recieve Global Psi",
+                        "Get Psi Conjugate",
+                    ]
+                )
+                np.conjugate(global_psi[k_idx], out=psi_tilde)
+                _Timer.time(["Get Psi Conjugate", "Calculate local Q"])
+                # Calculate current  current Q and send back
+                for not_i, not_a in enumerate(lead_idx):
+                    tmp_PI[:, not_i, :, :] = Q_nb(
+                        tmp_psi[:, not_i], Ixi[:, not_i]
+                    )
+
+                _Timer.time(["Calculate local Q", "Send local Q"])
+                # Nonblocking send
+                comm.Isend(tmp_PI, dest=0, tag=Worker_tags[number])
+                _Timer.time(["Send local Q", "Calculate local dPsi/dt"])
+                # Calculation of dΨ/dt
+                MM(
+                    tmp_psi,
+                    np.expand_dims(
+                        (tmp_Ht / hbar).transpose((0, 2, 1)), (1, 2)
+                    ),
+                    PSIS[i],
+                )  # Initial Overwrite, H(t)Ψ_axc(t)     term
+                _multiply(
+                    np.expand_dims(Xpp_delta / hbar, 4),
+                    tmp_psi,
+                    out=alloc_psi_1,
+                )  #                    - x_axc(t)Ψ_axc  term
+                PSIS[i] -= alloc_psi_1
+                # constant inhomogenous term
+                PSIS[i] += dPsi_const
+                MM(
+                    xi,
+                    np.expand_dims(tmp_sig.transpose((0, 2, 1)), (1, 2)),
+                    alloc_psi_1,
+                )  # diff * sig * xi    term
+                _multiply(
+                    np.expand_dims(diff_GGP_GLP, 4),
+                    alloc_psi_1,
+                    out=alloc_psi_1,
+                )
+                PSIS[i] += alloc_psi_1
+                MM(
+                    tmp_omg.reshape(om_shape),
+                    all_xi_1.reshape(all_xi_shape_2),
+                    alloc_psi_2,
+                )  # new term           sum over omega xi term
+                PSIS[i][..., orbidx_Ixi_all_nonzero] += alloc_psi_2.reshape(
+                    psi_shape_2
+                )
+                PSIS[i] *= -1j * h
+                _Timer.time(
+                    ["Calculate local dPsi/dt", "Calculate local dOmega/dt"]
+                )
+                # Calculation of dΩ/dt
+                # Ψ * Ixi  term
+                for _ia in range(NL):
+                    alligned_arrs_1[_ia][:, :, :] = tmp_psi.reshape(
+                        nk, nl * nx * neig, NO
+                    )[:, :, orbidx_alpha[_ia]]
+                    alligned_arrs_1[_ia] *= h
+                    MM(
+                        alligned_arrs_1[_ia],
+                        alligned_arrs_2[_ia],
+                        OMGS[i, :, :, :, :, _ia, :, :].reshape(
+                            alloc_omg_2_shape
+                        ),  # assign, used, resets from last step
+                    )
+                # Ψ^T * xi         term
+                alligned_arr_4[:, :, :] = psi_tilde.reshape(
+                    nk, NL * NX * NOT, NO
+                ).transpose((0, 2, 1))[:, orbidx_xi_nonzero, :]
+                alligned_arr_4 *= h
+                MM(alligned_arr_3, alligned_arr_4, alloc_omg_4)
+                OMGS[i] += alloc_omg_4.reshape(nk, nl, nx, neig, NL, NX, NOT)
+                # *hard_opti assumes Xpp_delta[:,:,:,c] is the same for all c
+                # *hard_opti assumes Xpm_all_delta[:,:,:,c] is the same for all c
+                OuterSubtraction_hard_opti(
+                    Xpp_delta * (1j * h / hbar),
+                    Xpm_all_delta * (1j * h / hbar),
+                    tmp_omg,
+                    OMGS[i],
+                )
+                _Timer.time(["Calculate local dOmega/dt"])
+
+            _Timer.time(["Calculate Psi error"])
+            local_error[0] = TERR2_psi(PSIS[0:RK_N], CT)
+            _Timer.time(["Calculate Psi error", "Calculate Omega error"])
+            local_error[1] = TERR2_omg(OMGS[0:RK_N], CT)
+            _Timer.time(
+                [
+                    "Calculate Omega error",
+                    "Send local error and recieve Succes/Failure",
+                ]
+            )
+
+            comm.Send(local_error, dest=0, tag=Worker_tags[number])
+            Step_Fourth = comm.bcast(Step_Fourth, root=0)
+            _Timer.time(["Send local error and recieve Succes/Failure"])
+
+        _Timer.time(["Save State"])
+
+        pass_checkpoint_and_not_saved = (_t0_ > checkpoints) * (
+            checkpoint_bookkeeper == 0
+        )
+        if save_checkpoints and pass_checkpoint_and_not_saved.any():
+            np.save(
+                name + "_save/" + "last_Psi_" + role_info[0] + ".npy", PSIS[-1]
+            )
+            np.save(
+                name + "_save/" + "last_Omg_" + role_info[0] + ".npy", OMGS[-1]
+            )
+            np.save(
+                name + "_save/" + "last_time_" + role_info[0] + ".npy", _t0_
+            )
+            np.save(
+                name + "_save/" + "last_stepsize_" + role_info[0] + ".npy", h
+            )
+            idx = np.where(pass_checkpoint_and_not_saved)[0][0]
+            checkpoint_bookkeeper[idx] = 1
+
+        _Timer.time(["Save State"])
+
+        _Timer.time(["Update Psi"])
+        step_fourth_psi(PSIS, CH)
+        _Timer.time(["Update Psi", "Update Omega"])
+
+        step_fourth_omg(OMGS, CH)
+        _Timer.time(["Update Omega"])
+
+        _Timer.time(["Main Loop"])
+        mystring = _Timer.generate_timings()
+        if print_timings:
+            with open(filename, "a") as file:
+                file.write(mystring)
+
+
+if ROLE == "Sigma":
+    SIGMA()
+elif "Worker" in ROLE:
+    Worker(ROLE_INFO)
+comm.Abort()
+

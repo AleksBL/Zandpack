@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug 24 14:06:09 2023
+
+@author: aleksander
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.PadeDecomp import FD_expanded, Pade_poles_and_coeffs, Hu_poles, FD
+from Block_matrices.Block_matrices import abssorted_eig_4inds as Sorted_eig
+from Zandpack.Linalg_factorisation import SVD, TAKAGI, QR
+from Zandpack.Loader import flexload
+
+pref = 'modify_occupations  '
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file'   :'TDT_file',
+           'outfile':'NewSCTDT_file',
+           'PairingField':'PairingField.py',
+           'SpinOrbit':'None'
+           }
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after N-SC-N command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+file    = options['file']
+outfile = options['outfile']
+print('Importing pairing_field(ik,i,j,spin1, spin2) from ' + options['PairingField'] + '...')
+exec('from ' + options['PairingField'].replace('.py','').replace(' ','') + ' import pairing_field')
+if options['SpinOrbit']!='None':
+    exec('from ' + options['SpinOrbit'].replace('.py','').replace(' ','') + ' import SOC')
+else:
+    def SOC(i,j):
+        return 0.0
+
+H0    = np.load(file+'/Arrays/H_Ortho.npy')
+dm0   = np.load(file+'/Arrays/DM_Ortho.npy')
+
+nk, no= H0.shape[0], H0.shape[1]
+SEs   = from_saved_file(file+'/Arrays')
+El    = [np.load(file+'/Arrays/Centres_Lorentzian_'+str(i)+'.npy')    for i in range(len(SEs))]
+Gl    = [np.load(file+'/Arrays/Broadening_Lorentzian_'+str(i)+'.npy') for i in range(len(SEs))]
+nl    = El[0].shape[1]
+mu_i  = np.load(file+'/Arrays/mu_i.npy')
+New_El= [np.hstack((El[i], mu_i[i] - El[i])) for i in range(len(El))]
+New_Gl= [np.hstack((Gl[i], Gl[i]          )) for i in range(len(Gl))]
+
+HSC        = np.zeros((H0.shape[0], H0.shape[1]*4, H0.shape[1]*4),dtype = complex)
+DMSC       = np.zeros(HSC.shape, dtype=complex)
+Coeffs_new = [np.zeros((np.array(se.Coeffs.shape) * np.array([1,2,4,4])), dtype=complex) for se in SEs]
+rearr_idx  = 4*np.arange(no)
+rearridx   = np.hstack((rearr_idx, rearr_idx+1, rearr_idx+2, rearr_idx+3))
+PF         = pairing_field
+
+I2x2 = np.eye(2)
+for i in range(no):
+    sli = slice(i*4, (i+1)*4)
+    for j in range(no):
+        slj = slice(j*4, (j+1)*4)
+        for ik in range(nk):
+            hij     = H0[ik, i,j]*I2x2/2
+            hij[0,1]=         SOC(i,j)
+            hij[1,0]= np.conj(hij[0,1])
+            Hs_2x2  = np.array([[PF(ik, i,j,0,0), PF(ik, i,j,0,1)], 
+                                [PF(ik, i,j,1,0), PF(ik, i,j,1,1)]])
+            H4x4    = np.block([[hij,              Hs_2x2  ],
+                                [Hs_2x2.conj().T, -hij     ]])
+            HSC[ik,sli,slj] = H4x4
+        DMSC[:,i*4,j*4] = dm0[:,i,j]
+        for a in range(len(SEs)):
+            Coeffs_new[a][:,  :nl,i*4  ,  j*4] =  SEs[a].Coeffs[:,:,i,j]/2
+            Coeffs_new[a][:,  :nl,i*4+1,j*4+1] =  SEs[a].Coeffs[:,:,i,j]/2
+            Coeffs_new[a][:,nl:  ,i*4+2,j*4+2] =  SEs[a].Coeffs[:,:,i,j]/2
+            Coeffs_new[a][:,nl:  ,i*4+3,j*4+3] =  SEs[a].Coeffs[:,:,i,j]/2
+
+Coeffs_new = np.array(Coeffs_new)
+os.system('cp -R '+file +' '+outfile)
+os.system('rm -rf '+outfile+'/Arrays/xi.*')
+os.system('rm -rf '+outfile+'/Arrays/Ixi.*')
+os.system('rm -rf '+outfile+'/Arrays/GG*.npy')
+os.system('rm -rf '+outfile+'/Arrays/GL*.npy')
+os.system('rm  '+outfile+'/Arrays/Xpp.npy')
+os.system('rm  '+outfile+'/Arrays/Xpm.npy')
+os.system('rm '+outfile+'/Arrays/H_Ortho.npy')
+os.system('rm '+outfile+'/Arrays/DM_Ortho.npy')
+np.savez_compressed(outfile+'/Arrays/Gamma_Coeffs.npz',Coeffs_new)
+#no -> 4x no
+#nl -> 2x nl
+psi_shape = np.load(outfile+'/Arrays/psi_shape.npy')
+psi_shape[3:] *= 4
+psi_shape[2 ] *= 2
+np.save(outfile+'/Arrays/psi_shape.npy', psi_shape)
+
+omg_shape = np.load(outfile+'/Arrays/omg_shape.npy')
+omg_shape[3] *= 4
+omg_shape[6] *= 4
+omg_shape[2] *= 2
+omg_shape[5] *= 2
+np.save(outfile+'/Arrays/omg_shape.npy', omg_shape)
+
+noT  = np.load(outfile+'/Arrays/noT.npy')
+np.save(outfile+'/Arrays/noT.npy', 4*noT)
+
+NumL = np.load(outfile+'/Arrays/num_lorentzians.npy')
+np.save(outfile+'/Arrays/num_lorentzians.npy', 2*NumL)
+for i in range(len(New_El)):
+    np.save(outfile+'/Arrays/Centres_Lorentzian_'+str(i)+'.npy', New_El[i])
+    np.save(outfile+'/Arrays/Broadening_Lorentzian_'+str(i)+'.npy', New_Gl[i])
+
+np.save(outfile+'/Arrays/H_Ortho.npy', HSC )
+np.save(outfile+'/Arrays/DM_Ortho.npy',DMSC)
+np.save(outfile+'/Arrays/Superconductor.npy', [1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+

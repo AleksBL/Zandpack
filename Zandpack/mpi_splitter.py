@@ -1,0 +1,759 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed May 18 12:06:22 2022
+
+@author: aleksander
+"""
+import numpy as np
+from k0nfig import Check_partition_scheme as _Check
+from k0nfig import Supress_parallel_K as SupK
+
+
+def get_sources(nw):
+    if nw==4:
+        return [[1],[2],[3]]
+    if nw==7:
+        return [[1,2], [3,4], [5,6]]
+    if nw==13:
+        return [[1,2,3,4], [5,6,7,8], [9,10,11,12]]
+
+
+def get_sources_scheme2(nw):
+    assert nw > 1
+    return [i for i in range(nw)][1:]
+
+def partition_scheme2(i, nw, nk, nl, nx):
+    """
+    Splits arrays between mpi-nodes.
+    
+    If the number of k-points is greater than the number of nodes,
+    the arrays are split the k-index.
+    
+    Otherwise the arrays are split in the lead and pole indices as
+    The lead is sliced as   [0..., N_lead]  ->  L1=[0,...,N_lead//2], L2=[ N_lead//2, ... , N_lead//2]
+    The poles are sliced as [0 ... N_poles] ->  Xn=[n * (N_poles//(N_nodes/2)), (n+1) * (N_poles//(N_nodes/2))]
+    
+    node 0:
+       master node
+    node 1: 
+        (L1 & L2) and X0
+    node 2:
+        L1   and X1
+    node 3:
+        L2   and X1
+    node 4:
+        L1   and X2
+    node 5:
+        L2   and X2
+    
+    
+    etc.....
+    
+    Splitting is hardcoded atm and supports:
+    N number of nodes:
+    
+    N = 
+      2
+      3
+      4
+      7
+      8
+      12
+      16
+      20 (hpc)
+      24 (Niflheim)
+      28
+      32 (hpc)
+      40 (Niflheim)
+      48
+      56 (Niflheim)
+    """
+
+
+    M = ['Sigma', 'Worker']
+    
+    K = np.arange(nk).astype(int)
+    L = np.arange(nl).astype(int)
+    X = np.arange(nx).astype(int)
+    if nk>=nw and not SupK:
+        return partition_scheme_for_k(i, nw, nk, nl, nx)
+    
+    
+    if nw == 2:
+        if i == 0: return [M[0], K, L, X]
+        if i == 1: return [M[1]+'0', K, L, X]
+    if nw == 3:
+        if i == 0: return [M[0],     K, L,          X]
+        if i == 1: return [M[1]+'0', K, L[0:nl//2], X]
+        if i == 2: return [M[1]+'1', K, L[nl//2: ], X]
+    if nw == 4:
+        number = nx//3
+        if i == 0: return [M[0],     K, L,          X]
+        if i == 1: return [M[1]+'0', K, L, X[0       :1*number]]
+        if i == 2: return [M[1]+'1', K, L, X[1*number:2*number]]
+        if i == 3: return [M[1]+'2', K, L, X[2*number:        ]]
+    if nw == 7:
+        number  = nx//3
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                    X                   ]
+        if i == 1: return [M[1]+'0', K, L[       :number2  ], X[        :1*number]]
+        if i == 2: return [M[1]+'1', K, L[       :number2  ], X[1*number:2*number]]
+        if i == 3: return [M[1]+'2', K, L[       :number2  ], X[2*number:        ]]
+        if i == 4: return [M[1]+'3', K, L[number2:         ], X[        :1*number]]
+        if i == 5: return [M[1]+'4', K, L[number2:         ], X[1*number:2*number]]
+        if i == 6: return [M[1]+'5', K, L[number2:         ], X[2*number:        ]]
+    if nw == 8:
+        N1  = 4
+        nxp     = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 3)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart = [0, N1] + nL
+        #print(xpart)
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i == 6: return [M[1]+'5', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i == 7: return [M[1]+'6', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+    # Make n=12 & 16
+    if nw == 12:
+        N1  = nx//10
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 5)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5', K, L[       :number2], X[xpart[5]:xpart[6]]]
+        
+        if i == 7: return [M[1]+'6', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i == 8: return [M[1]+'7', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i == 9: return [M[1]+'8', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==10: return [M[1]+'9', K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==11: return [M[1]+'10',K, L[number2:       ], X[xpart[5]:xpart[6]]]
+    if nw == 16:
+        N1  = nx//14
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 7)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5', K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6', K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7', K, L[       :number2], X[xpart[7]:xpart[8]]]
+        
+        if i == 9: return [M[1]+'8', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i ==10: return [M[1]+'9', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i ==11: return [M[1]+'10',K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==12: return [M[1]+'11',K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==13: return [M[1]+'12',K, L[number2:       ], X[xpart[5]:xpart[6]]]
+        if i ==14: return [M[1]+'13',K, L[number2:       ], X[xpart[6]:xpart[7]]]
+        if i ==15: return [M[1]+'14',K, L[number2:       ], X[xpart[7]:xpart[8]]]
+    
+    if nw == 20:
+        N1  = nx//18
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 9)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5', K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6', K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7', K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8', K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9', K, L[       :number2], X[xpart[9]:xpart[10]]]
+        
+        if i ==11: return [M[1]+'10', K, L[number2:      ], X[xpart[1]:xpart[2]]]
+        if i ==12: return [M[1]+'11', K, L[number2:      ], X[xpart[2]:xpart[3]]]
+        if i ==13: return [M[1]+'12', K, L[number2:      ], X[xpart[3]:xpart[4]]]
+        if i ==14: return [M[1]+'13', K, L[number2:      ], X[xpart[4]:xpart[5]]]
+        if i ==15: return [M[1]+'14', K, L[number2:      ], X[xpart[5]:xpart[6]]]
+        if i ==16: return [M[1]+'15', K, L[number2:      ], X[xpart[6]:xpart[7]]]
+        if i ==17: return [M[1]+'16', K, L[number2:      ], X[xpart[7]:xpart[8]]]
+        if i ==18: return [M[1]+'17', K, L[number2:      ], X[xpart[8]:xpart[9]]]
+        if i ==19: return [M[1]+'18', K, L[number2:      ], X[xpart[9]:xpart[10]]]
+    if nw == 24:
+        N1  = nx//22
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 11)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5', K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6', K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7', K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8', K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9', K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10',K, L[       :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11',K, L[       :number2], X[xpart[11]:xpart[12]]]
+        
+        if i ==13: return [M[1]+'12', K, L[number2:      ], X[xpart[1]:xpart[2]]]
+        if i ==14: return [M[1]+'13', K, L[number2:      ], X[xpart[2]:xpart[3]]]
+        if i ==15: return [M[1]+'14', K, L[number2:      ], X[xpart[3]:xpart[4]]]
+        if i ==16: return [M[1]+'15', K, L[number2:      ], X[xpart[4]:xpart[5]]]
+        if i ==17: return [M[1]+'16', K, L[number2:      ], X[xpart[5]:xpart[6]]]
+        if i ==18: return [M[1]+'17', K, L[number2:      ], X[xpart[6]:xpart[7]]]
+        if i ==19: return [M[1]+'18', K, L[number2:      ], X[xpart[7]:xpart[8]]]
+        if i ==20: return [M[1]+'19', K, L[number2:      ], X[xpart[8]:xpart[9]]]
+        if i ==21: return [M[1]+'20', K, L[number2:      ], X[xpart[9]:xpart[10]]]
+        if i ==22: return [M[1]+'21', K, L[number2:      ], X[xpart[10]:xpart[11]]]
+        if i ==23: return [M[1]+'22', K, L[number2:      ], X[xpart[11]:xpart[12]]]
+    
+    
+    if nw==28:
+        N1  = nx//26
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 13)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1', K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2', K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3', K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4', K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5', K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6', K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7', K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8', K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9', K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10', K, L[      :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11', K, L[      :number2], X[xpart[11]:xpart[12]]]
+        if i ==13: return [M[1]+'12', K, L[      :number2], X[xpart[12]:xpart[13]]]
+        if i ==14: return [M[1]+'13', K, L[      :number2], X[xpart[13]:xpart[14]]]
+        
+        if i ==15: return [M[1]+'14', K, L[number2:      ], X[xpart[1]:xpart[2]]]
+        if i ==16: return [M[1]+'15', K, L[number2:      ], X[xpart[2]:xpart[3]]]
+        if i ==17: return [M[1]+'16', K, L[number2:      ], X[xpart[3]:xpart[4]]]
+        if i ==18: return [M[1]+'17', K, L[number2:      ], X[xpart[4]:xpart[5]]]
+        if i ==19: return [M[1]+'18', K, L[number2:      ], X[xpart[5]:xpart[6]]]
+        if i ==20: return [M[1]+'19', K, L[number2:      ], X[xpart[6]:xpart[7]]]
+        if i ==21: return [M[1]+'20', K, L[number2:      ], X[xpart[7]:xpart[8]]]
+        if i ==22: return [M[1]+'21', K, L[number2:      ], X[xpart[8]:xpart[9]]]
+        if i ==23: return [M[1]+'22', K, L[number2:      ], X[xpart[9]:xpart[10]]]
+        if i ==24: return [M[1]+'23', K, L[number2:      ], X[xpart[10]:xpart[11]]]
+        if i ==25: return [M[1]+'24', K, L[number2:      ], X[xpart[11]:xpart[12]]]
+        if i ==26: return [M[1]+'25', K, L[number2:      ], X[xpart[12]:xpart[13]]]
+        if i ==27: return [M[1]+'26', K, L[number2:      ], X[xpart[13]:xpart[14]]]
+    
+    if nw == 32:
+        N1  = nx//30
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 15)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1',  K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2',  K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3',  K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4',  K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5',  K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6',  K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7',  K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8',  K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9',  K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10', K, L[       :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11', K, L[       :number2], X[xpart[11]:xpart[12]]]
+        if i ==13: return [M[1]+'12', K, L[       :number2], X[xpart[12]:xpart[13]]]
+        if i ==14: return [M[1]+'13', K, L[       :number2], X[xpart[13]:xpart[14]]]
+        if i ==15: return [M[1]+'14', K, L[       :number2], X[xpart[14]:xpart[15]]]
+        if i ==16: return [M[1]+'15', K, L[       :number2], X[xpart[15]:xpart[16]]]
+        
+        if i ==17: return [M[1]+'16', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i ==18: return [M[1]+'17', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i ==19: return [M[1]+'18', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==20: return [M[1]+'19', K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==21: return [M[1]+'20', K, L[number2:       ], X[xpart[5]:xpart[6]]]
+        if i ==22: return [M[1]+'21', K, L[number2:       ], X[xpart[6]:xpart[7]]]
+        if i ==23: return [M[1]+'22', K, L[number2:       ], X[xpart[7]:xpart[8]]]
+        if i ==24: return [M[1]+'23', K, L[number2:       ], X[xpart[8]:xpart[9]]]
+        if i ==25: return [M[1]+'24', K, L[number2:       ], X[xpart[9]:xpart[10]]]
+        if i ==26: return [M[1]+'25', K, L[number2:       ], X[xpart[10]:xpart[11]]]
+        if i ==27: return [M[1]+'26', K, L[number2:       ], X[xpart[11]:xpart[12]]]
+        if i ==28: return [M[1]+'27', K, L[number2:       ], X[xpart[12]:xpart[13]]]
+        if i ==29: return [M[1]+'28', K, L[number2:       ], X[xpart[13]:xpart[14]]]
+        if i ==30: return [M[1]+'29', K, L[number2:       ], X[xpart[14]:xpart[15]]]
+        if i ==31: return [M[1]+'30', K, L[number2:       ], X[xpart[15]:xpart[16]]]
+    if nw == 40:
+        N1  = nx//38
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 19)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1',  K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2',  K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3',  K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4',  K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5',  K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6',  K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7',  K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8',  K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9',  K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10', K, L[       :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11', K, L[       :number2], X[xpart[11]:xpart[12]]]
+        if i ==13: return [M[1]+'12', K, L[       :number2], X[xpart[12]:xpart[13]]]
+        if i ==14: return [M[1]+'13', K, L[       :number2], X[xpart[13]:xpart[14]]]
+        if i ==15: return [M[1]+'14', K, L[       :number2], X[xpart[14]:xpart[15]]]
+        if i ==16: return [M[1]+'15', K, L[       :number2], X[xpart[15]:xpart[16]]]
+        if i ==17: return [M[1]+'16', K, L[       :number2], X[xpart[16]:xpart[17]]]
+        if i ==18: return [M[1]+'17', K, L[       :number2], X[xpart[17]:xpart[18]]]
+        if i ==19: return [M[1]+'18', K, L[       :number2], X[xpart[18]:xpart[19]]]
+        if i ==20: return [M[1]+'19', K, L[       :number2], X[xpart[19]:xpart[20]]]
+        
+        if i ==21: return [M[1]+'20', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i ==22: return [M[1]+'21', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i ==23: return [M[1]+'22', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==24: return [M[1]+'23', K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==25: return [M[1]+'24', K, L[number2:       ], X[xpart[5]:xpart[6]]]
+        if i ==26: return [M[1]+'25', K, L[number2:       ], X[xpart[6]:xpart[7]]]
+        if i ==27: return [M[1]+'26', K, L[number2:       ], X[xpart[7]:xpart[8]]]
+        if i ==28: return [M[1]+'27', K, L[number2:       ], X[xpart[8]:xpart[9]]]
+        if i ==29: return [M[1]+'28', K, L[number2:       ], X[xpart[9]:xpart[10]]]
+        if i ==30: return [M[1]+'29', K, L[number2:       ], X[xpart[10]:xpart[11]]]
+        if i ==31: return [M[1]+'30', K, L[number2:       ], X[xpart[11]:xpart[12]]]
+        if i ==32: return [M[1]+'31', K, L[number2:       ], X[xpart[12]:xpart[13]]]
+        if i ==33: return [M[1]+'32', K, L[number2:       ], X[xpart[13]:xpart[14]]]
+        if i ==34: return [M[1]+'33', K, L[number2:       ], X[xpart[14]:xpart[15]]]
+        if i ==35: return [M[1]+'34', K, L[number2:       ], X[xpart[15]:xpart[16]]]
+        if i ==36: return [M[1]+'35', K, L[number2:       ], X[xpart[16]:xpart[17]]]
+        if i ==37: return [M[1]+'36', K, L[number2:       ], X[xpart[17]:xpart[18]]]
+        if i ==38: return [M[1]+'37', K, L[number2:       ], X[xpart[18]:xpart[19]]]
+        if i ==39: return [M[1]+'38', K, L[number2:       ], X[xpart[19]:xpart[20]]]
+    
+    if nw == 48:
+        N1  = nx//46
+        nxp = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 23)]
+        nL= []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1',  K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2',  K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3',  K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4',  K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5',  K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6',  K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7',  K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8',  K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9',  K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10', K, L[       :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11', K, L[       :number2], X[xpart[11]:xpart[12]]]
+        if i ==13: return [M[1]+'12', K, L[       :number2], X[xpart[12]:xpart[13]]]
+        if i ==14: return [M[1]+'13', K, L[       :number2], X[xpart[13]:xpart[14]]]
+        if i ==15: return [M[1]+'14', K, L[       :number2], X[xpart[14]:xpart[15]]]
+        if i ==16: return [M[1]+'15', K, L[       :number2], X[xpart[15]:xpart[16]]]
+        if i ==17: return [M[1]+'16', K, L[       :number2], X[xpart[16]:xpart[17]]]
+        if i ==18: return [M[1]+'17', K, L[       :number2], X[xpart[17]:xpart[18]]]
+        if i ==19: return [M[1]+'18', K, L[       :number2], X[xpart[18]:xpart[19]]]
+        if i ==20: return [M[1]+'19', K, L[       :number2], X[xpart[19]:xpart[20]]]
+        if i ==21: return [M[1]+'20', K, L[       :number2], X[xpart[20]:xpart[21]]]
+        if i ==22: return [M[1]+'21', K, L[       :number2], X[xpart[21]:xpart[22]]]
+        if i ==23: return [M[1]+'22', K, L[       :number2], X[xpart[22]:xpart[23]]]
+        if i ==24: return [M[1]+'23', K, L[       :number2], X[xpart[23]:xpart[24]]]
+        
+        
+        if i ==25: return [M[1]+'24', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i ==26: return [M[1]+'25', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i ==27: return [M[1]+'26', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==28: return [M[1]+'27', K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==29: return [M[1]+'28', K, L[number2:       ], X[xpart[5]:xpart[6]]]
+        if i ==30: return [M[1]+'29', K, L[number2:       ], X[xpart[6]:xpart[7]]]
+        if i ==31: return [M[1]+'30', K, L[number2:       ], X[xpart[7]:xpart[8]]]
+        if i ==32: return [M[1]+'31', K, L[number2:       ], X[xpart[8]:xpart[9]]]
+        if i ==33: return [M[1]+'32', K, L[number2:       ], X[xpart[9]:xpart[10]]]
+        if i ==34: return [M[1]+'33', K, L[number2:       ], X[xpart[10]:xpart[11]]]
+        if i ==35: return [M[1]+'34', K, L[number2:       ], X[xpart[11]:xpart[12]]]
+        if i ==36: return [M[1]+'35', K, L[number2:       ], X[xpart[12]:xpart[13]]]
+        if i ==37: return [M[1]+'36', K, L[number2:       ], X[xpart[13]:xpart[14]]]
+        if i ==38: return [M[1]+'37', K, L[number2:       ], X[xpart[14]:xpart[15]]]
+        if i ==39: return [M[1]+'38', K, L[number2:       ], X[xpart[15]:xpart[16]]]
+        if i ==40: return [M[1]+'39', K, L[number2:       ], X[xpart[16]:xpart[17]]]
+        if i ==41: return [M[1]+'40', K, L[number2:       ], X[xpart[17]:xpart[18]]]
+        if i ==42: return [M[1]+'41', K, L[number2:       ], X[xpart[18]:xpart[19]]]
+        if i ==43: return [M[1]+'42', K, L[number2:       ], X[xpart[19]:xpart[20]]]
+        if i ==44: return [M[1]+'43', K, L[number2:       ], X[xpart[20]:xpart[21]]]
+        if i ==45: return [M[1]+'44', K, L[number2:       ], X[xpart[21]:xpart[22]]]
+        if i ==46: return [M[1]+'45', K, L[number2:       ], X[xpart[22]:xpart[23]]]
+        if i ==47: return [M[1]+'46', K, L[number2:       ], X[xpart[23]:xpart[24]]]
+    
+    if nw == 56:
+        N1      = nx//54
+        nxp     = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), 27)]
+        nL      = []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        
+        if i == 2: return [M[1]+'1',  K, L[       :number2], X[xpart[1]:xpart[2]]]
+        if i == 3: return [M[1]+'2',  K, L[       :number2], X[xpart[2]:xpart[3]]]
+        if i == 4: return [M[1]+'3',  K, L[       :number2], X[xpart[3]:xpart[4]]]
+        if i == 5: return [M[1]+'4',  K, L[       :number2], X[xpart[4]:xpart[5]]]
+        if i == 6: return [M[1]+'5',  K, L[       :number2], X[xpart[5]:xpart[6]]]
+        if i == 7: return [M[1]+'6',  K, L[       :number2], X[xpart[6]:xpart[7]]]
+        if i == 8: return [M[1]+'7',  K, L[       :number2], X[xpart[7]:xpart[8]]]
+        if i == 9: return [M[1]+'8',  K, L[       :number2], X[xpart[8]:xpart[9]]]
+        if i ==10: return [M[1]+'9',  K, L[       :number2], X[xpart[9]:xpart[10]]]
+        if i ==11: return [M[1]+'10', K, L[       :number2], X[xpart[10]:xpart[11]]]
+        if i ==12: return [M[1]+'11', K, L[       :number2], X[xpart[11]:xpart[12]]]
+        if i ==13: return [M[1]+'12', K, L[       :number2], X[xpart[12]:xpart[13]]]
+        if i ==14: return [M[1]+'13', K, L[       :number2], X[xpart[13]:xpart[14]]]
+        if i ==15: return [M[1]+'14', K, L[       :number2], X[xpart[14]:xpart[15]]]
+        if i ==16: return [M[1]+'15', K, L[       :number2], X[xpart[15]:xpart[16]]]
+        if i ==17: return [M[1]+'16', K, L[       :number2], X[xpart[16]:xpart[17]]]
+        if i ==18: return [M[1]+'17', K, L[       :number2], X[xpart[17]:xpart[18]]]
+        if i ==19: return [M[1]+'18', K, L[       :number2], X[xpart[18]:xpart[19]]]
+        if i ==20: return [M[1]+'19', K, L[       :number2], X[xpart[19]:xpart[20]]]
+        if i ==21: return [M[1]+'20', K, L[       :number2], X[xpart[20]:xpart[21]]]
+        if i ==22: return [M[1]+'21', K, L[       :number2], X[xpart[21]:xpart[22]]]
+        if i ==23: return [M[1]+'22', K, L[       :number2], X[xpart[22]:xpart[23]]]
+        if i ==24: return [M[1]+'23', K, L[       :number2], X[xpart[23]:xpart[24]]]
+        if i ==25: return [M[1]+'24', K, L[       :number2], X[xpart[24]:xpart[25]]]
+        if i ==26: return [M[1]+'25', K, L[       :number2], X[xpart[25]:xpart[26]]]
+        if i ==27: return [M[1]+'26', K, L[       :number2], X[xpart[26]:xpart[27]]]
+        if i ==28: return [M[1]+'27', K, L[       :number2], X[xpart[27]:xpart[28]]]
+        
+        
+        if i ==29: return [M[1]+'28', K, L[number2:       ], X[xpart[1]:xpart[2]]]
+        if i ==30: return [M[1]+'29', K, L[number2:       ], X[xpart[2]:xpart[3]]]
+        if i ==31: return [M[1]+'30', K, L[number2:       ], X[xpart[3]:xpart[4]]]
+        if i ==32: return [M[1]+'31', K, L[number2:       ], X[xpart[4]:xpart[5]]]
+        if i ==33: return [M[1]+'32', K, L[number2:       ], X[xpart[5]:xpart[6]]]
+        if i ==34: return [M[1]+'33', K, L[number2:       ], X[xpart[6]:xpart[7]]]
+        if i ==35: return [M[1]+'34', K, L[number2:       ], X[xpart[7]:xpart[8]]]
+        if i ==36: return [M[1]+'35', K, L[number2:       ], X[xpart[8]:xpart[9]]]
+        if i ==37: return [M[1]+'36', K, L[number2:       ], X[xpart[9]:xpart[10]]]
+        if i ==38: return [M[1]+'37', K, L[number2:       ], X[xpart[10]:xpart[11]]]
+        if i ==39: return [M[1]+'38', K, L[number2:       ], X[xpart[11]:xpart[12]]]
+        if i ==40: return [M[1]+'39', K, L[number2:       ], X[xpart[12]:xpart[13]]]
+        if i ==41: return [M[1]+'40', K, L[number2:       ], X[xpart[13]:xpart[14]]]
+        if i ==42: return [M[1]+'41', K, L[number2:       ], X[xpart[14]:xpart[15]]]
+        if i ==43: return [M[1]+'42', K, L[number2:       ], X[xpart[15]:xpart[16]]]
+        if i ==44: return [M[1]+'43', K, L[number2:       ], X[xpart[16]:xpart[17]]]
+        if i ==45: return [M[1]+'44', K, L[number2:       ], X[xpart[17]:xpart[18]]]
+        if i ==46: return [M[1]+'45', K, L[number2:       ], X[xpart[18]:xpart[19]]]
+        if i ==47: return [M[1]+'46', K, L[number2:       ], X[xpart[19]:xpart[20]]]
+        if i ==48: return [M[1]+'47', K, L[number2:       ], X[xpart[20]:xpart[21]]]
+        if i ==49: return [M[1]+'48', K, L[number2:       ], X[xpart[21]:xpart[22]]]
+        if i ==50: return [M[1]+'49', K, L[number2:       ], X[xpart[22]:xpart[23]]]
+        if i ==51: return [M[1]+'50', K, L[number2:       ], X[xpart[23]:xpart[24]]]
+        if i ==52: return [M[1]+'51', K, L[number2:       ], X[xpart[24]:xpart[25]]]
+        if i ==53: return [M[1]+'52', K, L[number2:       ], X[xpart[25]:xpart[26]]]
+        if i ==54: return [M[1]+'53', K, L[number2:       ], X[xpart[26]:xpart[27]]]
+        if i ==55: return [M[1]+'54', K, L[number2:       ], X[xpart[27]:xpart[28]]]
+    else:
+        NW      = nw - 2
+        assert NW/2 == NW//2
+        N1      = nx//NW
+        nxp     = nx - N1
+        numbers = [len(v) for v in np.array_split(np.arange(nxp), NW//2)]
+        
+        nL      = []
+        for I in range(len(numbers)):
+            nL += [sum(numbers[0:I+1])+N1]
+        xpart   = [0, N1] + nL
+        number2 = nl//2
+        
+        if i == 0: return [M[0],     K, L,                  X                   ]
+        if i == 1: return [M[1]+'0', K, L,                  X[xpart[0]:xpart[1]]]
+        if i<=NW//2+1:
+            out = [M[1]+str(i-1), K, L[:number2 ], X[xpart[i-1]:xpart[i]]]
+        else:
+            out = [M[1]+str(i-1), K, L[number2: ], X[xpart[i-1-(NW//2)]:xpart[i-(NW//2)]]]
+        return out
+    
+    print('No Profile for the wanted number of processes. Make your own profile in the mpi_splitter.py file!')
+    assert 1 == 0
+
+def partition_scheme_for_k(i, nw, nk, nl, nx):
+    M = ['Sigma', 'Worker']
+    K = np.arange(nk).astype(int)
+    L = np.arange(nl).astype(int)
+    X = np.arange(nx).astype(int)
+    assert nk>=nw
+    ki = np.array_split(K, nw-1)
+    if i == 0:
+        return [M[0], K,   L,   X ]
+    else:
+        return [M[1] + str(i-1), ki[i-1], L, X]
+
+
+def find_max_orbital_idx_per_lead(GG_P, GL_P, zero_tol, fast=False):
+    """
+    Returns the max orbital index where all following eigenvalues are 
+    below the given tolerance.
+    Used in the Zand code
+    
+    """
+    nk, nlead, nx, nc =  GG_P.shape
+    psi_idx           = -np.ones((nlead, nx, nc),dtype = np.int64)
+    it_2              = 0
+    for a1 in range(nlead):
+        for x1 in range(nx):
+            for c1 in range(nc):
+                if np.abs(GG_P[:,a1,x1,c1]).max()<zero_tol and np.abs(GL_P[:,a1,x1,c1]).max()<zero_tol:
+                    if fast:
+                        continue
+                    else:
+                        pass
+                else:
+                    psi_idx[a1,x1,c1] = it_2
+                    it_2 += 1
+    l = []
+    for i in range(nlead):
+        l += [np.where(psi_idx[i]>-1)[1].max()+1]
+    noT_lead = np.array(l)
+    return noT_lead
+
+def _helper_partition_scheme3(nw, nk, nl, nx, noT_lead):
+    """
+    Splits the leads and poles and eigenindices 
+    into chukcs to be assigned to the worker nodes in
+    the Zand code.
+    
+    
+    """
+    assert nw>nl
+    NW = nw - 1
+    def to_int(f):
+        if int(f)==0:
+            return int(f)+1
+        else:
+            return int(f)
+    
+    lead_procs = [to_int(NW * noT_lead[_i]/noT_lead.sum()) for _i in range(len(noT_lead))]
+    tot_procs  = sum(lead_procs)
+    diff       = NW - tot_procs
+    lead_procs[lead_procs.index(max(lead_procs))]+= diff
+    
+    cumsum     = np.cumsum(lead_procs)
+    lead_pool  = [np.arange(0,lead_procs[0])]
+    for i in range(len(lead_procs)-1):
+        lead_pool += [np.arange(cumsum[i], cumsum[i+1])]
+    
+    pole_split_leads = [np.array_split(np.arange(0,nx), len(lead_workers)) 
+                        for lead_workers in lead_pool]
+    count = 0
+    out   = []
+    
+    for ia, p in enumerate(pole_split_leads):
+        for pp in p:
+            count += 1
+            out   += [[ia, pp, np.arange(0, noT_lead[ia])]]
+    # Sort according to computational load.
+    # The worker with the fewest orbitals and poles
+    # will be done first. This worker should be first in
+    # line to send its data to the master node
+    priority  = np.argsort([len(o[1]) * len(o[2]) for o in out])
+    out2      = [out[i] for i in priority]
+    return out2
+
+def partition_scheme3(i,nw, nk, nl, nx, noT_lead, eigsplit=1):
+    out = _helper_partition_scheme3(nw, nk, nl, nx, noT_lead)
+    M   = ['Sigma', 'Worker']
+    K   = np.arange(nk).astype(int)
+    L   = np.arange(nl).astype(int)
+    X   = np.arange(nx).astype(int)
+    orb = np.arange(0, noT_lead.max()+1)
+    if i == 0: 
+        return [M[0],          K, L, X, orb ]
+    else:
+        out = out[i-1]
+        return [M[1]+str(i-1), K, np.array([out[0]]), out[1], out[2]]
+
+
+
+
+
+
+
+
+
+# Check that runs every time the code is called 
+# and fails if the partition scheme does not work
+if _Check:
+    k_checks  = [1,2,3,5]
+    l_checks  = [1,2,3,4]
+    x_checks  = [3,10,11,32,49,52,61,215]
+    nw_checks = [2,3,4,7,8,12,16,20,24,28,32,40,48,56,112]
+    nw_checks2= [7,8,12,16,20,24,28,32,40,48,56,112]
+    
+    from numba import njit
+    @njit
+    def ZCount(z, ki, li, xi):
+        for k in ki:
+            for l in li:
+                for x in xi:
+                    z[k,l,x] +=1
+    
+    for iw in nw_checks:
+        for ik in k_checks:
+            for il in l_checks:
+                for ix in x_checks:
+                    zeros = np.zeros((ik,il,ix), dtype = int)
+                    ident_check = []
+                    info = [partition_scheme2 (jj, iw, ik, il, ix) for jj in range(1, iw)]
+                    for v in info:
+                        _kidx = v[1]
+                        _lidx = v[2]
+                        _xidx = v[3]
+                        ZCount(zeros,_kidx, _lidx, _xidx)
+                    
+                    if not (zeros==1).all():
+                        print('Partitioning failed with (iw, ik, il, ix)',iw,ik,il,ix)
+                        assert 1 == 0
+                    
+                    if iw in nw_checks2:
+                       # print(iw, il,ix)
+                        zeros    = np.zeros((ik,il,ix), dtype = int)
+                        noT_lead = np.random.randint(1,45, (il, ))
+                        info     = [partition_scheme3 (jj, iw, ik, il, ix, noT_lead) for jj in range(1, iw)]
+                        
+                        for v in info:
+                            _kidx = v[1]
+                            _lidx = v[2]
+                            _xidx = v[3]
+                            ZCount(zeros,_kidx, _lidx, _xidx)
+                        
+                        if not (zeros==1).all():
+                            print('Partitioning failed with (iw, ik, il, ix)',iw,ik,il,ix)
+                            assert 1 == 0
+                    
+                    
+                    
+    
+    print('Partitions Checked!')
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+# def partition(i, nw, nk, nl, nx):
+#     M = ['MASTER','PI', 'DPSI', 'DOMG']
+    
+#     K = np.arange(nk).astype(int)
+#     L = np.arange(nl).astype(int)
+#     X = np.arange(nx).astype(int)
+    
+#     if nw==4:
+#         if i==0: return [M[0]    , K,L,X]
+#         if i==1: return [M[1]+'0', K,L,X]
+#         if i==2: return [M[2]+'0', K,L,X]
+#         if i==3: return [M[3]+'0', K,L,X]
+#     if nw==7:
+#         if i==0: return [M[0], K,L,                X          ] # MASTER/ODE
+        
+#         if i==1: return [M[1]+'0', K,L[0:nl//2],   X          ] # PI_1
+#         if i==2: return [M[1]+'1', K,L[nl//2: ],   X          ] # PI_2
+        
+#         if i==3: return [M[2]+'0', K,L,            X[0:nx//2] ] # DPSI_1
+#         if i==4: return [M[2]+'1', K,L,            X[nx//2: ] ] # DPSI_2
+        
+#         if i==5: return [M[3]+'0', K,L,            X[0:nx//2] ] # DOMG_1
+#         if i==6: return [M[3]+'1', K,L,            X[nx//2: ] ] # DOMG_2
+    
+#     if nw==13:
+        
+#         if i==0: return  [M[0],     K,         L,            X          ] # MASTER/ODE
+        
+#         if i==1: return  [M[1]+'0', K,L[0:nl//2],   X[0 :nx//2]          ] # PI_1
+#         if i==2: return  [M[1]+'1', K,L[nl//2: ],   X[0 :nx//2]          ] # PI_2
+#         if i==3: return  [M[1]+'2', K,L[0:nl//2],   X[nx//2:nx]          ] # PI_3
+#         if i==4: return  [M[1]+'3', K,L[nl//2: ],   X[nx//2:nx]          ] # PI_4
+        
+#         if i==5: return  [M[2]+'0', K,         L[0:nl//2],   X[0:nx//2] ] # DPSI_1
+#         if i==6: return  [M[2]+'1', K,         L[0:nl//2],   X[nx//2: ] ] # DPSI_2
+#         if i==7: return  [M[2]+'2', K,         L[nl//2: ],   X[0:nx//2] ] # DPSI_3
+#         if i==8: return  [M[2]+'3', K,         L[nl//2: ],   X[nx//2: ] ] # DPSI_4
+        
+#         if i==9 : return [M[3]+'0', K,         L[0:nl//2],   X[0:nx//2] ] # DOMG_1
+#         if i==10: return [M[3]+'1', K,         L[0:nl//2],   X[nx//2: ] ] # DOMG_2
+#         if i==11: return [M[3]+'2', K,         L[nl//2: ],   X[0:nx//2] ] # DOMG_3
+#         if i==12: return [M[3]+'3', K,         L[nl//2: ],   X[nx//2: ] ] # DOMG_4
+    
+#     # If no match is found we throw an obscure message + error to think about
+#     print('No Profile for the wanted number of processes. Make your own profile in the splitter file!')
+#     assert 1 == 0
+
+    
+    

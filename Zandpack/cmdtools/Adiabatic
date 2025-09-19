@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jul 18 22:12:01 2022
+
+@author: aleksander
+
+
+Meant for computing steady-state properties of a system that has been through 
+the fitting of the $\Gamma$-matrices. Useful for comparing the timedependent 
+response to the adiabatic. 
+
+
+write --help and get a list of things you can specify.
+
+
+"""
+
+import sys
+import os
+import numpy as np
+import joblib as jl
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.Quasiparticle    import SteadyState
+from Zandpack.Loader import flexload
+from scipy.integrate import simpson
+from tqdm import tqdm
+
+args = sys.argv[1:]
+print('Adiabatic Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'dt': '0.5',          # fs   
+           'dE': '0.01',          # eV
+           'file': 'SaveFile',   # directory
+           'num_procs': '1',     # number of processors for joblib
+           'ik': '0',            # k-point
+           'kT_0' :  '0.025',
+           'kT_1' :  '0.025',
+           'mu_0' :  '0.0',
+           'mu_1' :  '0.0',
+           'Nlead': '2',
+           'xkT'  : '10',
+           'eta'  : '1e-3',
+           'backend':'loky',
+           'verbose':'5',
+           'outfile': 'SteadyStateFile',
+           'DOS_Emin': '-3',
+           'DOS_Emax': '+3',
+           'DOS_dE'  : '0.05',
+           'parallel':'1',
+           'Mode': 'Transport',
+           'QP_its': '20',
+           'QP_Eg': '0.0',
+           'QP_t': '0.0',
+           'QP_convergence_tol':'1e-5',
+           'QP_outfile': 'QuasiParticleFile',
+           'spin_factor': '2',
+           'DM_file':'unspecified',
+           'QP_dot_tol':'0.99',
+           'QP_wiggle': '0.01',
+           'QP_n_wiggles': '10',
+           'RefinedQP_outfile':'RefinedQP',
+           'phase_convention_eigvecsumisreal':'1',
+           'Skip_section':'None'
+           }
+
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+Mu_0  = np.array([float(options['mu_'+str(i)]) for i in range(int(options['Nlead']))])
+KT_0  = np.array([float(options['kT_'+str(i)]) for i in range(int(options['Nlead']))])
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Bias    import dH, bias
+from Initial import t0, t1, hbar#, Arrs
+
+def dH_k(t,sigma):
+    return dH(t,sigma)[int(options['ik'])]
+
+times   = np.arange(t0,t1, float(options['dt']))
+Ham     = flexload(options['file']+'/Arrays/H_Ortho.npy')[int(options['ik'])]
+SEs     = from_saved_file(options['file'] + '/Arrays', ik = int(options['ik']))
+print('# SEs = ', len(SEs))
+EqCalc  = SteadyState(Ham, SEs)
+zero_sig= np.zeros((1,) + Ham.shape, dtype = np.complex128)
+dm_eq   = flexload(options['file']+'/Arrays/DM_Ortho.npy')
+if options['DM_file']=='unspecified':
+    print('Using DM from ', options['file'] )
+    def get_dm(t):
+        return dm_eq
+else:
+    DM_file    = flexload(options['DM_file']+'.npz', return_arc=True)
+    t_DM, DM   = DM_file['times'], DM_file['DM']
+    def get_dm(t):
+        diff = np.abs(t - t_DM)
+        idx  = np.where(diff == diff.min())[0][0]
+        return DM[idx]
+
+def Fermi_D(E, mu, kT):
+    return 1/(1 + np.exp((E-mu)/kT))
+
+def Current_DOS(t):
+    dyn_bias = np.array([bias(t, a) for a in range(int(options['Nlead']))])
+    deltaH   = dH_k(t, get_dm(t))
+    Bias     = dyn_bias + Mu_0
+    maxkT    = KT_0.max()
+    xkT      = float(options['xkT'])
+    E1       = Bias.min() - xkT * maxkT
+    E2       = Bias.max() + xkT * maxkT
+    Eg       = np.arange(E1, E2, float(options['dE']))
+    Fi       = np.array([Fermi_D(Eg, Bias[a], KT_0[a]) for a in range(int(options['Nlead']))])
+    Fij      = (Fi[None, :,:] - Fi[:, None,:])
+    
+    Tij, _ = EqCalc.transmission_and_dos(Eg, 
+                                         float(options['eta']), 
+                                         Bias - Mu_0, # <--- 25.02.24 bugfix, used to be "Bias," 
+                                         deltaH)
+    
+    Eg_DOS = np.arange(float(options['DOS_Emin']),
+                       float(options['DOS_Emax']),
+                       float(options['DOS_dE'  ])
+                       )
+    
+    Tij_2, DOS = EqCalc.transmission_and_dos(Eg_DOS, 
+                                             float(options['eta']), 
+                                             Bias, 
+                                             deltaH)
+    
+    # units of electrons per whatever time-units 
+    # the user specified in the Initial file
+    Cij = simpson(Tij * Fij, x = Eg, axis = 2) * float(options['spin_factor'])/(2*2*np.pi*hbar) 
+    return Cij, DOS, Tij_2, Bias
+
+def QP(tE):
+    t,Eg = tE
+    sig  = get_dm(t)
+    dyn_bias = np.array([bias(t, a) for a in range(int(options['Nlead']))])
+    deltaH   = dH_k(t, sig)
+    
+    Bias     = dyn_bias + Mu_0
+    Eout, vec, Evec, iSE = EqCalc.solve_QP_equation(Eg,int(options['QP_its']),
+                                                    Bias, deltaH,
+                                                    conv_tol = float(options['QP_convergence_tol'])
+                                                    )
+    
+    Converged = 0
+    if len(Evec)<2:
+        Converged=1
+    elif abs(Evec[-1]-Evec[-2])<float(options['QP_convergence_tol']):
+        Converged = 1
+    return Evec, iSE, vec, Converged
+
+# DO CALCULATION THAT IS ASKED FOR
+if options['Mode'] == 'Transport':
+    print('')
+    print('Calculating steady-state/Adiabatic response properties at ', len(times), ' different timesteps!\n')
+    print('')
+
+    if options['parallel'] == '0':
+        Result = []
+        for ti in tqdm(times): Result += [[Current_DOS(ti)]]
+    else:
+        Result = jl.Parallel(n_jobs  = int(options['num_procs']),
+                             backend =     options['backend']   ,
+                             verbose = int(options['verbose'])  ,
+                             )(jl.delayed(Current_DOS)(ti) for ti in times)
+
+    nt       = len(times)
+    Currents = np.array([Result[i][0] for i in range(nt)])
+    DOS      = np.array([Result[i][1] for i in range(nt)])
+    Transm   = np.array([Result[i][2] for i in range(nt)])
+    Bias     = np.array([Result[i][3] for i in range(nt)])
+    
+    np.savez(options['outfile'], 
+             times        = times, 
+             Currents     = Currents, 
+             DOS          = DOS, 
+             Transmission = Transm,
+             Bias         = Bias,
+             Eg_DOS = np.arange(float(options['DOS_Emin']),
+                                float(options['DOS_Emax']),
+                                float(options['DOS_dE'  ])
+                                )
+             )
+    
+    print('Saved Transport-calculation in ', options['outfile'] + '.npz !')
+
+elif options['Mode'] == 'Quasiparticle':
+    print('')
+    print('Iterating quasi-particle equation!')
+    print('')
+    try:
+        print('Parallel mode')
+        t_E = flexload('QuasiParticle_Solver_Input_t_and_E_pairs.npy')
+        n_calc = len(t_E)
+        print(n_calc,' points to iterate')
+        print('num_procs:',options['num_procs'])
+        Result = jl.Parallel(n_jobs  = int(options['num_procs']),
+                             backend =     options['backend']   ,
+                             verbose = int(options['verbose'])  ,
+                             )(jl.delayed(QP)(t_E[i]) for i in range(n_calc))
+        Evec = np.zeros((n_calc, int(options['QP_its'])), dtype ='complex')
+        iSE  = np.zeros((n_calc, int(options['QP_its'])), dtype ='complex')
+        Conv = np.zeros((n_calc,), dtype ='int')
+        vec  = np.zeros((n_calc, EqCalc._no), dtype ='complex')
+        Evec[:,:] = np.nan
+        iSE [:,:] = np.nan
+        #Conv[:]   = np.nan
+        vec[:,:]  = np.nan
+        
+        counter = 0
+        for res in Result:
+            its = len(res[0])
+            Evec[counter, 0:its] = res[0]
+            iSE [counter, 0:its] = res[1]
+            vec[counter , :]     = res[2]
+            Conv[counter]        = res[3]
+            counter+=1
+        
+        np.savez(options['QP_outfile'],
+                 t    = t_E[:,0],
+                 Eg   = t_E[:,1],
+                 Evec = Evec,
+                 iSE  = iSE,
+                 Conv = Conv,
+                 vec  = vec)
+    except:
+        print('Single point mode')
+        t  = float(options['QP_t'])
+        Eg = float(options['QP_Eg'])
+        Evec, iSE, vec,Conv = QP((t, Eg))
+        
+        np.savez(options['QP_outfile'],
+                 t    = t,
+                 Eg   = Eg,
+                 Evec = Evec,
+                 iSE  = iSE,
+                 Conv = Conv,
+                 vec  = vec)
+    print('Saved Quasiparticle-calculation in ', options['QP_outfile'] + '.npz !')
+
+elif options['Mode']=='RefineQuasiparticle':
+    Eg      = float(options['QP_Eg'])
+    dt      = float(options['dt'])
+    dot_tol = float(options['QP_dot_tol'])
+    States  = []
+    Times   = []
+    Energies= []
+    
+    T0      = t0+0.0
+    Evec, iSE, vec,Conv = QP((T0, Eg))
+    if Conv!=1:
+        print('Initial Quasiparticle calculation did not Converge! Pick a better initial energy!')
+        exit()
+    notnan = np.where(np.isnan(Evec) == False)[0]
+    #print(Evec[notnan])
+    Eg     = Evec[notnan][-1]
+    States += [vec.copy()]
+    Times  += [T0]
+    counter = 0
+    skip_section=options['Skip_section']
+    if skip_section =='None':
+        skip_t = np.array([0.0])
+        skip_dT=np.array([0.0])
+        skip_done=np.array([1])
+    else:
+        skips  = skip_section.split('AND')
+        skip_t = np.array([float(s.split(':')[0]) for s in skips])
+        skip_dT= np.array([float(s.split(':')[1]) for s in skips])
+        skip_done=np.array([0]*len(skip_t))
+    
+    while T0<t1:
+        if np.mod(counter,50)==0:
+            print('At time', T0, 'of ', t1, 'with Eguess = ', Eg)
+        T0+=dt
+        Trig = ((skip_done==0) * (T0>skip_t))
+        if skip_section!='None' and Trig.any():
+            idx = np.where(Trig)[0][0]
+            T0  += skip_dT[idx]
+            skip_done[idx]=1
+        
+            
+        Evec, iSE, vec,Conv = QP((T0, Eg))
+        if Conv!=1:
+            print('QP equation didnt converge! Stopping')
+            break
+        if np.abs(vec.conj().dot(States[-1]))<dot_tol or Conv==0:
+            E_wig = Eg+np.linspace(-float(options['QP_wiggle']),
+                                    float(options['QP_wiggle']),
+                                    int(  options['QP_n_wiggles']))
+            wiggle_success = False
+            print('Wiggling energies')
+            for ewig in E_wig:
+                Evec, iSE, vec,Conv = QP((T0, ewig))
+                if np.abs(vec.conj().dot(States[-1]))>dot_tol and Conv==1:
+                    wiggle_success=True
+                    break
+            if wiggle_success == False:
+                print('Failed at finding vector that satisfied the asked for bound')
+                print('Stopping')
+                break
+        notnan  =  np.where(np.isnan(Evec) == False)[0]
+        Eg      =  Evec[notnan][-1]
+        States +=  [vec.copy()]
+        Times  +=  [T0]
+        Energies+= [Eg]
+        
+        counter+=1
+    
+    print('Last Time:', T0)
+    
+    Times  = np.array(Times)
+    States = np.array(States)
+    Sums   = States.sum(axis=1)
+    if options['phase_convention_eigvecsumisreal'] == '1':
+        phase  = np.log(Sums).imag
+        States = States*np.exp(-1*phase[:,None])
+    
+    np.savez(options['RefinedQP_outfile'],
+             t    = Times,
+             vecs = States,
+             Energies = Energies)
+
+elif options['Mode']=='Nothing':
+    print('No calculator mode set try e.g. writing "Mode=Transport"')
+    print('try --help after the executable')
+

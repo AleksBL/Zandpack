@@ -1,0 +1,465 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Nov 14 16:12:42 2022
+
+@author: aleksander
+
+
+Modifies the Fermi-function part of the calculation specified by the file-keyword
+
+Add --help afterwards to see some options you can specify.
+
+
+
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.PadeDecomp import FD_expanded, Pade_poles_and_coeffs, Hu_poles, FD
+from Block_matrices.Block_matrices import abssorted_eig_4inds as Sorted_eig
+from Zandpack.Linalg_factorisation import SVD, TAKAGI, QR
+from Zandpack.Loader import flexload
+
+pref = 'modify_occupations  '
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file'   :'TDT_file',
+           'outfile':'NewTDT_file',
+           'mu_i'   :'0.0,0.0',
+           'kT_i'   :'0.025,0.025',
+           'pole_mode':'JieHu2011',
+           'N_F':'20',
+           'eigtol':'1e-8',
+           'use_exact_fermi':'False',
+           'print_eigf':'False',
+           'print_eigl':'False',
+           'factorisation':'eigen',
+           'new_lead':'False',
+           'scale_gamma': 'None'
+           }
+
+os.chdir(os.getcwd())
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after modify_occupations command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+file    = options['file']
+outfile = options['outfile']
+if options['new_lead'] == 'False':
+    n_new_lead = 0
+else:
+    # NewLead is a dictionary containing the information of the lead
+    # 
+    n_new_lead = 1
+    exec('from '+options['new_lead'].replace('.py','') + ' import NewLead')
+    print('Imported new lead from '+options['new_lead'])
+
+if options['factorisation']=='eigen':
+    _n = 2
+else:
+    _n = 1
+
+
+sedir=file+'/Arrays'
+SEs  = from_saved_file(sedir)
+
+#Gl_eig0   =  flexload(sedir + '/_Gl_Eigenvalues.npy')
+num_l     =  flexload(sedir + '/num_lorentzians.npy')
+num_leads =  flexload(sedir + '/num_leads.npy'      ) + n_new_lead
+mu_i      =  np.fromstring(options['mu_i'], sep = ',')
+kT_i      =  np.fromstring(options['kT_i'], sep = ',')
+N_F       =  int(options['N_F'])
+Hs        =  flexload(sedir+'/H_Ortho.npy').shape
+nk,no     =  Hs[0],Hs[-1]
+
+if options['pole_mode'] == 'JieHu2011':
+    zi,ci = Hu_poles(N_F)
+elif options['pole_mode'] == 'Croy2009':
+    zi,ci = Pade_poles_and_coeffs(N_F)
+print('#  Leads: ', num_leads)
+F_poles = np.zeros((num_leads, N_F), dtype = np.complex128)
+print('Fermi function pole shape: ', F_poles.shape)
+for a in range(num_leads):
+    for i in range(N_F):
+        F_poles[a,i]     = mu_i[a] + zi[i]*kT_i[a] # The poles of the expanded fermifunction on the upper
+if len(mu_i)!=num_leads:
+    print(pref+'error in input mu_i')
+    exit()
+eps_l    = np.zeros((nk,num_leads, num_l))
+gam_l    = np.zeros((nk,num_leads, num_l))
+for a in range(num_leads):
+    if options['new_lead']=='False' or a<(num_leads-1):
+        eps_l[:,a,:] = flexload(sedir+'/Centres_Lorentzian_'+str(a)+'.npy')
+        gam_l[:,a,:] = flexload(sedir+'/Broadening_Lorentzian_'+str(a)+'.npy')
+    elif options['new_lead']!='False':
+        print('Using new lead information from '+options['new_lead']+'!')
+        eps_l[:,a,:] = NewLead['Centres_Lorentzian']
+        gam_l[:,a,:] = NewLead['Broadening_Lorentzian']
+        
+        
+
+Xpp  = np.zeros((nk, num_leads, num_l+_n*N_F, no), dtype=np.complex128)
+Xpm  = Xpp.copy()
+GGM  = Xpp.copy()
+GGP  = Xpp.copy()
+GLP  = Xpp.copy()
+GLM  = Xpp.copy()
+xi   = np.zeros((nk, num_leads, num_l+_n*N_F, no, no), dtype=np.complex128)
+Ixi  = xi.copy()
+_Gleig = np.zeros((nk, num_leads, num_l, no), dtype=np.complex128)
+_Gfeig = np.zeros((nk, num_leads, N_F, no), dtype=np.complex128)
+if options['scale_gamma']!='None':
+    scale_gamma = np.fromstring(options['scale_gamma'], sep=',')
+else:
+    scale_gamma = np.ones(num_leads)
+print('scale_gamma = ', scale_gamma)
+for a in range(num_leads):
+    if options['new_lead']=='False' or a<(num_leads-1):
+        SEsa = SEs[a]
+    elif options['new_lead']!='False':
+        print('Using new lead information from '+options['new_lead']+'!')
+        # In your editor this might show up as a warning, but its because its loaded
+        # with "exec('...')"
+        SEsa = NewLead['SEsa']
+    mu   = mu_i[a]
+    kT   = kT_i[a]
+    ea   = eps_l[:,a,:]
+    ga   = gam_l[:,a,:]
+    beta = 1/kT
+    Wi   = SEsa.Coeffs
+    print('Weights shape and PSD checks:')
+    assert Wi.shape[0] == nk
+    assert Wi.shape[2] == no
+    assert Wi.shape[3] == no
+    assert np.allclose(Wi, Wi.conj().transpose(0,1,3,2))
+    print('Checks okay')
+    
+    Zl   = ea + 1j*ga
+    correct_F = F_poles[a][None,:][[0]*nk]
+    xpp  = np.hstack((Zl,        correct_F,       correct_F))
+    xpm  = np.hstack((Zl.conj(), correct_F.conj(),correct_F.conj()))
+    
+    
+    
+    #if options['factorisation']!='eigen':
+    #    xpp  = np.hstack((Zl,        F_poles[None,a]))
+    #    xpm  = np.hstack((Zl.conj(), F_poles[None,a].conj()))
+    #else:
+    
+    Ga_in_poles_p  = SEsa.evaluate_gamma(F_poles[a]       )
+    Ga_in_poles_m  = SEsa.evaluate_gamma(F_poles[a].conj())
+    
+    B  =  Ga_in_poles_p + Ga_in_poles_p.conj().transpose(0,1,3,2)
+    C  =  Ga_in_poles_p - Ga_in_poles_p.conj().transpose(0,1,3,2)
+    B *=  (0.5 +0j)
+    C *=  (0.5 +0j)
+    
+    BB  =  Ga_in_poles_m + Ga_in_poles_m.conj().transpose(0,1,3,2)
+    CC  =  Ga_in_poles_m - Ga_in_poles_m.conj().transpose(0,1,3,2)
+    BB *=  (0.5 +0j)
+    CC *=  (0.5 +0j)
+    
+    
+    Ga_c = (Ga_in_poles_p.conj().transpose(0,1,3,2))
+    Gm_c = (Ga_in_poles_m.conj().transpose(0,1,3,2))
+    
+    assert np.allclose(Wi, Wi.conj().transpose(0,1,3,2))
+    #assert not np.allclose(Ga_in_poles_p@ Ga_c, (Ga_c@Ga_in_poles_p))
+    #assert not np.allclose(Ga_in_poles_m@ Gm_c, (Gm_c@Ga_in_poles_m))
+    assert np.allclose(B@(B.transpose(0,1,3,2).conj()), B.transpose(0,1,3,2).conj()@B)
+    assert np.allclose(C@(C.transpose(0,1,3,2).conj()), C.transpose(0,1,3,2).conj()@C)
+    
+    if options['factorisation']=='wrong_eigen':
+        print('Using eigen-decomposition of Gamma_'+str(a)+'(z_F)')
+        eigl, vecl        = Sorted_eig(Wi,            hermitian = True)
+        eigf1, vecf1      = Sorted_eig(Ga_in_poles_p, hermitian = False)
+        eigf2, vecf2      = Sorted_eig(Ga_in_poles_m, hermitian = False)
+        _Gleig[:,a,:,:]   = eigl
+        _Gfeig[:,a,:,:]   = eigf1
+        ivecf1            = np.linalg.inv(vecf1)
+        
+        
+        if not np.allclose(Ga_in_poles_p@ Ga_c, (Ga_c@Ga_in_poles_p)):
+            print('------->Gamma in fermipole not normal')
+        
+        xi[:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2), 
+                                            vecf1.transpose(0,1,3,2)
+                                            ), axis = 1)
+        
+        
+        print('Condition number of vecf1: ',np.linalg.cond(vecf1) )
+        Ixi[:,a,:,:,:]    = np.concatenate((vecl .transpose(0,1,3,2).conj(),
+                                           ivecf1.transpose(0,1,2,3)
+                                            ),axis = 1 )
+        
+    if options['factorisation']=='eigen':
+        eigl, vecl        = Sorted_eig(Wi,            hermitian = True)
+        eigf1, vecf1      = Sorted_eig(Ga_in_poles_p, hermitian = False)
+        eigf2, vecf2      = Sorted_eig(Ga_in_poles_m, hermitian = False)
+        
+        eB, vB            = Sorted_eig(B)
+        eC, vC            = Sorted_eig(C)
+        
+        eBB, vBB          = Sorted_eig(BB)
+        eCC, vCC          = Sorted_eig(CC)
+        
+        # scale gamma eigenvalues by scale_gamma
+        print('Scaling eigenvalues of Gamma_'+str(a)+' by '+ str(scale_gamma[a]))
+        eigl  *= scale_gamma[a]
+        eigf1 *= scale_gamma[a]
+        eigf2 *= scale_gamma[a]
+        eB    *= scale_gamma[a]
+        eC    *= scale_gamma[a]
+        eBB   *= scale_gamma[a]
+        eCC   *= scale_gamma[a]
+        
+        _Gleig[:,a,:,:]   = eigl
+        _Gfeig[:,a,:,:]   = eigf1
+        
+        xi[:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2), 
+                                              vB.transpose(0,1,3,2),
+                                              vC.transpose(0,1,3,2)
+                                              ), axis = 1)
+        
+        Ixi[:,a,:,:,:]    = np.concatenate((vecl.transpose(0,1,3,2).conj(),
+                                              vB.transpose(0,1,3,2).conj(),
+                                              vC.transpose(0,1,3,2).conj()
+                                              ),axis = 1 )
+    
+    print(eigf1.max())
+    print(eigl.max())
+    Xpp[:,a,:,:] = xpp[:,:,None]
+    Xpm[:,a,:,:] = xpm[:,:,None]
+    
+    for ik in range(nk):
+        max_error = 0.0
+        for l in range(num_l):
+            gkl  =  Zl [ik, l].imag
+            if options['use_exact_fermi']=='False':
+                fz   = FD_expanded(np.array([Zl[ik,l]])       , zi, beta, mu=mu, coeffs=ci)[0]
+                fzc  = FD_expanded(np.array([Zl[ik,l].conj()]), zi, beta, mu=mu, coeffs=ci)[0]
+            elif options['use_exact_fermi']=='True':
+                fz   = FD(Zl[ik,l]       ,  beta, mu=mu)
+                fzc  = FD(Zl[ik,l].conj(),  beta, mu=mu)
+            
+            rfz  = FD(Zl[ik,l],        beta, mu = mu)
+            rfzc = FD(Zl[ik,l].conj(), beta, mu = mu)
+            
+            for o in range(no):
+                eklo = eigl[ik, l, o]
+                v1    =  0.5j *    fz    * eklo * gkl
+                v2    =  0.5j *    fzc   * eklo * gkl
+                v3    = -0.5j * (1-fz )  * eklo * gkl
+                v4    = -0.5j * (1-fzc)  * eklo * gkl
+                
+                rv1   =  0.5j *    rfz   * eklo * gkl
+                rv2   =  0.5j *    rfzc  * eklo * gkl
+                rv3   = -0.5j * (1-rfz ) * eklo * gkl
+                rv4   = -0.5j * (1-rfzc) * eklo * gkl
+                
+                GLP[ik, a, l, o] =  v1
+                GLM[ik, a, l, o] =  v2
+                GGP[ik, a, l, o] =  v3
+                GGM[ik, a, l, o] =  v4
+                
+                mxer = max((abs(v1-rv1), abs(v2-rv2), abs(v3-rv3),abs(v4-rv4)))
+                if mxer > max_error:
+                    max_error = 0.0 + mxer
+        
+        print('Max error on (ik,ia) = ', (ik,a), 'is ', max_error)
+        
+        for p in range(N_F):
+            for o in range(no):
+                if options['factorisation']!='eigen':
+                    eklo1 = eigf1[ik, p, o]
+                    eklo2 = eigf2[ik, p, o]
+                    
+                    
+                    GLP[ik, a, p+num_l, o] = +kT * eklo1 * ci[p]
+                    GLM[ik, a, p+num_l, o] = -kT * eklo2 * ci[p]
+                    GGP[ik, a, p+num_l, o] = +kT * eklo1 * ci[p]
+                    GGM[ik, a, p+num_l, o] = -kT * eklo2 * ci[p]
+                else:
+                    eklo1b = eB [ik, p, o]
+                    eklo2b = eBB[ik, p, o]
+                    eklo1c = eC [ik, p, o]
+                    eklo2c = eCC[ik, p, o]
+                    
+                    GLP[ik, a, p+num_l, o] = +kT * eklo1b * ci[p]
+                    GLM[ik, a, p+num_l, o] = -kT * eklo2b * ci[p]
+                    GGP[ik, a, p+num_l, o] = +kT * eklo1b * ci[p]
+                    GGM[ik, a, p+num_l, o] = -kT * eklo2b * ci[p]
+                    
+                    GLP[ik, a, p+num_l+N_F, o] = +kT * eklo1c * ci[p]
+                    GLM[ik, a, p+num_l+N_F, o] = -kT * eklo2c * ci[p]
+                    GGP[ik, a, p+num_l+N_F, o] = +kT * eklo1c * ci[p]
+                    GGM[ik, a, p+num_l+N_F, o] = -kT * eklo2c * ci[p]
+        
+
+print('Maximum of eigenvalues of Lorentzian Gammas: ' + str(np.round(_Gleig.max(),6)))
+print('Minimum of eigenvalues of Lorentzian Gammas: ' + str(np.round(_Gleig.min(),6)))
+print('Maximum of eigenvalues of Fermi-pole Gammas: ' + str(np.round(_Gfeig.max(),6)))
+print('Minimum of eigenvalues of Fermi-pole Gammas: ' + str(np.round(_Gfeig.min(),6)))
+
+# print('Maximum of eigenvalues of Pole Gammas: ' + str(np.round(_Gfeig.max(),6)))
+# print('Minimum of eigenvalues of Pole Gammas: ' + str(np.round(_Gfeig.min(),6)))
+# print('GGM abssum', np.abs(GGM).sum())
+# print('GGM abssum', np.abs(GGP).sum())
+# print('GGM abssum', np.abs(GLM).sum())
+# print('GGM abssum', np.abs(GLP).sum())
+    
+diff_GGM_GLM = GGM - GLM
+diff_GGP_GLP = GGP - GLP
+
+os.system('rm -rf '+ options['outfile'])
+os.system('cp -R '+options['file'] +' '+ options['outfile'])
+os.chdir(options['outfile']+'/Arrays')
+
+delete = ['diff_GGM_GLM','diff_GGP_GLP','GG_M', 'GL_M', 'GL_P','GG_P', 
+          '_Gl_Eigenvalues', '_Gp_Eigenvalues', 
+          'xi','Ixi', 'Xpp', 'Xpm',
+          'num_poles_fermi'
+          ]
+
+M = xi@Ixi.transpose(0,1,2,4,3)
+print(np.sum(M), ' / ', num_leads * (num_l+N_F) * no)
+
+for f in os.listdir():
+    if any([ele in f for ele in delete]):
+        os.system('rm ' + f)
+
+np.savez_compressed('xi', xi)
+np.savez_compressed('Ixi', Ixi)
+np.save('Xpp', Xpp)
+np.save('Xpm', Xpm)
+np.save('GG_M', GGM)
+np.save('GG_P', GGP)
+np.save('GL_P', GLP)
+np.save('GL_M', GLM)
+np.save('diff_GGM_GLM', diff_GGM_GLM)
+np.save('diff_GGP_GLP', diff_GGP_GLP)
+np.save('_Gl_Eigenvalues', _Gleig.transpose(1,0,2,3))
+np.save('_Gp_Eigenvalues', _Gfeig.transpose(1,0,2,3))
+np.save('num_poles_fermi', _n*N_F)
+np.save('mu_i', mu_i)
+np.save('kT_i', kT_i)
+if options['new_lead']!='False':
+    np.save('Centres_Lorentzian_'+str(num_leads-1)+'.npy',NewLead['Centres_Lorentzian'])
+    np.save('Broadening_Lorentzian_'+str(num_leads-1)+'.npy',NewLead['Broadening_Lorentzian'])
+    np.save('num_leads.npy', num_leads)
+    
+m1 = max(np.where(np.abs(_Gleig)>float(options['eigtol']))[3])
+m2 = max(np.where(np.abs(_Gfeig)>float(options['eigtol']))[3])
+noT_new = max((m1,m2))+1
+print('noT: ', flexload('noT.npy'),' -> ', noT_new)
+np.save('noT', noT_new)
+np.save('zero_tol',float(options['eigtol']))
+
+psi_shape = flexload('psi_shape.npy')
+psi_shape[1] = num_leads
+psi_shape[3] = noT_new
+psi_shape[2] = _n*N_F + num_l
+print('psi_shape: ', flexload('psi_shape.npy'),' -> ', psi_shape)
+np.save('psi_shape', psi_shape)
+
+omg_shape = flexload('omg_shape.npy')
+omg_shape[1] = num_leads
+omg_shape[3] = noT_new
+omg_shape[2] = _n*N_F + num_l
+omg_shape[5] = _n*N_F + num_l
+
+print('omg_shape: ', flexload('omg_shape.npy'),' -> ', omg_shape)
+np.save('omg_shape', omg_shape)
+
+print(pref + 'new chemical potentials: ', mu_i)
+print(pref + 'new temperatures: ', kT_i)
+print(pref + 'new number of poles: ', _n*N_F)
+
+print('---------------------')
+if options['print_eigf'] == 'True':
+    for v in _Gfeig.ravel():
+        print(v)
+print('---------------------')
+if options['print_eigl'] == 'True':
+    for v in _Gleig.ravel():
+        print(v)
+print('---------------------')
+    
+
+
+
+
+    # if options['factorisation']=='svd_fermi':
+    #     print('Using SVD-decomposition of Gamma_'+str(a)+'(z_F)')
+    #     print('EXPERIMENTAL')
+        
+    #     eigl, vecl         = Sorted_eig(Wi, hermitian = True)
+    #     Uf1,eigf1,Vf1      = SVD(Ga_in_poles_p)
+    #     Uf2,eigf2,Vf2      = SVD(Ga_in_poles_m)
+        
+    #     xi [:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2),
+    #                                          Uf1), axis=1)
+    #     Ixi[:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2).conj(),
+    #                                          Vf1.conj()), axis=1)
+    #     _Gleig[:,a,:,:]    = eigl
+    #     _Gfeig[:,a,:,:]    = eigf1
+    
+    # if options['factorisation']=='svd_all':
+    #     print('Using SVD decomposition of whole Gamma_'+str(a))
+    #     print('EXPERIMENTAL')
+        
+    #     vecl,eigl,uecl     = SVD(Wi)
+    #     Uf1,eigf1,Vf1      = SVD(Ga_in_poles_p)
+    #     Uf2,eigf2,Vf2      = SVD(Ga_in_poles_m)
+        
+    #     xi [:,a,:,:,:]     = np.concatenate((vecl,
+    #                                          Uf1 ), axis=1)
+    #     Ixi[:,a,:,:,:]     = np.concatenate((uecl,
+    #                                          Vf1), axis=1)
+    #     _Gleig[:,a,:,:]    = eigl
+    #     _Gfeig[:,a,:,:]    = eigf1
+
+    # if options['factorisation']=='takagi_fermi':
+    #     print('Using TAKAGI-decomposition of Gamma_'+str(a)+'(z_F)')
+    #     print('EXPERIMENTAL')
+        
+    #     eigl, vecl         = Sorted_eig(Wi, hermitian = True)
+    #     Uf1,eigf1,Vf1      = TAKAGI(Ga_in_poles_p)
+    #     Uf2,eigf2,Vf2      = TAKAGI(Ga_in_poles_m)
+        
+    #     xi [:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2),
+    #                                          Uf1), axis=1)
+    #     Ixi[:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2).conj(),
+    #                                          Vf1), axis=1)
+    #     _Gleig[:,a,:,:]    = eigl
+    #     _Gfeig[:,a,:,:]    = eigf1
+    # if options['factorisation']=='qr_fermi':
+    #     print('Using QR-decomposition of Gamma_'+str(a)+'(z_F)')
+    #     print('EXPERIMENTAL')
+        
+    #     eigl, vecl         = Sorted_eig(Wi, hermitian = True)
+    #     Uf1,eigf1,Vf1      = QR(Ga_in_poles_p)
+    #     Uf2,eigf2,Vf2      = QR(Ga_in_poles_m)
+        
+    #     xi [:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2),
+    #                                          Uf1), axis=1)
+    #     Ixi[:,a,:,:,:]     = np.concatenate((vecl.transpose(0,1,3,2).conj(),
+    #                                          Vf1), axis=1)
+    #     _Gleig[:,a,:,:]    = eigl
+    #     _Gfeig[:,a,:,:]    = eigf1
+    

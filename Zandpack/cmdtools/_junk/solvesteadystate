@@ -1,0 +1,811 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 26 11:50:44 2023
+
+@author: aleksander
+
+A slower development version of the psinought code.
+
+
+"""
+
+import sys
+import os
+import numpy as np
+from numba import njit, prange
+import scipy.sparse.linalg as LSA
+import scipy.sparse as sp
+from Zandpack.Louivillian import Louivillian
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.Quasiparticle import SteadyState
+
+
+Axb_solver = LSA.cgs
+LinearOperator = LSA.LinearOperator
+
+args = sys.argv[1:]
+print('solvesteadystate Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+_check = True
+#Default values
+options = {'file': 'SaveFile',   # directory
+           'savefile':'None',
+           }
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Initial import t0, hbar
+from Bias    import bias, dH
+print('Reading arrays.....')
+
+dm0     =  np.load(options['file']+'/Arrays/DM_Ortho.npy')
+H0      =  np.load(options['file']+'/Arrays/H_Ortho.npy') + dH(t0, dm0)
+SEs     =  from_saved_file(options['file']+'/Arrays')
+SSobj   =  SteadyState(H0[0], SEs)
+N_F     =  np.load(options['file']+'/Arrays/num_poles_fermi.npy')
+kT_i    =  np.load(options['file']+'/Arrays/kT_i.npy')
+
+nk      =  H0.shape[0]
+no      =  H0.shape[-1]
+fd      =  options['file']+'/Arrays/'
+psi_sh  =  np.load(fd+'psi_shape.npy')
+nx,noT  = psi_sh[2:4]
+xi      =  np.ascontiguousarray(np.load(fd+'xi.npy')[:,:,:,:noT])
+Ixi     =  np.ascontiguousarray(np.load(fd+'Ixi.npy')[:,:,:,:noT])
+#IXC     =  np.conj(Ixi)
+GGP     =  np.ascontiguousarray(np.load(fd+'GG_P.npy')[:,:,:,:noT])
+GGM     =  np.ascontiguousarray(np.load(fd+'GG_M.npy')[:,:,:,:noT])
+GLP     =  np.ascontiguousarray(np.load(fd+'GL_P.npy')[:,:,:,:noT])
+GLM     =  np.ascontiguousarray(np.load(fd+'GL_M.npy')[:,:,:,:noT])
+Xpp     =  np.ascontiguousarray(np.load(fd+'Xpp.npy')[:,:,:,:noT])
+Xpm     =  np.ascontiguousarray(np.load(fd+'Xpm.npy')[:,:,:,:noT])
+diff_GGM_GLM = GGM-GLM#np.load(fd+'diff_GGM_GLM.npy')
+diff_GGP_GLP = GGP-GLP#np.load(fd+'diff_GGP_GLP.npy')
+na      = psi_sh[1]
+bias_a  = np.array([bias(t0,i) for i in range(na)])
+for ia in range(na):
+    Xpp[:,ia,:,:] += bias_a[ia]
+for ia in range(na):
+    Xpm[:,ia,:,:] += bias_a[ia]
+
+nsigr   = (no*(no+1))//2
+nsigi   =  nsigr - no
+npsi    =  np.prod(psi_sh[1:])
+nomg    = (na * nx * noT)**2
+ns      = nsigr + nsigi
+IK      = 0
+
+print('na, nx, noT, no', (na, nx,noT, no))
+@njit(fastmath = True,parallel=False)
+def Av_opt(v, ik, out, OPSI):
+    assert out.shape == v.shape
+    vpsiR   =  v[ 0  :   npsi].reshape(na, nx, noT, no)
+    vpsiI   =  v[npsi: 2*npsi].reshape(na, nx, noT, no)
+    psi     =  vpsiR+ 1j*vpsiI
+    psic    =  np.conj(psi)
+    X       =  xi [ik,:,:,:].copy()
+    IX      =  Ixi[ik,:,:,:]#.copy()#.reshape(compound,no).copy()
+    compound=  na*nx*noT
+    
+    deltaM  =  diff_GGM_GLM[ik,:,:,:].copy().reshape(compound,1)
+    deltaP  =  diff_GGP_GLP[ik,:,:,:]#.reshape(compound)
+    
+    _H0 = H0[ik]
+    I   = np.eye(no)
+    iA,iX,iO1,iO2 = np.where(psi!=0)
+    iA = iA[0]
+    iX = iX[0]
+    iO1= iO1[0]
+    iO2= iO2[0]
+    #print(iA)
+    
+    xpm     =  Xpm[ik, :, :, :noT].copy()
+    X_sum   =  X.reshape(compound,no).T#.copy()
+    IXrow   =  IX[:,:,:,iO2].copy().reshape(compound,1)
+    X_sumrow=  X_sum[iO2,:]
+    it=0
+    SUM  = np.zeros(no,dtype=np.complex128)
+    
+    for a in range(na):
+        for x in range(nx):
+            ig = _H0 - I * Xpp[ik,a,x,0]
+            for c in range(noT):
+                
+                L1,L2 = it*no, (it+1)*no
+                
+                frac = 1j/(xpm[iA, iX, iO1] - Xpp[ik,a,x,c])
+                ele2 = frac*psic[iA,iX,iO1,iO2]*deltaP[a,x,c]*X[a,x,c,iO2]
+                SUM  = X[iA,iX,iO1]*ele2
+                
+                if a ==iA and x==iX and c==iO1:
+                    FRAC = 1j/(xpm.reshape(compound,1) - Xpp[ik,a,x,c])
+                    ele1 = (FRAC*deltaM*IXrow)[:,0]*psi[iA,iX,iO1,iO2]
+                    SUM += np.dot(X_sum,ele1)
+                #SUM*=-1
+                if a ==iA and x==iX and c==iO1:
+                    SUM += np.dot(ig, psi[a,x,c,:])
+                
+                out[L1:L2]          = SUM.real
+                out[L1+npsi:L2+npsi]= SUM.imag
+                it+=1
+
+
+
+
+@njit(fastmath = True,parallel=False)
+def Av3(v, ik, out, OPSI,includefrac = 1.0):
+    assert out.shape == v.shape
+    vpsiR   =  v[ 0  :   npsi].reshape(na, nx, noT, no)
+    vpsiI   =  v[npsi: 2*npsi].reshape(na, nx, noT, no)
+    psi     =  vpsiR+ 1j*vpsiI
+    psic    =  np.conj(psi)
+    X       =  xi [ik,:,:,:].copy()
+    IX      =  Ixi[ik,:,:,:].copy()#.reshape(compound,no).copy()
+    compound=  na*nx*noT
+    
+    OPSI    = np.zeros(psi.shape,dtype=np.complex128)
+    
+    deltaM  =  diff_GGM_GLM[ik,:,:,:].copy().reshape(compound,1)
+    deltaP  =  diff_GGP_GLP[ik,:,:,:]#.reshape(compound)
+    
+    _H0 = H0[ik]
+    I   = np.eye(no)
+    # iA,iX,iO1,iO2 = np.where(psi!=0)
+    # iA = iA[0]
+    # iX = iX[0]
+    # iO1= iO1[0]
+    # iO2= iO2[0]
+    
+    xpm      = Xpm[ik, :, :, :noT].copy()
+    X_sum    = X.reshape(compound,no).T#.copy()
+    # IXrow    = IX[:,:,:,iO2].copy().reshape(compound,1)
+    # X_sumrow = X_sum[iO2,:]
+    # it       = 0
+    for a in range(na):
+        for x in range(nx):
+            ig = _H0 - I * Xpp[ik,a,x,0]
+            for c in range(noT):
+                # General, DOT
+                # compound indices for sum in np dot
+                # FRAC =  (1j/(  xpm
+                #               - Xpp[ik, a, x, c])).reshape(compound,1)
+                # ARR1 = (FRAC*deltaM) * IX.reshape(compound,no)
+                # SUM  = np.dot(X_sum, np.dot(ARR1,psi[a,x,c]))
+                # ARR2 = FRAC.reshape(compound,1) * psic.reshape(compound,no)
+                # SUM += includefrac*np.dot(X_sum, np.dot(ARR2, deltaP[a,x,c]*X[a,x,c]))
+                # OPSI[a,x,c,:]  = SUM#/hbar
+                # OPSI[a,x,c,:] += np.dot(ig, psi[a,x,c,:])
+                
+                # General, NUMBA
+                SUM = np.zeros(no, dtype=np.complex128)
+                for a2 in range(na):
+                    for x2 in range(nx):
+                        for o2 in range(noT):
+                            frac = 1j/(Xpm[ik, a2, x2, o2] 
+                                      - Xpp[ik, a, x, c])
+                            SUM += (diff_GGM_GLM[ik, a2,x2,o2]\
+                                    *np.dot(IX [a2,x2,o2],
+                                            psi[a,x,c])
+                                    *frac)*X[a2, x2, o2]
+                            SUM += (diff_GGP_GLP[ik,a,x,c]\
+                                    *np.dot(psic[a2,x2,o2],
+                                            X[a,x,c])
+                                    *frac)*X[a2, x2, o2]
+                OPSI[a,x,c,:] = SUM
+                OPSI[a,x,c,:] += np.dot(ig, psi[a,x,c,:])
+                
+    out[0    :   npsi] = OPSI.reshape(na*nx*noT*no).real
+    out[npsi : 2*npsi] = OPSI.reshape(na*nx*noT*no).imag
+    # 
+    return out
+
+    
+
+
+def B3(ik,DM):
+    b     = np.zeros(2*npsi)
+    psi_b = np.zeros((na, nx, noT, no), dtype=np.complex128)
+    X     = xi[ik]
+    for a in range(na):
+        for x in range(nx):
+            for c in range(noT):
+                psi_b[a,x,c] = + hbar*GLP[ik,a,x,c] *  X[a,x,c] + hbar * diff_GGP_GLP[ik,a,x,c]*DM @ X[a,x,c]
+    
+    b[0 : npsi ]    = psi_b.reshape(na*nx*noT*no).real
+    b[npsi: 2*npsi] = psi_b.reshape(na*nx*noT*no).imag
+    return b
+
+# @njit
+#def Guessmat(ik):
+#    M = np.zeros((na,nx,noT,no, no),dtype=np.complex128)
+#    _H0 = H0[ik]
+#    I  = np.eye(_H0.shape[1])
+#    for a in range(na):
+#        for x in range(nx):
+#            for c in range(noT):
+#                m = _H0 - I * Xpp[ik,a,x,c]
+#                FRAC  = 1j*diff_GGM_GLM[ik]/(Xpm[ik] -Xpp[ik,a,x,c])
+#                outer = xi[ik,:,:,:,:,None]@(xi.conj())[ik,:,:,:,None,:]
+#                Bij   = np.sum(FRAC[:,:,:,None,None]*outer,axis=(0,1,2))
+#                m    += Bij
+#                M[a,x,c] = m[:,:]
+#    return M
+#Psi_subproblem:
+
+print('FINDING DM')
+print('N_F: ', N_F//2 )
+#NEGFDM   =  SSobj.Glesser(1e-3, N_poles=N_F//2, kT_i = kT_i)
+# np.save('NEGFDM',NEGFDM[0])
+print('FINDING DM DONE')
+
+N        =  2 * npsi
+bvec     =  B3(IK,dm0[0])
+v3       =  np.zeros(N)
+SpMat    =  sp.lil_matrix((N,N),dtype=np.float64)
+outvec   =  np.zeros(2*npsi,dtype=np.float64)
+OPSI     =  np.zeros((na,nx,noT, no), dtype=np.complex128)
+
+for j in range(N):
+    if np.mod(j,100)==0:
+        print(j/N * 100)
+    v3[j]   = 1
+    v3[j-1] = 0
+    
+    Av_opt(v3, IK, outvec, OPSI, #includefrac=1.0,
+           )
+    
+    i      =  np.where(np.abs(outvec)>1e-9)[0]
+    v      =  outvec[i]
+    SpMat[i,np.ones(len(v),dtype=int)*j] = v
+
+SpMat = SpMat.tocsr()
+# Mat   = Guessmat(IK)
+# bvec0 = (bvec[0:npsi] + 1j*bvec[npsi:2*npsi]).reshape(na,nx,noT,no)
+# sol0  = np.linalg.solve(Mat,bvec0)
+# print('Sol0sum ', np.abs(sol0).sum())
+# assert 1 == 0 
+x     = LSA.spsolve(SpMat,bvec)
+
+PSI   = x[0:npsi] + 1j * x[npsi:2*npsi]
+PSI   = PSI.reshape(1,na, nx, noT, no)
+OMG   = np.zeros((1,na, nx, noT, na, nx, noT), dtype=complex)
+for a in range(na):
+    for x in range(nx):
+        for o in range(noT):
+            for aa in range(na):
+                for xx in range(nx):
+                    for oo in range(noT):
+                        OMG [0,a,x,o,aa,xx,oo] = -( Ixi[IK,aa,xx,oo].dot(PSI[IK,a,x,o]) * diff_GGM_GLM[IK,aa,xx,oo]
+                                                    +np.conj(PSI[IK,aa,xx,oo]).dot(xi[IK,a,x,o])*diff_GGP_GLP[IK,a,x,o]
+                                                  )*(1j*hbar)/(Xpm[IK, aa, xx,oo] - Xpp[IK,a,x,o])
+sp.save_npz('SpMat', SpMat)
+np.save('PSI0',PSI)
+np.save('OMG0',OMG)
+# np.save('DM0',NEGFDM[0])
+exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# SOL = np.linalg.solve(K, bvec)
+# np.save('SOL.npy', SOL)
+fracdef = 0.00
+def matvec3(v):
+    return Av3(v, IK, outvec, OPSI, includefrac=fracdef)
+
+LO3   = LinearOperator((N,N), matvec = matvec3,dtype=np.float64)
+print('CG solver started')
+
+# x0 = np.zeros(N)
+# x0[0:npsi]      = sol0.reshape(na*nx*noT*no).real
+# x0[npsi:2*npsi] = sol0.reshape(na*nx*noT*no).imag
+
+def cb_function(v):
+    pass
+    #print(np.abs(v).sum())
+tol = 1e-5
+xx,info      = Axb_solver(LO3, bvec, callback=cb_function,
+                          x0=x0, tol=tol,
+                          maxiter = 10**6)
+fracdef = 0.0025
+x3,info2      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=xx, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.005
+x4,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x3, tol=tol,
+                            maxiter = 10**6)
+
+fracdef = 0.01
+x5,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x4, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.02
+x6,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x5, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.03
+x7,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x6, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.05
+x8,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x7, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.07
+x8,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x7, tol=tol,
+                            maxiter = 10**6)
+fracdef = 0.1
+x9,info3      = Axb_solver(LO3, bvec, callback=cb_function,
+                            x0=x8, tol=tol,
+                            maxiter = 10**6)
+
+
+
+
+print(np.abs(x-x9).sum())
+print(info)
+np.save('cgSOL.npy', xx)
+# assert np.allclose(K, SpMat.todense())
+# # x    = np.linalg.solve(K, bvec)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+# class itcount:
+#     def __init__(self):
+#         self.count = 0
+#     def Count(self):
+#         self.count+=1
+#         print(self.count)
+# CC = itcount()
+
+
+    
+#     print(np.linalg.norm(Av3(v, IK) - bvec))
+#     # print(v[0])
+# # 
+# if _check:
+#     print('Checking Hermravel & Herconstr')
+#     _A  = np.random.random((121, 121)) + 1j * np.random.random((121,121))
+#     _A += _A.conj().T
+#     _Br = np.zeros(((121*122)//2))
+#     _Bi = np.zeros(((121*122)//2 - 121))
+#     _C  = np.zeros((121,121),dtype=complex)
+#     Hermravel (_A, _Br, _Bi)
+#     Hermconstr(_C, _Br, _Bi)
+#     assert np.allclose(_A, _C)
+
+
+
+
+
+
+# M    = nsigr + nsigi + 2*npsi
+# bvec = B2(IK)
+# LO   = LinearOperator((M,M), matvec = matvec,dtype=np.float64)
+# Mat  = np.zeros((M,M))
+# v2   = np.zeros(M)
+
+
+# for j in range(M):
+#     if np.mod(j,100)==0:
+#         print(j/M * 100)
+#     if j == 0:
+#         v2[j] = 1
+#     else:
+#         v2[j] = 1
+#         v2[j-1]=0
+#     Mat[:,j] = Av2(v2, IK) #LO.matvec(v2)
+
+# v = np.linalg.solve(Mat,bvec)
+# np.save('Mat.npy' , Mat)
+# np.save('bvec.npy', bvec)
+# np.save('sol.npy' , v)
+# DM = np.zeros((no,no), dtype=complex)
+# Hermconstr(DM, v[0:nsigr] ,v[nsigr:(nsigr+nsigi)])
+# PSI =   v[(nsigr +nsigi):(nsigr +nsigi + npsi)].reshape(1,na, nx, noT, no)\
+#     +1j*v[(nsigr +nsigi + npsi):(nsigr +nsigi + 2*npsi)].reshape(1,na, nx, noT, no)
+# OMG = np.zeros((1, na, nx, noT, na, nx, noT), dtype=complex)
+# for a in range(na):
+#     for x in range(nx):
+#         for o in range(noT):
+#             for aa in range(na):
+#                 for xx in range(nx):
+#                     for oo in range(noT):
+#                         OMG [0,a,x,o,aa,xx,oo] = -( Ixi[0,aa,xx,oo].dot(PSI[0,a,x,o]) * diff_GGM_GLM[0,aa,xx,oo]
+#                                                    +np.conj(PSI[0,aa,xx,oo]).dot(xi[0,a,x,o])*diff_GGP_GLP[0,a,x,o]
+#                                                    )*1j*hbar/(Xpm[0,aa,xx,oo] - Xpp[0,a,x,o])
+
+# if options['savefile'] != 'None':
+#     sfd = options['savefile']
+#     np.save(sfd+'/last_sigma.npy', DM)
+#     np.save(sfd+'/last_psi.npy', PSI)
+#     np.save(sfd+'/last_omg',OMG)
+
+
+
+
+# exit()
+
+
+
+
+# @njit
+# def f(v,ik):
+#     out   = np.zeros(v.shape, dtype=np.float64)
+#     dm    = np.zeros((no,no), dtype=np.complex128)
+#     Hermconstr(dm,   v[0:nsigr], v[nsigr:ns])
+#     if np.abs(dm - dm.conj().T).sum()> 1e-13:
+#         print('DM not Hermitian!!!!!!')
+#         print(np.where(np.abs(dm - dm.conj().T)>1e-13))
+    
+#     vpsiR =  v[ ns       : (ns+npsi)  ].reshape(na, nx, noT, no)
+#     vpsiI =  v[(ns+npsi) : (ns+2*npsi)].reshape(na, nx, noT, no)
+#     vomgR =  v[(ns+2*npsi):(ns+2*npsi + nomg)]          .reshape(na,nx,noT,na,nx,noT)
+#     vomgI =  v[(ns+2*npsi + nomg): (ns+2*npsi + 2*nomg)].reshape(na,nx,noT,na,nx,noT)
+#     omg   =  vomgR + 1j*vomgI
+#     psi   =  vpsiR + 1j*vpsiI
+#     psic  =  np.conj(psi)
+#     Hk    =  H0 [ik] 
+#     X     =  xi [ik]
+#     IX    =  Ixi[ik]
+#     IXc   =  IXC[ik]
+    
+#     ODM   =  np.zeros((no,no),dtype=np.complex128)
+#     for a in range(na): 
+#         for x in range(nx): 
+#             for c in range(noT):
+#                 outer_add(psi[a,x,c],  IX[a,x,c],  ODM)
+#                 outer_add(IXc[a,x,c],psic[a,x,c],  ODM)
+    
+#     ODM *= 1j/hbar
+#     ODM += np.dot(Hk, dm) - np.dot(dm, Hk)
+#     OPSI = np.zeros((na,nx,noT, no), dtype=np.complex128)
+#     OOMG = np.zeros((na,nx,noT,na,nx,noT), dtype=np.complex128)
+    
+#     SUM            = np.zeros(no,dtype=np.complex128)
+#     OMGaxc         = np.zeros((na,nx,noT),dtype=np.complex128)
+    
+#     for a in range(na):
+#         for x in range(nx):
+#             for c in range(noT):
+#                 DMxi  = np.dot(dm, X[a,x,c])
+#                 OPSI[a,x,c,:] += hbar*diff_GGP_GLP[ik,a,x,c]*DMxi
+#                 SUM[:]        = 0.0
+#                 Baxc           = omg[a,x,c,:,:,:]
+#                 for a2 in range(na):
+#                     for x2 in range(nx):
+#                         for c2 in range(noT):
+#                             SUM += omg[a,x,c,a2,x2,c2] * X[a2,x2,c2]
+#                             OMGaxc[a2,x2,c2]  = (Xpm[ik,a2,x2,c2] - Xpp[ik,a , x, c]) * Baxc[a2,x2,c2]
+#                             OMGaxc[a2,x2,c2] +=  (1j*hbar)*diff_GGM_GLM[ik,a2,x2,c2]\
+#                                                  *np.dot(IX [a2,x2,c2],psi[a,x,c])
+#                             OMGaxc[a2,x2,c2] +=  (1j*hbar)*diff_GGP_GLP[ik,a, x, c]     \
+#                                                  *np.dot(psic[a2,x2,c2], X[a,x,c])
+                
+#                 OOMG[a,x,c  ] =   OMGaxc[:,:,:]
+#                 OPSI[a,x,c,:] +=  SUM
+#                 OPSI[a,x,c,:] +=  np.dot(ig_kaxc[ik,a,x,c], psi[a,x,c,:])
+#                 OPSI[a,x,c,:] +=  hbar*GLP[ik,a,x,c] * X[a,x,c]
+    
+    
+#     Hermravel(ODM, out[0:nsigr], out[nsigr:(nsigr + nsigi)])
+#     out[ns        : (ns +  npsi)] = OPSI.reshape(na*nx*noT*no).real
+#     out[(ns+npsi) : (ns +2*npsi)] = OPSI.reshape(na*nx*noT*no).imag
+    
+#     out[(ns+2*npsi):(ns+2*npsi + nomg)]           = OOMG.reshape(na*nx*noT*na*nx*noT).real
+#     out[(ns+2*npsi + nomg): (ns+2*npsi + 2*nomg)] = OOMG.reshape(na*nx*noT*na*nx*noT).imag
+#     return out
+
+# def F(x):
+#     return f(x, IK)
+
+# print('Solving with fsolve')
+# from scipy.optimize import root
+
+# def cb2(a,c):
+#     print(a[0])
+
+# vin    = np.zeros((ns+2*npsi + 2*nomg))
+# Hermravel(dm0[0], vin[0:nsigr], 
+#                vin[nsigr:(nsigr+nsigi)]   
+#          )
+
+# SOL    = root(F, np.random.random((ns+2*npsi + 2*nomg)), 
+#               method='krylov', callback=cb2, 
+#               )
+
+# np.save('fsolvesol', SOL.x)
+# print(SOL.success)
+# print(SOL.message)
+
+
+
+
+
+
+
+    
+#x,info      = Axb_solver(LO, bvec, callback=cb_function,
+##                         x0=np.random.random(len(v)), tol=1e-8
+ #                        )
+
+# from scipy.integrate import solve_ivp
+# def f(t,y):
+#     out = np.zeros(len(y))
+#     Matvec = Av2(y, IK)
+#     #out[0:nsigr ]
+#     return 
+
+# print(np.linalg.norm(f(0.0, np.zeros(len(v)))))
+# sol = solve_ivp(f, (0,50),  (v*0).astype(complex), rtol = 1e-8, atol = 1e-8, t_eval = np.linspace(0,50,100),)
+
+# np.save('odesol', sol.y )
+
+
+# print(info)
+# print(np.abs(LO.matvec(x) - bvec).sum())
+
+
+# @njit(fastmath = True, parallel = False)
+# def Av(v,ik):
+#     out  = np.zeros(v.shape, dtype=np.complex128)
+#     # reference to individual blocks of the result
+#     osig  = out[0:no**2].reshape(no,no).copy()
+#     opsiR = out[no**2:(no**2 + npsi)].reshape(na, nx, noT, no).copy()
+#     vsig  = v[0:no**2].reshape(no,no)
+#     vpsiR = v[no**2:(no**2 + npsi)].reshape(na, nx, noT, no)
+#     vpsiI = v[(no**2 + npsi):(no**2 + 2*npsi)].reshape(na, nx, noT, no)
+#     Hk   = H0[ik] ; X    = xi[ik]
+#     IX   = Ixi[ik]; IXc  = IXC[ik]
+#     psi  = vpsiR + 1j*vpsiI; psic = np.conj(psi)
+#     for a in range(na): 
+#         for x in range(nx): 
+#             for c in range(noT):
+#                 outer_add(psi[a,x,c],  IX[a,x,c],  osig)
+#                 outer_add(psic[a,x,c], IXc[a,x,c], osig)
+#     osig *= 1j
+#     osig += Hk.dot(vsig) - vsig.dot(Hk)
+#     for a in range(na):
+#         for x in range(nx):
+#             for c in range(noT):
+#                 gaxc = g_kaxc[ik,a,x,c]
+#                 sdx  = vsig.dot(X[a,x,c])
+#                 opsiR[a,x,c,:] += hbar * diff_GGP_GLP[ik,a,x,c] * sdx
+#                 SUM = np.zeros(no,dtype=np.complex128)
+#                 for ia2 in range(na):
+#                     for ix2 in range(nx):
+#                         for io2 in range(noT):
+#                             frac = 1/(Xpm[ik, ia2, ix2, io2] 
+#                                     - Xpp[ik, a, x, c])
+                            
+#                             SUM += (diff_GGM_GLM[ik,ia2,ix2,io2]\
+#                                     *IX [ia2,ix2,io2].dot(
+#                                       psi[a,x,c]   )
+#                                     *frac)*X[ia2, ix2, io2]
+                            
+#                             SUM += (diff_GGP_GLP[ik,a,x,c]\
+#                                     *psic[ia2,ix2,io2].dot(
+#                                         X[a,x,c])
+#                                     *frac)*X[ia2, ix2, io2]
+#                 SUM *= 1j
+#                 opsiR[a,x,c] -= SUM
+#                 opsiR[a,x,c]  = gaxc.dot(opsiR[a,x,c])
+#     opsiR[:,:,:,:] +=  psi[:,:,:,:]
+#     out[0:no**2]                         = osig.reshape(no**2)
+#     out[no**2:(no**2 + npsi)]            = opsiR.reshape(na*nx*noT*no).real
+#     out[(no**2 + npsi):(no**2 + 2*npsi)] = opsiR.reshape(na*nx*noT*no).imag
+#     return out
+
+# @njit
+# def B(ik):
+#     b = np.zeros((no**2 + 2 * npsi),dtype = np.complex128)
+#     psi_b   = b[no**2:(no**2 + npsi)].reshape(na,nx,noT,no).copy()
+#     Hk   = H0[ik]
+#     X    = xi[ik]
+#     for a in range(na):
+#         for x in range(nx):
+#             for c in range(noT):
+#                 gaxc         = g_kaxc[ik,a,x,c]
+#                 psi_b[a,x,c] = - hbar * GLP[ik,a,x,c] *  gaxc.dot(X[a,x,c])
+#     b[no**2:(no**2 + npsi)]            = psi_b.reshape(na*nx*noT*no).real
+#     b[(no**2 + npsi):(no**2 + 2*npsi)] = psi_b.reshape(na*nx*noT*no).imag
+#     return b
+#def rmatvec(v):
+#    return LOA._matvec(v)
+# LO     = LinearOperator((no**2 + 2* npsi, no**2 + 2* npsi), matvec = matvec, dtype=np.complex128)
+#LOA    = LO.adjoint()
+#print(LOA)
+#LO2    = LinearOperator((no**2 + 2* npsi, no**2 + 2* npsi), 
+#                        matvec = matvec, rmatvec = rmatvec, 
+#                        dtype=np.complex128)
+# IT = 0
+# x0  = np.zeros(no**2 + 2* npsi, dtype=np.complex128)
+# N   =   no**2  + 2 * npsi
+# Mat = np.zeros((N, N), dtype = np.complex128)
+#DMout = v[0:no**2].reshape(no,no)
+#psiR  = v[no**2:(no**2 + npsi)] 
+#psiR  = v[(no**2 + npsi):(no**2 + 2*npsi)]
+ 
+ 
+
+#print(np.linalg.det(Mat))
+#print(DMout)
+#np.save(v)
+#LO2.matvec(x0)
+#LO2.rmatvec(x0)
+
+#x0[0:no**2] = dm0[IK].reshape(no**2)
+#x0[no**2: ] = np.random.random(2 * npsi)/100
+## FAC = LSA.factorized(LO_obj)
+# print(LSA.svds(LO2, which='SM', k=20))
+# @njit
+# def Hermravel(M,vecr, veci):
+#     no = M.shape[0]
+#     assert len(vecr) == (no*(no+1))//2
+#     assert len(veci) == (no*(no+1))//2 - no
+#     itr, iti = 0,0
+#     for i in range(no):
+#         for j in range(i,no):
+#             vecr[itr] = M[i,j].real
+#             itr += 1
+#             if j>i:
+#                 veci[iti] = M[i,j].imag
+#                 iti += 1
+    
+#     assert itr == len(vecr)
+#     assert iti == len(veci)
+
+# @njit
+# def Hermconstr(M,vecr,veci):
+#     no = M.shape[0]
+#     assert len(vecr) == (no*(no+1))//2
+#     assert len(veci) == (no*(no+1))//2 - no
+#     itr,iti = 0,0
+#     for i in range(no):
+#         for j in range(i,no):
+#             M[i,j]  = vecr[itr]
+#             M[j,i]  = vecr[itr]
+#             itr    += 1
+#             if j>i:
+#                 v       = 1j*veci[iti]
+#                 M[i,j] += v
+#                 M[j,i] -= v
+#                 iti    += 1
+#     assert itr == len(vecr)
+#     assert iti == len(veci)
+
+# @njit
+# def outer_add(a,b,out):
+#     NA,NB = len(a),len(b)
+#     for i in range(NA):
+#         for j in range(NB):
+#             out [i,j] += (a[i]*b[j])
+# @njit
+# def Av2(v, ik):
+#     out   = np.zeros(v.shape, dtype=np.float64)
+#     dm    = np.zeros((no,no), dtype=np.complex128)
+#     Hermconstr(dm,   v[0:nsigr], v[nsigr:ns])
+    
+#     if np.abs(dm - dm.conj().T).sum()> 1e-13:
+#         print('DM not Hermitian!!!!!!')
+#         print(np.where(np.abs(dm - dm.conj().T)>1e-13))
+    
+#     vpsiR =  v[ ns       : (ns+npsi)  ].reshape(na, nx, noT, no)
+#     vpsiI =  v[(ns+npsi) : (ns+2*npsi)].reshape(na, nx, noT, no)
+#     psi   =  vpsiR + 1j*vpsiI
+#     psic  =  np.conj(psi)
+#     Hk    =  H0 [ik] 
+#     X     =  xi [ik]
+#     IX    =  Ixi[ik]
+#     IXc   =  IXC[ik]
+#     ODM   =  np.zeros((no,no),dtype=np.complex128)
+    
+#     for a in range(na): 
+#         for x in range(nx): 
+#             for c in range(noT):
+#                 outer_add(psi[a,x,c],  IX[a,x,c],  ODM)
+#                 outer_add(IXc[a,x,c],psic[a,x,c],  ODM)
+    
+#     ODM *= 1j/hbar
+#     ODM += np.dot(Hk, dm) - np.dot(dm, Hk)
+#     OPSI = np.zeros((na,nx,noT, no), dtype=np.complex128)
+#     SUM            = np.zeros(no,dtype=np.complex128)
+    
+#     for a in range(na):
+#         for x in range(nx):
+#             for c in range(noT):
+#                 DMxi  = np.dot(dm, X[a,x,c])
+#                 OPSI[a,x,c,:] += hbar*diff_GGP_GLP[ik,a,x,c]*DMxi
+#                 SUM[:] = 0.0
+#                 for a2 in range(na):
+#                     for x2 in range(nx):
+#                         for o2 in range(noT):
+#                             frac = 1j/(Xpm[ik, a2, x2, o2] 
+#                                      - Xpp[ik, a, x, c])
+#                             SUM += (diff_GGM_GLM[ik, a2,x2,o2]\
+#                                     *np.dot(IX [a2,x2,o2],
+#                                             psi[a,x,c])
+#                                     *frac)*X[a2, x2, o2]
+#                             SUM += (diff_GGP_GLP[ik,a,x,c]\
+#                                     *np.dot(psic[a2,x2,o2],
+#                                             X[a,x,c])
+#                                     *frac)*X[a2, x2, o2]
+#                 OPSI[a,x,c]   -= SUM
+#                 OPSI[a,x,c,:] +=  np.dot(ig_kaxc[ik,a,x,c], psi[a,x,c,:])
+    
+#     Hermravel(ODM, out[0:nsigr], out[nsigr:(nsigr + nsigi)])
+#     out[ns        : (ns +  npsi)] = OPSI.reshape(na*nx*noT*no).real
+#     out[(ns+npsi) : (ns +2*npsi)] = OPSI.reshape(na*nx*noT*no).imag
+    
+#     return out
+
+# @njit
+# def B2(ik):
+#     b     = np.zeros(nsigr + nsigi+ 2*npsi)
+#     psi_b = np.zeros((na, nx, noT, no), dtype=np.complex128)
+#     X     = xi[ik]
+#     for a in range(na):
+#         for x in range(nx):
+#             for c in range(noT):
+#                 psi_b[a,x,c] = - hbar*GLP[ik,a,x,c] *  X[a,x,c]
+#     b[ns:(ns + npsi)]            = psi_b.reshape(na*nx*noT*no).real
+#     b[(ns + npsi):(ns + 2*npsi)] = psi_b.reshape(na*nx*noT*no).imag
+#     return b
+
+# IK = 0
+# def matvec(v):
+#     return Av2(v, IK)

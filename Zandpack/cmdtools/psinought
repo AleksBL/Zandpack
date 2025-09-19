@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Feb 11 11:16:35 2023
+
+@author: aleksander
+
+Iterative solver for obtaining the steady-state
+psi and omegas from the given density matrix.
+
+Relies on the given density matrix to actually be 
+the equilibrium density matrix. Proper use of the SCF tool
+is therefore recommended.
+
+"""
+
+import sys
+import os
+import numpy as np
+from numba import njit, prange
+import scipy.sparse.linalg as LSA
+import scipy.sparse as sp
+from Zandpack.TimedependentTransport import Q_nb
+from Zandpack.Louivillian import Louivillian
+from Zandpack.Loader import flexload
+from Zandpack.docstrings import psi0_docstring, CoolLine
+from time import time, perf_counter
+from tqdm import tqdm
+import gc
+LinearOperator = LSA.LinearOperator
+args           = sys.argv[1:]
+print(psi0_docstring)
+print('psinought program start')
+print('')
+print('sys.argv:', sys.argv)
+print('OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)')
+print('')
+_check = True
+
+#Default values
+options = {'file': 'SaveFile',   # directory
+           'maxiter':'10000',    # Iterations for Ax=b solver
+           'checkderivative':'True', # Print additional information related to ODE
+           #'numba_parallel':'0',
+           'dl':'1.0', # dep.
+           'steptol':'1e-8',#tolerance
+           'add_random':'False',     # initial guess
+           'random_weight':'0.0001', # initial guess
+           #'use_csr':'False',
+           'L_info':'False',         # additional information related to ODE.
+           'Axb_solver':'cgs',       # scipy solver, cgs, minres, gmres
+           'start_psi':'None',       # If you have an initial guess
+           'memory_save':'True',     # Yes, dont not use this
+           'Xpp_optim':'True',       # Dont not use this
+           'printfile':'psinought.print', # file for tracking iterations
+           'extreme_memory_save':'False',
+           'Woodbury-inv':'True',
+           'prec_to_disk':'False',
+           'outer_einsum':'True',
+           #'use_preconditioner':'True'
+           }
+
+
+pref = 'psinought: '
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+print(options)
+good_solvers = ['cgs', 'tfqmr', 'gcrotmk', 'lgmres', 'gmres']
+if options['Axb_solver'] not in good_solvers:
+    print('--->WARNING<----:') 
+    print('Be sure your chosen solver is able to solve this specific system!')
+Axb_solver = getattr(LSA, options['Axb_solver'])
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Initial import t0, hbar
+from Bias    import bias, dH
+from Zandpack.mpi_splitter import find_max_orbital_idx_per_lead
+
+print(pref + 'Reading arrays.....')
+print('DM input from ', options['file']+'/Arrays/DM_Ortho.npy')
+DM0     =  flexload(options['file']+'/Arrays/DM_Ortho.npy')
+H0      =  flexload(options['file']+'/Arrays/H_Ortho.npy') + dH(t0, DM0)
+nk      =  H0.shape[0]
+no      =  H0.shape[-1]
+fd      =  options['file']+'/Arrays/'
+psi_sh  =  flexload(fd+'psi_shape.npy')
+nx      =  psi_sh[2]
+noT_lead=  find_max_orbital_idx_per_lead(flexload(fd+'GG_P.npy'), 
+                                         flexload(fd+'GL_P.npy'),
+                                         float(flexload(fd+'zero_tol.npy')
+                                               )
+                                         )
+noT     =  max(noT_lead)
+psi_sh[3] = noT
+del noT_lead
+
+XI      =  flexload(fd+'xi.npy')[:,:,:,:noT]
+IXI     =  flexload(fd+'Ixi.npy')[:,:,:,:noT]
+GGP     =  flexload(fd+'GG_P.npy')[:,:,:,:noT]
+GGM     =  flexload(fd+'GG_M.npy')[:,:,:,:noT]
+GLP     =  flexload(fd+'GL_P.npy')[:,:,:,:noT]
+GLM     =  flexload(fd+'GL_M.npy')[:,:,:,:noT]
+XPP     =  flexload(fd+'Xpp.npy')[:,:,:,:noT]
+XPM     =  flexload(fd+'Xpm.npy')[:,:,:,:noT]
+
+diff_GGM_GLM = GGM-GLM
+diff_GGP_GLP = GGP-GLP
+na      = psi_sh[1]
+bias_a  = np.array([bias(t0,i) for i in range(na)])
+for ia in range(na):
+    XPP[:,ia,:,:] += bias_a[ia]
+for ia in range(na):
+    XPM[:,ia,:,:] += bias_a[ia]
+npsi      =  np.prod(psi_sh[1:])
+alloc_psi = np.zeros(psi_sh, dtype=complex)
+compound  =  na*nx*noT
+# THANKS STACKEXCHANGE
+def solve_sparse(A, b, x0, tol):
+    num_iters = 0
+    def callback(xk):
+        nonlocal num_iters
+        num_iters+=1
+        if np.mod(num_iters,1)==0 and options['printfile']!='None':
+            with open(options['printfile'], 'a') as f:
+                print('     sum(|Psi_'+str(num_iters)+'|)'+ str(np.abs(xk).sum()) + '\n',file=f)
+    x, status = Axb_solver(A, b,
+                           # tol=tol, deprecated by scipy-1.14
+                           # atol=tol,
+                           rtol=tol,
+                           x0=x0, 
+                           callback=callback, 
+                           maxiter=int(options['maxiter']), 
+                           M = preconditioner
+                           )
+    return x,status,num_iters
+def SM(iA, u, v, out):
+    idx = np.where(np.abs(u)>1e-10)[0]
+    iAu = iA[:,idx]@u[idx]
+    np.multiply.outer(iAu[:,0], ((v.T/(1.+v.T@iAu))@iA)[:,0], out = out)
+    iA -= out
+
+PSI = np.zeros((nk,na,nx, noT,no),dtype=complex)
+OMG = np.zeros((nk,na,nx, noT,na,nx, noT),dtype=complex)
+
+print(pref + 'Converging steady-state with DM from     '+options['file']+'/Arrays/   folder.')
+print(pref + 'Particle number: ', np.trace(DM0,axis1=1,axis2=2))
+print(pref + 'Bias:            ', bias_a)
+print(pref + 'size:            ', (nk,na,nx,noT,no))
+print(pref + 'Operator Dims:   ', np.prod((nk,na,nx,noT,no)), ' X ',np.prod((nk,na,nx,noT,no)),)
+mdot = np.linalg.multi_dot
+inv  = np.linalg.inv
+
+for IK in range(nk):
+    xi      = XI[IK].copy()
+    ixi     = IXI[IK].copy()
+    ggp     = GGP[IK].copy()
+    ggm     = GGM[IK].copy()
+    glp     = GLP[IK].copy()
+    glm     = GLM[IK].copy()
+    deltaM  = ggm-glm
+    _deltaM = deltaM.reshape(compound,1).copy()
+    deltaP  = ggp-glp
+
+    xpp = XPP[IK].copy()
+    xpm = XPM[IK].copy()
+    h0  = H0[IK].copy()
+    dm0 = DM0[IK].copy()
+    I   = np.eye(no)
+    if options['L_info']=='True':
+        L0  =  Louivillian(h0)
+        L0.calculate_Leigv()
+    @njit(fastmath = True)
+    def Av3(v, out, OPSI, alloc_psi, psic#, includefrac = 1.0
+            ):
+        assert out.shape == v.shape
+        alloc_psi[:,:,:,:]  =     v[ 0  :   npsi].reshape(na, nx, noT, no)
+        alloc_psi[:,:,:,:] +=  1j*v[npsi: 2*npsi].reshape(na, nx, noT, no)
+        psic     [:,:,:,:]  =     alloc_psi[:,:,:,:].real
+        psic     [:,:,:,:] += -1j*(alloc_psi[:,:,:,:].imag)
+        
+        X_sum               = xi.reshape(compound,no).T
+        
+        for a in range(na):
+            for x in range(nx):
+                ig = I * xpp[a,x,0]-h0
+                FRAC =  (1j/(  xpm - xpp[a, x, 0])).reshape(compound,1)
+                ARR1 = (FRAC*_deltaM) * ixi.reshape(compound,no)
+                ARR2 = FRAC.reshape(compound,1) * psic.reshape(compound,no)
+                
+                for c in range(noT):
+                    
+                    SUM  = np.dot(X_sum, np.dot(ARR1, alloc_psi[a,x,c]))
+                    SUM += np.dot(X_sum, np.dot(ARR2, deltaP[a,x,c]*xi[a,x,c]))#* includefrac
+                    SUM += np.dot(ig, alloc_psi[a,x,c])
+                    OPSI[a,x,c,:]  = SUM
+                    
+        
+        out[0    :   npsi] = OPSI.reshape(na*nx*noT*no).real
+        out[npsi : 2*npsi] = OPSI.reshape(na*nx*noT*no).imag
+        return out
+    
+    def B3():
+        b     = np.zeros(2*npsi)
+        psi_b = np.zeros((na, nx, noT, no), dtype=np.complex128)
+        for a in range(na):
+            for x in range(nx):
+                for c in range(noT):
+                    psi_b[a,x,c] = hbar*glp[a,x,c]*xi[a,x,c] + hbar * deltaP[a,x,c]* dm0 @ xi[a,x,c]
+        
+        b[0   :   npsi] = psi_b.reshape(na*nx*noT*no).real
+        b[npsi: 2*npsi] = psi_b.reshape(na*nx*noT*no).imag
+        return b
+        
+    def diagmat():
+        I  = np.eye(h0.shape[1])
+        rms = slice(0,   no)
+        ims = slice(no,2*no)
+        
+        _M       = np.zeros((2*no, 2*no))
+        it       = 0
+        dtype    = np.float32
+        if options['memory_save'] == 'False' and options['outer_einsum']=='False':
+            outer    = (xi[:,:,:,:,None]@(xi.conj())[:,:,:,None,:]).reshape(na*nx*noT, no,no).transpose(1,2,0)
+        elif options['outer_einsum']=='False':
+            outer    = (xi[:,:,:,:,None].astype(np.complex64)@(xi.conj().astype(np.complex64))[:,:,:,None,:]).reshape(na*nx*noT, no,no).transpose(1,2,0)
+        else:
+            xi_ijk  = xi.reshape(na*nx*noT,no).copy()
+            xid_ijk = xi.reshape(na*nx*noT,no).conj()
+            outer=None
+            
+        print('Outer done!')
+        vals    = []
+        slices1 = []
+        slices2 = []
+        Xpp_optim = options['Xpp_optim'] =='True'
+        W_inv    = options['Woodbury-inv']=='True'
+        vu,vv     = np.zeros((2*no,4)),np.zeros((2*no,4))
+        #SM_out    = np.zeros((2*no, 2*no))
+        for a in range(na):
+            print('Electrode ',a)
+            for x in tqdm(range(nx)):
+                for c in range(noT):
+                    if c == 0 or Xpp_optim == False:
+                        # if Xpp_optim is False, then this part will execute on all c's
+                        # if the Xpp_optim is enabled, only when c = 0, the values are calculated.
+                        # because X_axc = X_ax0 right now, this is okay
+                        m = -(h0 - I * xpp[a,x,c])
+                        o_dtype = outer.dtype if options['outer_einsum']==False else xi_ijk.dtype
+                        FRAC     = (1j*deltaM/(xpm -xpp[a,x,c])).astype(o_dtype)
+                        Bij      = np.zeros((no,no),dtype=o_dtype)
+                        if options['outer_einsum']=='False':
+                            np.matmul(outer,FRAC.reshape(na*nx*noT), out=Bij)
+                        else:
+                            np.einsum('ij   ,  ik    ,  i -> jk',
+                                      xi_ijk, xid_ijk, FRAC.reshape(na*nx*noT),
+                                      optimize=True, out=Bij)
+                        if W_inv:
+                            _MR      = (m + Bij )
+                            _MI      = (m + Bij )*1j
+                            _M[rms, rms] = _MR.real
+                            _M[ims, rms] = _MR.imag
+                            _M[rms, ims] = _MI.real
+                            _M[ims, ims] = _MI.imag
+                            iBij    = inv(_M)
+                            _M[:,:] = 0.0
+                    
+                    FRAC2 = 1j*deltaP[a,x,c]/(xpm[a,x,c] -xpp[a,x,c])
+                    if W_inv:
+                        # Woodberry inverse uses prec = (A + \sum_v v.T*v)^-1
+                        vu[:,:],vv[:,:] = 0.0,0.0
+                        vec   = xi[a,x,c,:]
+                        vecr,veci = vec.real, vec.imag
+                        Fr,Fi = FRAC2.real, FRAC2.imag
+                        # T1
+                        vu[:no,0] = vecr
+                        vv[:no,0] = Fr*vecr - Fi*veci
+                        vv[no:,0] = Fr*veci + Fi*vecr
+                        # T2
+                        vu[:no,1] = veci
+                        vv[:no,1] = -(Fr*veci - Fi*vecr)
+                        vv[no:,1] =   Fr*vecr - Fi*veci
+                        # T3
+                        vu[no:,2] = vecr
+                        vv[:no,2] =   Fr*veci + Fi*vecr
+                        vv[no:,2] = -(Fr*vecr - Fi*veci)
+                        # T4
+                        vu[no:,3] = veci
+                        vv[:no,3] =   Fr*vecr - Fi*veci
+                        vv[no:,3] = -(Fr*veci - Fi*vecr)
+                        # Woodbury identity
+                        prec = iBij - mdot([iBij, vu, 
+                                            inv(np.eye(4)+mdot([vv.T, iBij, vu])), 
+                                            vv.T, iBij])
+                    else:
+                        outer2   = xi[a,x,c,:,None]*(xi[a,x,c,None,:])
+                        Cij      = FRAC2*outer2
+                        _MR      = (m + Bij + Cij)
+                        _MI      = (m + Bij - Cij)*1j
+                        _M[rms, rms] = _MR.real
+                        _M[ims, rms] = _MR.imag
+                        _M[rms, ims] = _MI.real
+                        _M[ims, ims] = _MI.imag
+                        prec     = np.linalg.inv(_M).astype(dtype)
+                    if options['extreme_memory_save']=='True':
+                        prec2 = prec.astype(np.float16)
+                        if not np.isinf(prec2).any():
+                            del prec
+                            prec = prec2
+                        else:
+                            print('float16 conversion failed')
+                    vals.append(prec.copy())
+                    slices1 += [np.arange( 2*it*no,     (2*it+1)*no)]
+                    slices2 += [np.arange((2*it+1)*no,  2*(it+1)*no)]
+                    it+=1
+            if options['prec_to_disk']=='True':
+                dic = {'arr'+str(i):vals[i] for i in range(len(vals))}
+                np.savez_compressed('Preconditioner_'+str(a),  **dic)
+        
+        del outer, prec, Bij, FRAC, FRAC2, m, _M
+        if options['prec_to_disk']!='True':
+            out = sp.block_diag(vals,format='csr')
+        del vals
+        
+        if W_inv:
+            del iBij
+        else:
+            del Cij
+        if options['prec_to_disk']=='True':
+            first =True
+            for a in range(na):
+                arc  = np.load('Preconditioner_'+str(a)+'.npz')
+                nb   = len(arc.files)
+                slc  = np.array_split(np.arange(nb), 5)
+                for sl in slc:
+                    vals = [arc['arr'+str(i)] for i in sl]
+                    if  a == 0 and first:
+                        out  = sp.block_diag(vals,format='csr')
+                        first= False
+                    else:
+                        out  = sp.block_diag([out]+vals, format='csr')
+                    for _k in range(len(vals)):
+                        vals[_k] = None
+        
+        slices1 = np.hstack(slices1)
+        slices2 = np.hstack(slices2)
+        idx     = np.hstack((slices1, slices2))
+        absdata = np.abs(out.data)
+        out.data[absdata<((absdata.max() * 1e-5))]=0.0
+        out.eliminate_zeros()
+        return out[idx[:,None], idx[None,:]]
+    print(pref + 'Constructing Preconditioner')
+    print(pref + 'Using dense blocks for the preconditioner ')
+    if options['extreme_memory_save']=='True':
+        print(pref + ' Attempting to use float16 during construction of preconditioner! ')
+    bvec     = B3()
+    print(pref + 'Construct preconditioner done.')
+    def matvec3(v):
+        return Av3(v, outvec, OPSI, alloc_psi, psic#, includefrac=fracdef
+                   )
+    N        =  2 * npsi
+    outvec   =  np.zeros(2*npsi,dtype=np.float64)
+    OPSI     =  np.zeros((na,nx,noT, no), dtype=np.complex128)
+    alloc_psi=  np.zeros((na,nx,noT, no), dtype=np.complex128)
+    psic     =  np.zeros((na,nx,noT, no), dtype=np.complex128)
+    preconditioner  = diagmat()
+    x        = preconditioner@bvec
+    if options['add_random']=='True':
+        x   += np.random.random(len(bvec))*float(options['random_weight'])
+    
+    #if options['start_psi']!='None':
+    #    x    = np.load(options['start_psi'])[IK].reshape(na*nx*noT*no)
+    #    print()
+    print(pref + options['Axb_solver'] + ' solver started')
+    LO       = LinearOperator((N,N), matvec = matvec3,dtype=np.float64)
+    
+    maxit     = int(options['maxiter'])
+    fails     = 0
+    fracdef   =  0.0
+    step      = float(options['dl'])
+    t1        = time()
+    x,info,its= solve_sparse(LO, bvec, 
+                             x0=x, tol=float(options['steptol']), )
+    t2        = time()
+    if info==0:
+        print(pref+'Converged psi in ', its, ' iterations. ('+str(np.round(t2-t1,3))+' secs)')
+    else:
+        print(pref+'SciPy info: ', info,' Calculation didnt succeed.')
+    
+    psi       =  x[0:npsi] + 1j * x[npsi:2*npsi]
+    PSI[IK]   = psi.reshape(1,na, nx, noT, no)
+    for a in range(na):
+        for x in range(nx):
+            for o in range(noT):
+                for aa in range(na):
+                    for xx in range(nx):
+                        #for oo in range(noT):
+                        OMG [IK,a,x,o,aa,xx,:] = -(        ixi[   aa,xx,:].dot(PSI[IK,a,x,o]) * deltaM[aa,xx,:]
+                                                   +np.conj(PSI[IK,aa,xx,:]).dot(   xi[a,x,o]) * deltaP[a,x,o]
+                                                    )*(1j*hbar)/(xpm[aa, xx,:] - xpp[a,x,o])
+    
+    # Calculate Derivative
+    if options['checkderivative']=='True':
+        dPsi = np.zeros(PSI.shape,dtype=complex)
+        for a in range(na):
+            for x in range(nx):
+                for c in range(noT):
+                    dPsi[0,a,x,c]  = (h0 - I*xpp[a,x,c])@PSI[0,a,x,c] + hbar * glp[a,x,c]*xi[a,x,c]+ hbar*deltaP[a,x,c]*(dm0@xi[a,x,c])
+                    dPsi[0,a,x,c] += (xi.reshape(na*nx*noT,no).T@(OMG[0,a,x,c].reshape(na*nx*noT)))/hbar
+        print('sum over |Derivative| of psi_axc')
+        print(np.abs(dPsi).sum())
+        PI = np.zeros((na,no,no),dtype=complex)
+        for ia in range(na):
+            PI[ia] = Q_nb(PSI[[IK], ia], IXI[[IK], ia])
+        J = np.trace(PI, axis1=1,axis2=2)/hbar
+        Q = (1/hbar)*(PI.sum(axis=0))
+        print(pref +'----------------')
+        print('         Current running with this DM at ik='+str(IK)+':  ', J)
+        dSig = (-1j/hbar)*(h0@dm0 - dm0@h0) + Q
+        print('         max(|DM derivative|) ', np.abs(dSig).max())
+        print('')
+        if options['L_info']=='True':
+            print('         Current term Q projection onto |psi_i><psi_i| of the Hamiltonian: ')
+            print(np.diag(np.abs(L0.proj_null(Q, 0))))
+            print('         DM projection onto |psi^i><psi_i| of the Hamiltonian: ')
+            print(np.diag(np.abs(L0.proj_null(dm0, 0))))
+        
+        print(pref +'----------------------')
+        
+    
+
+
+files = os.listdir()
+savedir=options['file']+'_save'
+if savedir not in files:
+    os.mkdir(savedir)
+np.save(savedir+'/last_psi.npy',PSI)
+np.save(savedir+'/last_omg.npy',OMG)
+
+
+# @njit(fastmath=True)
+# def addperturbationterm(v, delta, OPSI, alloc_psi, psic):
+#     alloc_psi[:,:,:,:]  =     v[ 0  :   npsi].reshape(na, nx, noT, no)
+#     alloc_psi[:,:,:,:] +=  1j*v[npsi: 2*npsi].reshape(na, nx, noT, no)
+    
+#     psic     [:,:,:,:]  =      alloc_psi[:,:,:,:].real
+#     psic     [:,:,:,:] += - 1j*alloc_psi[:,:,:,:].imag
+    
+#     X_sum               = xi.reshape(compound,no).T
+    
+#     for a in range(na):
+#         for x in range(nx):
+#             gaxc = np.linalg.inv(h0 - I * xpp[a,x,0])
+#             FRAC =  (1j/(  xpm
+#                          - xpp[a, x, 0])).reshape(compound,1)
+#             #MINUS!!!!
+#             ARR2 = - FRAC.reshape(compound,1) * psic.reshape(compound,no)
+#             for c in range(noT):
+#                 OPSI[a,x,c] = gaxc.dot(delta*np.dot(X_sum, np.dot(ARR2, deltaP[a,x,c]*xi[a,x,c])))
+#     v[0:npsi]     += OPSI.reshape(na*nx*noT*no).real
+#     v[npsi:2*npsi]+= OPSI.reshape(na*nx*noT*no).imag
+
+# @njit
+# def iterate(its,step,v,OPSI, alloc_psi, psic):
+#     pstep = step/its
+#     for i in range(its):
+#         addperturbationterm(v, pstep, OPSI, alloc_psi, psic)

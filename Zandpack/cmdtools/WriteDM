@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jul 21 08:58:39 2022
+
+@author: aleksander
+
+"""
+
+import sys
+import os
+import numpy as np
+import joblib as jl
+from scipy.integrate import simpson
+from tqdm import tqdm
+from numba import njit
+from Zandpack.mpi_tools import combine_dm
+
+args = sys.argv[1:]
+print('WriteDM Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+options = {'file_save':'file_save',
+           'outfile': 'DM_t_file',
+           'ik':'0',
+           'dt_tol': '1e-2'
+           }
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after WriteDM command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+try:
+    T_E = np.load('QuasiParticle_Solver_Input_t_and_E_pairs.npy')
+    t,dm = combine_dm([options['file_save']])
+    dm   = dm[:,[int(options['ik'])]]
+    if len(t)!=len(dm):
+        t = t[:-1]
+
+    DM_list = []
+    filtered_times = [T_E[0,0]]
+    tol = float(options['dt_tol'])
+    for ti in T_E[1:,0]:
+        diff = np.abs(ti - np.array(filtered_times))
+        if (diff>tol).all():
+            filtered_times += [ti]
+    filtered_times = np.array(filtered_times)
+
+    for ti in filtered_times:
+        diff = np.abs(ti - t)
+        idx  = np.where(diff == diff.min())[0][0]
+        DM_list += [dm[idx,:,:,:]]
+    DM_list = np.array(DM_list)
+    np.savez(options['outfile']+'.npz',
+             DM    = DM_list,
+             times = filtered_times)
+
+except:
+    print('Reading specfied times for when the DM is needed failed. Continuing without!')
+    t,dm = combine_dm([options['file_save']])
+    if len(t)!=len(dm):
+        t = t[:-1]
+    filtered_times = [t[0]]
+    DM_list = []
+    tol = float(options['dt_tol'])
+    for ti in t:
+        diff = np.abs(ti - np.array(filtered_times))
+        if (diff>tol).all():
+            filtered_times += [ti]
+    filtered_times = np.array(filtered_times)
+    for ti in filtered_times:
+        diff = np.abs(ti - t)
+        idx  = np.where(diff == diff.min())[0][0]
+        DM_list += [dm[idx,:,:,:]]
+    DM_list = np.array(DM_list)
+    np.savez(options['outfile']+'.npz',
+             DM    = DM_list,
+             times = filtered_times)
+    
+
+
+

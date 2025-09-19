@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Created on Wed Feb 22 10:50:58 2023
+
+@author: aleksander
+
+:::::USAGE:::::
+For use in combination with 
+    - An array file from Zandpack
+    - A Bias file for Zandpack
+    - A Initial file for Zandpack
+
+Execute in the folder with the Initial,Bias and file as this:
+
+    goldfish Dir=$PWD 
+
+This tells the code to take the information in Bias.py and Initial.py 
+and propagate accordingly.
+
+Comments on code
+    - Performance functions are located in _Funcs
+    - The top 100 lines in this code is just reading and navigating directies.
+    - the adaptive RK45 starts around l. 190
+    - Lots of "@" broadcasting going on. Read these places with care?    
+"""
+
+import numpy as np
+from Zandpack.mpi_RK4pars_dev import A, B, C, CT, CH, RK_N
+import os
+import sys
+from _3Funcs import PI3, get_nonzero_omg, MM, TERR2_psi, TERR2_sig, TERR2_omg
+from _3Funcs import Memoryless_ODE_PSI as ODE_PSI
+from _3Funcs import step_fourth_sig, step_fourth_psi, step_fourth_omg
+from time import time
+
+# Initial Navigation to directory given
+args = sys.argv[1:]
+original_folder=os.getcwd()
+ChDir = False
+Check = ['Dir' in v for v in args]
+if sum(Check)>1:
+    print('Dont specify several directories. Stopping processes')
+    assert 1 == 0
+if True in Check:
+    i = Check.index(True)
+    if "=" not in args[i]:
+        assert 1 == 0
+    path = args[0].replace(' ', '').split('=')[1]
+    os.chdir(path)
+    new_folder = os.getcwd()
+    sys.path.append(new_folder)
+options = {'Dir':'$PWD',
+           'write_input':'False',
+           }
+for opt in args:
+    kw,flag = opt.split('=')
+    options.update({kw:flag})
+    
+
+
+
+
+
+
+# Initial Handling of keywords given
+from Initial import Arrs as D
+from Initial import t0, t1, stepsize, print_timings, usesave, saveevery, name, eps,  n_dm_compress, save_PI
+from Initial import checkpoints, save_checkpoints, LoadFromFull
+checkpoints = np.array(checkpoints)
+checkpoints = checkpoints[checkpoints>t0]
+checkpoints = checkpoints[checkpoints<t1]
+checkpoint_bookkeeper = np.zeros(len(checkpoints), dtype = int)
+from Bias import dH, bias, dissipator
+
+nax = np.newaxis
+DT  = np.complex128
+def CZ(s):
+    return np.zeros(s, dtype = DT)
+
+#Readins from saved folder, imported from "Initial"
+NK   = D['H_Ortho'].shape[0]
+NO   = D['H_Ortho'].shape[-1]
+NA   = D['num_leads']
+NL   = D['num_lorentzians']
+NF   = D['num_poles_fermi']
+#NX   = NL + NF
+NX = D['psi_shape'][2]
+NOT  = D['noT']
+XI   = D['xi'][:,:,:,:NOT].copy()
+IXI  = D['Ixi'][:,:,:,:NOT].copy()
+H0   = D['H_Ortho'].copy()
+
+Xpp  = D['Xpp'][:,:,:,:NOT]
+Xpm  = D['Xpm'][:,:,:,:NOT]
+
+assert (Xpp.imag>0).all()
+assert (Xpm.imag<0).all()
+
+
+GGP = D['GG_P'][:,:,:,:NOT]
+GLP = D['GL_P'][:,:,:,:NOT]
+GGM = D['GG_M'][:,:,:,:NOT]
+GLM = D['GL_M'][:,:,:,:NOT]
+deltaP = GGP - GLP
+deltaM = GGM - GLM
+print('GLP-shape', GLP.shape)
+print('xi-shape', XI.shape)
+print('ixi-shape', IXI.shape)
+
+### OMG BLOCKS ####
+# _BLOCKS, _INDICES,B_ij2i,B_i2ij = get_nonzero_omg(deltaP[:,:,:,:NOT], deltaM[:,:,:,:NOT])
+# BLOCKS = [Bi.copy() for Bi in _BLOCKS]
+# INDICES = [Ii.copy() for Ii in _INDICES]
+# del _BLOCKS, _INDICES
+
+
+idxholder    = {0:None,
+                1:np.array([0,6]),
+                2:np.array([0,1,6]),
+                3:np.array([0,1,2,6]),
+                4:np.array([0,1,2,3,6]),
+                5:np.array([0,1,2,3,4,6]),
+                }
+
+
+DM          = D['DM_Ortho']
+tmp_Q       = CZ((NK, NA, NO, NO))
+tmp_sig     = D['DM_Ortho'].copy()
+tmp_sig[:,:,:] = 0.0
+tmp_psi        = CZ((NK,NA,NX,NOT, NO))
+print('psi-shape', tmp_psi.shape)
+
+SIGS           =  CZ((RK_N+1,)+DM.shape)
+PSIS           =  CZ((RK_N+1,NK, NA,NX,NOT, NO))
+
+#OMGS           = [CZ((RK_N+1,)+BLOCKS[i].shape).copy() for i in range(len(BLOCKS))]
+
+Delta_a        = np.zeros(NA)
+t              = 0.0 + t0
+h              = 0.0 + stepsize
+SIGS[-1]       = DM[:,:,:]
+Current        = []
+times          = []
+
+def hnew(h, TE): 
+    return 0.9 * h * (eps / TE) ** 0.2
+
+del DM
+
+
+count = 0
+_tstart = time()
+
+# Runge kutta propagation
+while t < t1:
+    Step_Fourth = 0 # 0 or 1. 0 repeats same step with lesser stepsize, 1 propagates
+    while Step_Fourth == 0:
+        dt = A * h
+        for i in range(RK_N):
+            _idx_i = idxholder[i] #Indexing for computing intermediate result, see mpi_funcs.py
+            if i==0: 
+                tmp_sig[:,:,:]     = SIGS[-1]
+                tmp_psi[:,:,:,:,:] = PSIS[-1]
+            
+            else:
+                MM(SIGS[_idx_i].transpose(1, 2, 3, 0) ,   B[i, _idx_i], tmp_sig)
+                MM(PSIS[_idx_i].transpose(1,2,3,4,5,0), B[i, _idx_i], tmp_psi)
+            
+            ts = t  + dt[i]
+            Ht = H0 + dH(ts, tmp_sig)
+            for _not_i in range(NA): Delta_a[_not_i] = bias(ts, _not_i)
+            Xpp_t = Xpp + Delta_a[None,:,None,None]
+            Xpm_t = Xpm + Delta_a[None,:,None,None]
+            
+            # Sigma part of ODE
+            SIGS[i] = -1j*(Ht@tmp_sig - tmp_sig@Ht) - dissipator(ts, tmp_sig)
+            tmp_Q[:,:,:,:] = 0.0
+            PI3(tmp_psi, IXI, tmp_Q)
+            if i == 0:
+                J = np.trace(tmp_Q, axis1=2, axis2=3)
+            SIGS[i] +=  tmp_Q.sum(axis=1)
+            SIGS[i] *=  h
+            
+            # Psi part of ODE
+            #psi, H,Xpp, Xpm, sigma, xi,ixi, GLP, DeltaP, DeltaM,
+            #out
+            ODE_PSI(tmp_psi, Ht, Xpp_t, Xpm_t, tmp_sig, XI, IXI, GLP, deltaP, deltaM, PSIS[i])
+            PSIS[i] *= (-1j*h)
+            
+            
+        error_sig = TERR2_sig(SIGS[0:RK_N], CT)
+        error_psi = TERR2_psi(PSIS[0:RK_N], CT)
+        
+        TE = (error_sig+error_sig)**0.5
+        h           = hnew(h,  TE)
+        Step_Fourth = 1 if TE < eps else 0
+    
+    Current += [0.0 + J]
+    times   += [0.0 + t]
+    t += h
+    
+    step_fourth_sig(SIGS, CH) 
+    step_fourth_psi(PSIS, CH)
+    
+    if np.mod(count,50)==0:
+        print(str(np.round(t0,5))+'||'+ str(np.round(t,5))+'||'+ str(np.round(t1,5)) + '|| J='+str(np.round(J.real,6)))
+    count += 1
+
+_tstop = time()
+    
+np.save(name+'_3idxresult_t.npy',times)
+np.save(name+'_3idxresult_J.npy',Current)
+
+print('RUNTIME : ', _tstop - _tstart, ' secs')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

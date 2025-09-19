@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Mar 28 10:11:19 2023
+
+@author: aleksander
+"""
+
+import numpy as np
+import os 
+import sys
+args = sys.argv[1:]
+print(args)
+#Default values
+options = {'folder':'tmp',
+           'files':'{}',
+           'mode':'compress',
+           'delete':'False',
+           'command':'None',
+           'delete_all':'False'
+           }
+
+if '--help' in args:
+    msg = 'This tool is for compression and easy transfer of files for the Zandpack code.\n'
+    msg+= 'Usage:\n     (compression and upload): \n'
+    msg+= '            zzz Dir=$PWD folder=tmp files=* command="rsync -a tmp.tar.xz name@clusterlogin.dk:/dir/upload/" delete_all=True\n'
+    msg+= '     (decompression): \n'
+    msg+= '            zzz Dir=$PWD folder=tmp.tar.xz mode=decompress\n'
+    msg+= 'default options:'
+    print(msg)
+    print('     ',options)
+    exit()
+    
+for a in args:
+    if 'command' not in a:
+        split = a.replace(' ', '').split('=')
+    else:
+        split = a.split('=')
+    options.update({split[0]:split[1]})
+print(options)
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+def tup2files(tup):
+    files = tup.replace('{','').replace('}','').split(',')
+    return files
+
+if options['mode'] == 'compress':
+    os.system('rm -rf  ' + options['folder'])
+    os.mkdir(options['folder'])
+    print(options['files'])
+    print( tup2files(options['files']))
+    for f in tup2files(options['files']):
+        os.system('cp -R '+f +' '+options['folder']+'/')
+    os.system('tar -cjvf '+options['folder']+'.tar.xz ' +options['folder'])
+    if options['delete']=='True' or options['delete_all']=='True':
+        os.system('rm -rf  ' + options['folder'])
+    if options['command']!='None':
+        os.system(options['command'])
+    if options['delete_all']=='True':
+        os.system('rm -rf '+options['folder']+'.tar.xz')
+    exit()
+if options['mode']=='decompress':
+    os.system('tar -xvf '+options['folder'])
+    if options['delete']=='True':
+        os.system('rm -rf  ' + options['folder'])
+    
+
+

@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug 17 17:08:08 2023
+
+@author: aleksander
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.Loader import flexload
+
+pref = 'add_spin_component:  '
+
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           }
+
+os.chdir(os.getcwd())
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Basischange command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+infile  = options['file']
+
+xi  = flexload(infile + '/Arrays/xi.npy')
+Ixi = flexload(infile + '/Arrays/Ixi.npy')
+np.savez_compressed(infile+'/Arrays/xi.npz',xi)
+np.savez_compressed(infile+'/Arrays/Ixi.npz',Ixi)
+os.system('rm '+infile+'/Arrays/xi.npy')
+os.system('rm '+infile+'/Arrays/Ixi.npy')
+
+exit()

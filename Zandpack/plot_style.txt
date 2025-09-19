@@ -1,0 +1,70 @@
+xtick.color: 323034
+ytick.color: 323034
+text.color: 323034
+lines.markeredgecolor  : black
+patch.facecolor        : bc80bd
+patch.force_edgecolor  : True
+patch.linewidth: 0.8
+scatter.edgecolors: black
+grid.color: b1afb5
+#grid.color: b0b0b0
+axes.titlesize: 16
+legend.title_fontsize: 12
+xtick.labelsize: 16
+ytick.labelsize: 16
+axes.labelsize: 16
+font.size: 10
+#axes.prop_cycle : (cycler('color', ['b' ,'r', 'y','magenta','cyan','orange','green']))
+axes.prop_cycle : (cycler('color', [(.77, 0, .05), (0,    0,    0), (.12, .24, 1  ), (.31, 1 , 0.34),(0,   0, .4 ), (.95, .83, .18), (1, .35  , .14), (1,  .65, .74),(1, .14, .35), (0,.78,0),(.33, .04, 1.)]))
+mathtext.fontset: stix
+font.family: STIXGeneral
+lines.linewidth: 1.5
+legend.frameon: True
+legend.framealpha: 0.8
+legend.fontsize: 10
+legend.edgecolor: 0.9
+legend.borderpad: 0.2
+legend.columnspacing: 1.5
+legend.labelspacing:  0.4
+text.usetex: True
+axes.titlelocation: left
+axes.formatter.use_mathtext: True
+axes.autolimit_mode: round_numbers
+axes.labelpad: 3
+axes.formatter.limits: -4, 4
+axes.labelcolor: black
+axes.edgecolor: black
+axes.linewidth: 0.6
+axes.spines.right : True
+axes.spines.top : True
+axes.grid: True
+figure.titlesize: 18
+figure.dpi: 150
+figure.figsize: 6,5
+
+# Set x axis
+xtick.direction : in
+xtick.major.size : 3
+xtick.major.width : 0.5
+xtick.minor.size : 1.5
+xtick.minor.width : 0.5
+xtick.minor.visible : True
+xtick.top : True
+
+# Set y axis
+ytick.direction : in
+ytick.major.size : 3
+ytick.major.width : 0.5
+ytick.minor.size : 1.5
+ytick.minor.width : 0.5
+ytick.minor.visible : True
+ytick.right : True
+
+savefig.bbox : tight
+savefig.pad_inches : 0.05
+
+#grid.color       :   k       # grid color
+grid.linestyle   :   :       # dotted
+grid.linewidth   :   0.5     # in points
+
+

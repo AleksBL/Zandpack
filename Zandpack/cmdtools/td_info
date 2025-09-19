@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 14 14:50:44 2022
+
+@author: aleksander
+
+Tool for printing and plotting information from a TD calculation.
+
+
+
+
+"""
+
+import sys
+import os
+import numpy as np
+#import matplotlib.pyplot as plt
+from inspect import getsource
+from Zandpack.Loader import flexload
+
+args = sys.argv[1:]
+print('td_info Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'dt': '0.1',          # fs   
+           'file': 'SaveFile',   # directory
+           'savefile':'None',
+           'plot':'0',
+           'plotcurrent':'0',
+           'plotdevicecharge':'0',
+           'plotdm':'0', # seperate index i and j by ,e.g. "plotdm=2,5"
+           'plotgeom':'0',
+           'plotrealspacecharge':'0',
+           'tmin':'None',
+           'tmax':'None',
+           'ik':'None',
+           'dm_inds':'None',
+           'label': 'None',
+           'pltshow':'1',
+           'TSHSfile':'None',
+           'FFT': 'False',
+           'format':'svg',
+           'orbN':'9',
+           'orbvac1':'0.5',
+           'orbvac2':'3.0,3.0,3.0',
+           'orbdir':'Device',
+           'gridfolder':'gridfolder',
+           'regularmpl':'0',
+           'toqr':'0',
+           'qr_n':'10',
+           'sourcefiles':'None', # Seperate files by ","
+           'qr_nocompression':'0',
+           'onlysource':'0'
+           }
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+from Zandpack.plot import plt
+
+FORMAT = options['format']
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Initial import t0, t1,eps, checkpoints
+from Bias    import bias, dH, dissipator
+
+if not options['file']=='None' and options['savefile']=='None':
+    options['savefile']=options['file']+'_save'
+
+if options['tmin'] == 'None':
+    tmin = -10.0**9
+else:
+    tmin = float(options['tmin'])
+
+if options['tmax'] == 'None':
+    tmax =  10.0**9
+else:
+    tmax = float(options['tmax'])
+
+if options['savefile']=='None':
+    t_save = None
+elif 'last_time.npy' in os.listdir(options['savefile']):
+    t_save = np.load(options['savefile']+'/last_time.npy')
+else:
+    t_save = None
+
+if options['label']!=None:
+    label = options['label']
+else:
+    label = ''
+
+if options['ik'] == 'None':
+    nk = np.load(options['file']+'/Arrays/H_Ortho.npy').shape[0]
+    kidx = np.arange(nk)
+else:
+    kidx = np.fromstring(options['ik'],sep=',').astype(int)
+
+num_elecs = int(np.load(options['file']+'/Arrays/num_leads.npy'))
+print(kidx)
+if options['plotcurrent']=='1':
+    from Zandpack.mpi_tools import combine_currents as CC
+    t,J = CC([options['savefile']], n=num_elecs)
+    _idx = (t>tmin)*(t<tmax)
+    for i in range(num_elecs):
+        for ik in kidx:
+            plt.plot(t[_idx],J[i][_idx,ik], label = r'$J_'+str(i)+'$, ik='+str(ik))
+    plt.legend()
+    plt.xlabel(r'$\mathrm{Time}$ $t$ $[\mathrm{fs}]$',size = 16)
+    plt.ylabel(r'$\mathrm{Current}$ $[\frac{\mathrm{e}}{\mathrm{fs}}]$',size = 16)
+    plt.tight_layout()
+    plt.savefig(label + 'Currentplot.'+FORMAT)
+    if options['pltshow']=='1':
+        plt.show()
+    exit()
+
+if options['plotdevicecharge']=='1':
+    from Zandpack.mpi_tools import occupation_number as CC
+    t,N = CC([options['savefile']])
+    _idx = (t>tmin)*(t<tmax)
+    for ik in kidx:
+        plt.plot(t[_idx],N[_idx,ik], label = r'Device occupation')
+    plt.xlabel(r'$\mathrm{Time}$ $t$ $[\mathrm{fs}]$',size = 16)
+    plt.ylabel(r'$\mathrm{Device\phantom{.}Charge}$ $[\mathrm{e}]$',size = 16)
+    print(tmin,tmax)
+    tlim = [None, None]#(None,None)
+    if options['tmin']!='None':
+        tlim[0]=float(options['tmin'])
+    if options['tmax']!='None':
+        tlim[1]=float(options['tmax'])
+    plt.xlim(tlim[0], tlim[1])
+    plt.tight_layout()
+    plt.savefig(label+'Devicechargeplot.'+FORMAT)
+    if options['pltshow']=='1':
+        plt.show()
+    exit()
+
+if options['plotdm']=='1':
+    from Zandpack.mpi_tools import closest_dm
+    from Zandpack.mpi_tools import combine_currents as CC
+    t, J  = CC([options['savefile']], n=num_elecs)
+    ts    = np.arange(t.min(), t.max(), float(options['dt']))
+    ts    = ts[(ts>tmin)*(ts<tmax)]
+    dm    = closest_dm(ts, options['savefile'], 0.0 )
+    inds = np.fromstring(options['dm_inds'],sep=',', dtype=int)
+    
+    for ik in kidx:
+        plt.plot(ts,dm[:,ik, inds[0], inds[1]].real, label = r'Device occupation, ik='+str(ik))
+        if inds[0]!=inds[1]:
+            plt.plot(ts,dm[:,ik, inds[0], inds[1]].imag, label = r'Device occupation, ik='+str(ik))
+    
+    plt.xlabel(r'$\mathrm{Time}$ $t$ $[\mathrm{fs}]$',size = 16)
+    plt.ylabel(r'$\mathrm{Current}$ $[\frac{\mathrm{e}}{\mathrm{fs}}]$',size = 16)
+    
+    #plt.xlabel('Time [fs]',size = 16)
+    sub = '{'+str(inds[0])+','+str(inds[1])+'}'
+    plt.ylabel(r'$\rho_'+sub+' [\mathrm{e}]$ ',size = 16)
+    plt.tight_layout()
+    plt.savefig(label + 'DM_'+str(inds)+'.'+FORMAT)
+    if options['pltshow']=='1':
+        plt.show()
+    exit()
+
+if options['plotgeom']=='1':
+    r = np.load(options['file']+'/Arrays/Positions.npy')
+    s = np.load(options['file']+'/Arrays/Species.npy')
+    p = np.load(options['file']+'/Arrays/pivot.npy')
+    import sisl
+    from ase.visualize import view
+    from ase import Atoms
+    A = Atoms(positions=r, numbers=s,)
+    view(A)
+    if options['TSHSfile'] != 'None':
+        TSHS = sisl.get_sile(options['TSHSfile']).read_hamiltonian()
+        o2a  = TSHS.o2a(p)
+        tags = []
+        
+        unique_a = sorted(np.unique(o2a))
+        for a in unique_a:
+            print('Atom ',a ,' has orbitals ', p[np.where(o2a == a)[0]])
+        print('Unmentioned atoms are electrode atoms')
+    exit()
+
+if options['plotrealspacecharge'] == '1':
+    from siesta_python.DFTOrbitals import DFTOrbitals
+    from Zandpack.mpi_tools import closest_dm
+    import sisl
+    print('Computing difference in real-space charge between tmax and tmin')
+    tref = float(options['tmin'])
+    if ',' not in options['tmax']:
+        ts = np.array(float(options['tmax']))[None]
+    else:
+        split = options['tmax'].split(',')
+        ts = np.array([float(si) for si in split])
+    tv    = np.zeros(len(ts)+1)
+    tv[0] = tref; tv[1:]= ts
+    sk    = np.load(options['file']+'/Arrays/S^(-0.5).npy')[None,:,:,:]
+    dm    = sk@closest_dm(tv, options['savefile'], 0.0 )@sk
+    dmref = dm[0].copy(); dm = dm[1:].copy()
+    d_dm  = dm - dmref
+    del dm, dmref
+    orbdir = options['orbdir']
+    try:
+        structfile = sisl.get_sile(orbdir+'/'+'STRUCT.fdf').read_geometry()
+    except:
+        structfile = sisl.get_sile(orbdir+'/'+'STRUCT.xyz').read_geometry()
+    
+    Orbitals = DFTOrbitals(orbdir, np.array(structfile.atoms.Z), N = int(options['orbN']), vacuum=float(options['orbvac1']))
+    Orbitals.set_pos(structfile.xyz.copy())
+    print('Number of orbitals in structure: ', Orbitals.get_no())
+    
+    from dm2DM import dm2DM
+    
+    Orbitals.InitDensity(vac = np.fromstring(options['orbvac2'], sep=','))
+    dmdir = options['gridfolder']
+    try:
+        os.mkdir(dmdir)
+    except:
+        print(dmdir + ' folder exists!')
+    
+    for i in range(len(d_dm)):
+        print(str(i)+' / ' +str(len(d_dm)))
+        Orbitals.evaluate_density(dm2DM(d_dm[i], Orbitals))
+        np.savez_compressed(dmdir + '/grid'+str(i), grid = Orbitals.Dens, ti = tv[i+1])
+    exit()
+if options['toqr']=='1':
+    from QRWrapper.QR import np2qr,txt2qr
+    from Zandpack.mpi_tools import combine_currents as CC
+    import re
+    print('You should clean the directory for all files that will be created by this program, else the program will give an error!')
+    QRD = options['file']+'_QR'
+    os.mkdir(QRD)
+    compr = True if options['qr_nocompression']=='0' else False
+    t,J = CC([options['savefile']], n=num_elecs)
+    vals = [t.copy()]
+    for ik in range(nk):
+        vals += [Ji[:,ik].copy() for Ji in J]
+    vals = np.vstack(vals)[:,::int(options['qr_n'])]
+    dm_0 = np.load(options['file']+'/Arrays/DM_Ortho.npy')
+    if options['onlysource'] == '0':
+        np2qr(vals, QRD+'/'+options['savefile'] + '_Curr_QR', fmt='%.4g')
+        np2qr(dm_0, QRD+'/'+options['savefile'] + '_DM0_QR')
+    if options['sourcefiles']!='None':
+        makefiles = options['sourcefiles'].split(',')
+        txt=''
+        for Is, s in enumerate(makefiles):
+            txt  += '# file: ' + s + '\n'
+            fc    = open(s,'r').read()
+            fc    = re.sub('#.*?\n','\n',fc, flags=re.DOTALL)
+            txt  += fc 
+        txt2qr(txt, QRD+'/'+options['file']+'sourcefiles'+'_QR.png', compression=compr)
+    exit()
+    
+
+
+    
+    
+tv        = np.arange(t0,t1, float(options['dt']))
+tv        = tv[(tv>tmin)*(tv<tmax)]
+if options['plot'] == '1':
+    for i in range(num_elecs):
+        plt.plot(tv, [bias(ti, i) for ti in tv], label='electrode '+str(i))
+    Vamp = max([abs(bias(ti, 0)) for ti in tv])
+    for ti in checkpoints:
+        plt.vlines(ti, -Vamp, Vamp, linestyle='dashed')
+    plt.legend()
+    if options['pltshow']=='1':
+        plt.show()
+
+print('t_save: ', t_save)
+print('t-interval: ',t0 ,' to ', t1,' with error-tolerance ', eps )
+print('# k-points, spin-components: ', np.load(options['file']+'/Arrays/H_Ortho.npy').shape[0])
+print('# Fermi Poles: ', np.load(options['file']+'/Arrays/num_poles_fermi.npy'))
+
+print('\nBias:')
+print(getsource(bias))
+
+print('\ndH:')
+print(getsource(dH))
+
+print('\nDissipator:')
+print(getsource(dissipator))
+
+
+

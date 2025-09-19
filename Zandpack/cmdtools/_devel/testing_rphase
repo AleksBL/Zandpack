@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan 24 17:14:14 2023
+
+@author: aleksander
+"""
+
+import sys
+import os
+import numpy as np
+pref = 'testing_rphase:  '
+
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'outfile':'NewTDT_file',
+           'seed':'None'
+           }
+
+os.chdir(os.getcwd())
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Basischange command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+H       = np.load(options['file'] + '/Arrays/H_Ortho.npy')
+nk      = H.shape[0]
+
+infile  = options['file']
+outfile = options['outfile']
+
+# Copy to new directory, where we modify phases on xi and Ixi
+os.system(
+          'cp -R '+ infile + '  ' + outfile
+          )
+
+os.chdir(outfile+'/Arrays/')
+print(pref + 'Modifying in directory ' + os.getcwd())
+
+xi = np.load('xi.npy')
+Ixi= np.load('Ixi.npy')
+nk,na, nx, no = xi.shape[0:4]
+if options['seed'] != 'None':
+    np.random.seed(int(options['seed']))
+
+
+for ik in range(nk):
+    for ia in range(na):
+        for ix in range(nx):
+            for io in range(no):
+                number = 2 * np.pi *  np.random.random()
+                xi[ik, ia, ix, io] *= np.exp(-1j * number)
+                Ixi[ik, ia, ix, io]*= np.exp( 1j * number)
+np.save('xi', xi)
+np.save('Ixi', Ixi)
+

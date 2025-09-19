@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Oct 22 11:11:23 2022
+
+@author: aleksander
+
+Program doubles the number of elements in the first index of 
+every quantity. So if we have a spin-degenerate set of files,
+this program makes it spin-polarised. It doesnt add matrix indices, 
+only 'k'-type indices.
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.Loader import flexload
+
+pref = 'add_spin_component:  '
+
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'outfile':'NewTDT_file',
+           }
+
+os.chdir(os.getcwd())
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after add_spin_component command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+H       = flexload(options['file'] + '/Arrays/H_Ortho.npy')
+nk      = H.shape[0]
+
+infile  = options['file']
+outfile = options['outfile']
+
+# Copy to new directory, where we modify H and the eigendecomposition 
+os.system(
+          'cp -R '+ infile + '  ' + outfile
+          )
+
+os.chdir(outfile+'/Arrays/')
+print(pref + 'Modifying in directory ' + os.getcwd())
+
+idx        = np.hstack((np.arange(nk),np.arange(nk)))
+exceptions = ['Positions', 'psi_shape', 'omg_shape','Species',
+              'num_leads','num_lorentzians', 'noT', 'num_poles_fermi','zero_tol']
+
+for A in os.listdir():
+    is_excep  = any([ex in A for ex in exceptions])
+    if is_excep:
+        continue
+    arr = flexload(A)
+    sh1 = arr.shape
+    if '_Eigenvalues.npy' in A:
+        arr = arr[:,idx]
+    else:
+        arr = arr[idx]
+    
+    sh2 = arr.shape
+    np.save(A.replace('.npz','.npy'), arr)
+    print(pref+'Rewrote ',A,':'+str(sh1),'-->',str(sh2))
+A = flexload('omg_shape.npy')
+_a = A.copy()
+A[0]*=2
+_aa= A.copy()
+np.save('omg_shape.npy', A)
+print(pref+'Rewrote omg_shape:',str(_a),'-->',str(_aa))
+A = flexload('psi_shape.npy')
+_a = A.copy()
+A[0]*=2
+_aa= A.copy()
+np.save('psi_shape.npy', A)
+print(pref+'Rewrote psi_shape:',str(_a),'-->',str(_aa))
+
+
+print(pref + 'Made '+str((nk,)), ' into ' +str((2*nk,))+' copied spin index into the last nk:2nk block.')
+print(pref + 'Great Succes'     )
+

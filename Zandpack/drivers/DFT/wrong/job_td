@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#BSUB -J Zand1
+#BSUB -q hpc
+#BSUB -W 24:00
+#BSUB -R "span[hosts=1]"
+#BSUB -n 4
+#BSUB -M 2GB
+#BSUB -B
+#BSUB -N
+#BSUB -u abalo@dtu.dk
+#BSUB -o TD.out
+#BSUB -e TD.error
+
+# For larger calculations, eg. tbtrans may segfault if the max stacksize is too small
+ulimit -s unlimited
+echo SLOTS : $LSB_DJOB_NUMPROC
+echo OMP NUM THREADS : $OMP_NUM_THREADS
+echo LIST OF HOSTS:
+echo "    ${LSB_MCPU_HOSTS}"
+echo The current stack limit is \"$( ulimit -s )\".
+echo ------------------------------------------------------
+source /dtu/sw/dcc/dcc-sw.bash
+module purge
+module load dcc-setup/2021-nov
+module load python/3.9.9
+module load siesta
+module load numpy
+module load scipy
+module load matplotlib
+module load numba
+module load mpi4py
+module load sisl
+module load ase
+
+export OMP_NUM_THREADS=4
+export NUMBA_NUM_THREADS=4
+
+#SCF Dir=$PWD file=AlJunc_file history=7 nprocs=4
+mpirun -np 4 Zand Dir=$PWD > RUN.out

@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec 22 08:22:26 2022
+
+@author: aleksander
+"""
+
+import sys
+import os
+import numpy as np
+import joblib as jl
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.Quasiparticle    import SteadyState
+from scipy.integrate import simpson
+from tqdm import tqdm
+
+args = sys.argv[1:]
+print('ccs Program Start')
+print('Program Decomissioned')
+exit()
+
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file': 'SaveFile',   # directory
+           'ik': '0',            # k-point
+           'mu_i'   :'0.0,0.0',
+           'dmu_i'   :'0.0,0.0',
+           'eta':'1e-3',
+           'elecs':    '0,1',
+           'time':'None',
+           'DM':'None'
+           }
+
+
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+Mu = np.fromstring(options['mu_i'],sep=',')
+#KT = np.fromstring(options['kT_i'],sep=',')
+e1,e2 = np.fromstring(options['elecs'],sep=',')
+eta= float(options['eta'])
+path = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Bias    import dH, bias
+from Initial import t0, t1, hbar
+
+def dH_k(t,sigma):
+    return dH(t,sigma)[int(options['ik'])]
+
+if options['time']=='None':
+    time = t0
+else:
+    time = float(options['time'])
+
+Ham      = np.load(options['file']+'/Arrays/H_Ortho.npy')[int(options['ik'])]
+SEs      = from_saved_file(options['file'] + '/Arrays', ik = int(options['ik']))
+if options['DM'] == 'None':
+    DM = np.load(options['file']+'/Arrays/DM_Ortho.npy')
+else:
+    DM = np.load(options['DM'])
+
+Ham = Ham + dH_k(time, DM)[int(options['ik'])]
+
+Eavg = np.array([np.average(Mu)])
+I    = np.eye(Ham.shape[-1])
+
+SEf  = np.zeros(Ham.shape, dtype=complex)
+for ie,se in enumerate(SEs):
+    arr = se.evaluate(Eavg, bias=Mu[ie])[0,0]
+    #print(arr.shape)
+    SEf +=  arr
+    if ie == e1:
+        G1 = 1j*(arr - arr.conj().T)
+    if ie == e2:
+        G2 = 1j*(arr - arr.conj().T)
+    
+    
+G    = (Eavg +1j*eta)* I - Ham - SEf
+T0   = np.trace(G1@G@G2@(G.conj().T))
+dmu  = np.fromstring(options['dmu_i'], sep=',') 
+dmu  = dmu[1] - dmu[0]
+dJ   = T0 * dmu
+
+
+print('\n\n')
+print('----------------------')
+print('Shift would give a change in current of: ')
+print('    dJ = '+str(np.round(np.real(dJ), 6)))
+assert abs(dJ.imag)<1e-12
+print('---------------------')
+
+
+
+

@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jul 20 11:43:15 2022
+
+@author: aleksander
+"""
+
+import numpy as np
+import sys
+import os
+import numba as nb
+outfile = "QuasiParticle_Solver_Input_t_and_E_pairs" # Fixed by the Adiabatic code
+args    = sys.argv[1:]
+options = {'Emin':'-1.0',
+           'Emax':'+1.0',
+           'file':'SteadyStateFile',
+           'dE': '0.1',
+           'dt': '1.0',
+           }
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after qp_grid command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+# Set options:
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+from Initial import t0,t1
+
+times = np.arange(t0,t1, float(options['dt']))
+eg    = np.arange(float(options['Emin']),
+                  float(options['Emax']),
+                  float(options['dE']),
+                  )
+
+@nb.njit
+def make_TE_grid(times, eg):
+    nt, ne = len(times), len(eg)
+    
+    tout = np.zeros((nt, ne))
+    eout = np.zeros((nt, ne))
+    for it in range(nt):
+        for ie in range(ne):
+            tout[it,ie] = times[it]
+            eout[it,ie]  = eg[ie]
+    return tout, eout
+
+T,E   = make_TE_grid(times, eg)
+
+T = T.reshape(-1,1)
+E = E.reshape(-1,1)
+
+T_E = np.hstack((T,E))
+np.save(outfile+'.npy', T_E)

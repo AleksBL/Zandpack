@@ -1,0 +1,27 @@
+import numpy as np
+import os
+
+name             = 'YourFolderName'
+eps              = 1e-6        # RK45 error tolerance
+
+t0, t1           = -5.0, 200.0  # Start and End
+usesave          = True       # Should the code use a previously saved run? requires -np x is the same as last run
+LoadFromFull     = False       # Have you stiched the previous run results?
+saveevery        = 50          # How often to write the current and DM to file
+checkpoints      = [-2.0]      # When to save full system state
+save_checkpoints = False       # If to save full system state
+print_timings    = False       # More verbose output from the code (MASTER.txt & Worker*.txt)
+stepsize         = 0.1         # Initial stepsize. Overwritten when usesave=True
+
+
+# Read in stuff, you probably dont need to change anything here
+Adir             = name + '/Arrays/'
+Arrs             = {}
+files = os.listdir(Adir)
+for f in files:
+    Arrs.update({f[:-4]: np.load(Adir+f)})
+# hbar is currently doubly defined in the code, this should be equal to the hbar used in the TimedepependentTransport module. Bug fix for the future
+
+hbar = 6.582119569*10**-1     # electronvolt * femtosecond
+steps_for_bondcurrent = 10    # ??
+

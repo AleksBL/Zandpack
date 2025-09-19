@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Nov 21 17:45:40 2022
+
+@author: aleksander
+"""
+
+
+
+import sys
+import os
+import numpy as np
+from Zandpack.FittedSelfEnergy import from_saved_file
+import sisl
+from numba import njit,prange
+from Zandpack.TimedependentTransport import PI
+
+args = sys.argv[1:]
+print('PsiNought Program Start')
+print('Program decommissioned')
+exit()
+
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'dpsi_tol':'1e-5',
+           'history':'2',
+           'weight':'0.7',
+           'psi_start_file':'None'}
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+from Bias    import dH, bias
+from Initial import t0, hbar
+
+print('Reading arrays.....')
+Ham     =  np.load(options['file']+'/Arrays/H_Ortho.npy')
+DM      =  np.load(options['file']+'/Arrays/DM_Ortho.npy')
+nk      =  Ham.shape[0]
+no      =  Ham.shape[-1]
+fd      =  options['file']+'/Arrays/'
+psi_sh  =  np.load(fd+'psi_shape.npy')
+omg_sh  =  np.load(fd+'omg_shape.npy')
+xi      =  np.load(fd+'xi.npy')
+Ixi     =  np.load(fd+'Ixi.npy')
+GGP     =  np.load(fd+'GG_P.npy')
+GGM     =  np.load(fd+'GG_M.npy')
+GLP     =  np.load(fd+'GL_P.npy')
+GLM     =  np.load(fd+'GL_M.npy')
+Xpp     =  np.load(fd+'Xpp.npy')
+Xpm     =  np.load(fd+'Xpm.npy')
+diff_GGM_GLM = np.load(fd+'diff_GGM_GLM.npy')
+diff_GGP_GLP = np.load(fd+'diff_GGP_GLP.npy')
+assert np.allclose(diff_GGM_GLM, GGM - GLM)
+assert np.allclose(diff_GGP_GLP, GGP - GLP)
+
+
+I       =  np.eye(no)
+print('xi shape ',   xi.shape)
+print('Ixi shape ',  Ixi.shape)
+print('GGP shape ',  GGP.shape)
+print('GGM shape ',  GGP.shape)
+print('GLP shape ',  GLP.shape)
+print('GLM shape ',  GLM.shape)
+print('psi shape',   psi_sh)
+print('omg shape',   omg_sh)
+print('Xpp shape', Xpp.shape)
+print('Calculating bare Greens function')
+# g
+g_kaxc  = np.linalg.inv(Xpp[:,:,:,0,None,None]*I - Ham[:, None, None, :,:])
+print('g_kaxc shape ', g_kaxc.shape)
+
+if options['psi_start_file']!='None':
+    PSI0    = np.load(options['psi_start_file'])
+else:
+    PSI0    = np.zeros(psi_sh).astype(np.complex128)#/1000
+
+error = 100.0**2
+@njit
+def HCommat():
+    M = np.zeros((nk,no**2, no**2), dtype = np.complex128)
+    c1 = 0
+    for ik in range(nk):
+        for i in range(no):
+            for ii in range(no):
+                c2 = 0
+                B1 = np.zeros((no,no),dtype=np.complex128)
+                B1[i,ii] = 1
+                for j in range(no):
+                    for jj in range(no):
+                        B2 = np.zeros((no,no), dtype=np.complex128)
+                        B2[j,jj] = 1
+                        res = Ham[ik].dot(B2) - B2.dot(Ham[ik]) 
+                        M[ik, c1,c2] = np.sum(B1 * res)
+                        c2 += 1
+                c1 += 1
+    return M
+
+# Mcom = HCommat()
+# pinvMcom = np.linalg.pinv(Mcom)
+
+# assert np.allclose((Mcom@DM.reshape(nk,-1).T).T, (Ham@DM - DM@Ham).reshape(nk,-1))
+
+@njit
+def FixPoint(Psi0, DM):
+    Psi0conj = Psi0.conj()
+    Out      = np.zeros(Psi0.shape, dtype = Psi0.dtype)
+    nk,na,nx,noT,no = Psi0.shape
+    for ik in range(nk):
+        sigk = DM[ik].copy()
+        for ia1 in range(na):
+            for ix1 in range(nx):
+                for io1 in range(noT):
+                    vec = np.zeros(no, dtype = np.complex128)
+                    vec-=\
+                        hbar*GLP[ik,ia1,ix1,io1]*xi[ik,ia1,ix1,io1]
+                    
+                    vec-=\
+                        hbar*diff_GGP_GLP[ik,ia1,ix1,io1]*sigk.dot(xi[ik,ia1,ix1,io1])
+                    
+                    SUM = np.zeros(no, dtype=np.complex128)
+                    for ia2 in range(na):
+                        for ix2 in range(nx):
+                            for io2 in range(noT):
+                                frac = 1/(Xpm[ik, ia2, ix2, io2] 
+                                        - Xpp[ik, ia1, ix1, io1])
+                    
+                                val = (diff_GGM_GLM[ik,ia2,ix2,io2]\
+                                        *Ixi [ik,ia2,ix2,io2].dot(
+                                         Psi0[ik,ia1,ix1,io1]   )
+                                        )*frac#*xi[ik, ia2, ix2, io2]
+                                val += (diff_GGP_GLP[ik,ia1,ix1,io1]\
+                                        *Psi0conj[ik,ia2,ix2,io2].dot(
+                                               xi[ik,ia1,ix1,io1]    )
+                                        )*frac#*xi[ik, ia2, ix2, io2]
+                                SUM += val * xi[ik,ia1,ix2,io2]
+                    vec += 1j *SUM
+                    Out[ik,ia1,ix1,io1]  = g_kaxc[ik,ia1,ix1].dot(vec)
+    return Out
+
+counter = 0
+psi_shape = PSI0.shape
+
+def ravel(s):
+    return np.hstack([s.ravel().real, s.ravel().imag])
+
+n_ele = np.prod(psi_sh)
+def unravel(s):
+    a = np.zeros(psi_sh, dtype=np.complex128)
+    a[:,:,:,:,:] +=    s[0:n_ele      ].reshape(psi_sh)
+    a[:,:,:,:,:] += 1j*s[n_ele:2*n_ele].reshape(psi_sh)
+    return a
+@njit
+def calculate_psi_derivative(psi0,
+                             ):
+    
+    out = np.zeros(psi0.shape, dtype = np.complex128)
+    nk,na,nx,noT,no = psi0.shape
+    psic = psi0.conj()
+    
+    for ik in range(nk):
+        sigk = DM[ik].copy()
+        Hk   = Ham[ik].copy()
+        I    = np.eye(Hk.shape[-1])
+        for ia1 in range(na):
+            for ix1 in range(nx):
+                for io1 in range(noT):
+                    out[ik, ia1, ix1, io1] += (Hk  - Xpp[ik, ia1, ix1, io1]*I).dot(
+                                               psi0[ik, ia1, ix1, io1,:])
+                    out[ik, ia1, ix1, io1] += hbar*\
+                        GLP[ik, ia1, ix1, io1] * xi[ik, ia1, ix1, io1,:]
+                    out[ik, ia1, ix1, io1] += hbar*\
+                        diff_GGP_GLP[ik, ia1, ix1, io1] * sigk.dot(xi[ik, ia1, ix1, io1,:])
+                    
+                    SUM = np.zeros(no, dtype=np.complex128)
+                    for ia2 in range(na):
+                        for ix2 in range(nx):
+                            for io2 in range(no):
+                                frac = 1/(Xpm[ik, ia2, ix2, io2] 
+                                        - Xpp[ik, ia1, ix1, io1])
+                                
+                                SUM += (diff_GGM_GLM[ik,ia2,ix2,io2]\
+                                        *Ixi [ik,ia2,ix2,io2].dot(
+                                         psi0[ik,ia1,ix1,io1]   )
+                                        )*frac*xi[ik, ia2, ix2, io2]
+                                
+                                if io2<noT:
+                                    SUM += (diff_GGP_GLP[ik,ia1,ix1,io1]\
+                                            *psic[ik,ia2,ix2,io2].dot(
+                                                   xi[ik,ia1,ix1,io1]    )
+                                            )*frac*xi[ik, ia2, ix2, io2]
+                    
+                    out[ik,ia1,ix1,io1] -= 1j * SUM
+    return out
+
+                    
+                    
+                    
+                    
+                    
+                    
+DM += 1e-10     
+mixer   =  sisl.mixing.PulayMixer(weight=float(options['weight']),history = int(options['history']))
+print('DM min eig ', np.linalg.eigh(DM)[0].min())
+print('Iteration START')
+
+
+PI_ka = np.zeros((nk,PSI0.shape[1], no, no),dtype=np.complex128)
+
+while error>float(options['dpsi_tol']):
+    #print('----> max(|dPsi/dt|)', np.abs(calculate_psi_derivative(
+    #                                      PSI0,
+    #                                      )).max())
+    #for i in range(PSI0.shape[1]):
+    #    PI_ka[:,i,:,:] = PI(PSI0[:, i,:,:,:], Ixi[:,i, 0:PSI0.shape[3],:,:])
+    #DM0    = -1j * (PI_ka + PI_ka.transpose(0,1,3,2)).sum(axis=1)
+    #print(np.trace(DM0,axis1=1,axis2=2))
+    PSInew = FixPoint(PSI0,DM)
+    delta  = ravel(PSInew - PSI0)
+    
+    # PSI0   = PSInew.copy()
+    PSI0 = unravel(mixer(ravel(PSI0), delta))
+    
+    error = np.abs(delta).max()
+    print('Iteration ', counter, '| error', np.round(error,6))
+    counter+=1
+# print('----> max(|dPsi/dt|)', np.abs(calculate_psi_derivative(
+#                              PSI0,
+#                              )).max())
+
+np.save('PsiConverged.npy',PSI0)

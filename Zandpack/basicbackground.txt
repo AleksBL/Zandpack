@@ -1,0 +1,46 @@
+
+  ::::::Basic background::::::
+  Consult Efficient auxiliary-mode approach for time-dependent nanoelectronics
+  by Bogdan Stefan Popescu & Alexander Croy for detailed theory and Haug & Jauho book from 2008.
+  
+  The occupied states of the electrodes of the system are described by a
+  self-energy on the form
+  $
+     \Sigma^<_\alpha(t_2,t) = \frac{i}{2\pi\hbar}\mathrm{e}^{\frac{i}{\hbar}\int_{t_2}^t \mathrm{d}t_1 \Delta_\alpha(t_1)}\int_{-\infty}^\infty\mathrm{d}\epsilon f_\alpha(\epsilon)\mathbf{\Gamma}_\alpha(\epsilon)\mathrm{e}^{-\frac{i}{\hbar}\epsilon(t_2 - t)}
+  $
+  \newline
+  $
+     \Sigma^>_\alpha(t_2,t) = -\frac{i}{2\pi\hbar}\mathrm{e}^{\frac{i}{\hbar}\int_{t_2}^t \mathrm{d}t_1 \Delta_\alpha(t_1)}\int_{-\infty}^\infty\mathrm{d}\epsilon (1-f_\alpha(\epsilon))\mathbf{\Gamma}_\alpha(\epsilon)\mathrm{e}^{-\frac{i}{\hbar}\epsilon(t_2 - t)}
+  $
+  and the electrode linewidth functions are taken as a weighted sum of Lorentzians:
+  $
+     \mathbf{\Gamma}_\alpha(\epsilon) = \sum_l \frac{W^2_{\alpha l}}{(\epsilon - \epsilon_{\alpha l})^2 + W_{\alpha l}^2} \mathbf{\Lambda}_{\alpha l}
+  $
+  \newline
+  Here the weight matrixes in the above sum can be fitted with the python module""" +\
+      ProgramName+\
+  """
+  This program takes input in the form of a folder containing some saved numpy arrays that has been through this fitting procedure.
+  Note that the arrays need not come from """+ProgramName+""", but can just as well be written by the user.
+  The present methodology progates the system described by the Hamiltonian, linewidth function 
+  and Fermi-distribution in a numerically exact way in the one-particle picture. The basic quantities
+  are: 
+      The Density:                      $\sigma $                                  (nk, no, no,) array)
+      The auxillary-mode wave-vectors:  $\vec{\Psi}_{k,\alpha x c}$                (nk, na, nx, nc\', nc) array
+      The two-mode  phasor (????)    :  $\Omega_{k, \alpha x c \alpha \' x\' c\'}$ (nk, na, nx, nc\', na, nx, nc)
+  These have the coupled equations of motion which for each k-point is on the following form:
+
+    $
+        i\hbar\frac{\mathrm{d} \sigma}{\mathrm{d}t} = [\mathbf{H}(t), \sigma]_-  + i \sum_\alpha \mathbf{\Pi}_\alpha (t) + \mathbf{\Pi}_\alpha^\dagger (t)
+    $
+    $
+        i\hbar\frac{\mathrm{d} \vec{\Psi}_{\alpha x c}}{\mathrm{d}t} = [\mathbf{H}(t) -  \chi_{\alpha x c}(t) ]\vec{\Psi}_{\alpha x c}  + \hbar\Lambda^<_{\alpha x c}\vec{\xi}_{\alpha x c} + \hbar(\Lambda^{>,+}_{\alpha x c} - \Lambda^{<,+}_{\alpha x c})\sigma\vec{\xi}_{\alpha x c} + \frac{1}{\hbar}\sum_{\alpha'x'c'}\Omega_{\alpha x c \alpha' x' c' }\vec{\xi}_{\alpha'x'c'}
+    $
+    $
+        i\hbar\frac{\mathrm{d}}{\mathrm{d}t}\Omega_{\alpha x c \alpha' x' c' } = (\chi^-_{\alpha' x' c' }(t) - \chi^+_{\alpha x c }(t))\Omega_{\alpha x c \alpha' x' c' } + i\hbar(\Lambda^{>,-}_{\alpha' x' c'} - \Lambda^{<,-}_{\alpha' x' c'})\vec{\Upsilon}_{\alpha' x' c'}\vec{\Psi}_{\alpha x c} + i\hbar(\Lambda^{>,+}_{\alpha x c} - \Lambda^{<,+}_{\alpha x c})\vec{\Psi}^\dagger_{\alpha' x' c'}\vec{\xi}_{\alpha x c}
+    $
+
+    with $\Pi$ given as the sum over an outer product:
+    $
+        \mathbf{\Pi}_{\alpha} = \frac{1}{\hbar} \sum_{x c}\vec{\Psi}_{\alpha x c}\vec{\Upsilon}_{\alpha x c}
+    $

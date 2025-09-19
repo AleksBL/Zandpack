@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Oct 23 14:43:51 2022
+
+@author: aleksander
+
+
+This code splits independent k-points if you want to run them seperately.
+E.g. run them in a trivially parallel way.
+
+
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.Loader import flexload
+pref = 'split_k:  '
+
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'N_split':'all',
+           }
+
+os.chdir(os.getcwd())
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Basischange command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+Hk = flexload(options['file']+'/Arrays/H_Ortho.npy')
+nk = Hk.shape[0 ]
+no = Hk.shape[-1]
+
+if options['N_split'].lower() == 'all':
+    nsplit = nk
+else:
+    nsplit = int(options['N_split'])
+
+def splitfunc(A):
+    return np.array_split(A, nsplit)
+
+exceptions = ['Positions', 'Species',
+              'num_leads','num_lorentzians', 'noT', 'num_poles_fermi']
+
+DirO = options['file'] + '/Arrays/'
+print(os.getcwd())
+print('k-points: ',nk,' --> ', np.array_split(np.arange(nk), nsplit))
+for i in range(nsplit):
+    DirD = options['file']+'_'+str(i)
+    os.mkdir(DirD)
+    os.mkdir(DirD+'/Arrays')
+    os.system('cp '+options['file']+'/Info.txt '+DirD+'/')
+    DirD +='/Arrays/'
+    for file in os.listdir(DirO):
+        is_excep  = any([ex in file for ex in exceptions])
+        if is_excep:
+            os.system('cp '+DirO+'/'+file+' '+DirD)
+        else:
+            Arr = splitfunc(flexload(DirO+file))[i]
+            #print(Arr.shape)
+            np.save(DirD+file, Arr)
+    
+

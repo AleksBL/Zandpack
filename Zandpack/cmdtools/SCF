@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Nov 19 17:34:58 2022
+
+@author: aleksander
+
+Tool for obtaining the equilibrium 
+density matrix for the system in the specified file.
+Done by contour integration as in the Hubbard code/ Transiesta.
+
+This tool finds a self-consistent solution such that doing
+the operation SIGMA[H_DM(SIGMA)] is actually stationary.
+
+do a SCF --help for some keywords
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.FittedSelfEnergy import from_saved_file
+import sisl
+import joblib as Jl
+from Zandpack.PadeDecomp import Hu_poles, FD_expanded
+from Zandpack.Loader import flexload
+from scipy.integrate import quad_vec
+from time import time
+from Zandpack.docstrings import scf_docstring, CoolLine
+
+args = sys.argv[1:]
+print(scf_docstring)
+print('SCF Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'Contour':'None',
+           'kT':'0.025',
+           'file':'TDT_file',
+           'kweights':'kweights.npy',
+           'drho_tol':'1e-5',
+           'history':'6',
+           'weight':'0.2',
+           'DM_start_file':'None',
+           'nprocs':'1',
+           'backend':'loky',
+           'DM_out_file':'None',
+           'UfUd':'False',
+           'real_line_integral':'False',
+           'real_line_min': '-60.',
+           'real_line_max':'20.0',
+           'real_line_N':'20',
+           'real_line_exact_fermi':'False',
+           'Nonequilibrium':'False',
+           'DM_randomness':'0.001',
+           'random_on_diag_only':'True',
+           'memory_conserve': 'False',
+           'fact_kT': '10.0',
+           'tolerance':'1e-8',
+           'quadvec_workers':'1',
+           'Bias':'None'}
+
+SCF_place = __file__[:-3]
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after SCF command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+print(options)
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+from Bias    import dH, bias
+from Initial import t0
+
+_mu     = flexload(options['file']+'/Arrays/mu_i.npy')
+_kT     = flexload(options['file']+'/Arrays/kT_i.npy')
+BIAS    = np.array([bias(t0, ia) for ia in range(len(_mu))])
+if options['Bias']!='None':
+    print('----> Using custom bias you specified!')
+    BIAS = np.fromstring(options['Bias'],sep=',')
+_mu    += BIAS
+if (_mu.max() - _mu.min())>1e-6 and options['Nonequilibrium'] == 'False':
+    print('----> Detected Nonequilibrium but you didnt explicitly state Nonequilibrium=True. Is this on purpose?')
+    
+print('----> Mu = ', str(_mu))
+print('----> Bias= ', str(BIAS))
+Ham     =  flexload(options['file']+'/Arrays/H_Ortho.npy')
+
+nk      =  Ham.shape[0]
+no      =  Ham.shape[-1]
+SEs     =  from_saved_file(options['file'] + '/Arrays')
+
+if options['Contour'] == 'None':
+    Cntr    = flexload(SCF_place+'SCF_default_Contour.npy')
+    print('Contour-file:  ', SCF_place+'SCF_default_Contour.npy')
+else:
+    Cntr    =  flexload(options['Contour'])
+    print('Contour-file:  ', options['Contour'])
+
+# Shift Contour, (Re(Ei), Im(Ei),Re(Wi), Im(Wi))  in (np, 4) format
+Cntr[:,0] +=  _mu.min()
+nprocs     =  int(options['nprocs'])
+mixer      =  sisl.mixing.PulayMixer(weight=float(options['weight']),history = int(options['history']))
+if options['DM_start_file']!='None':
+    rhoi    = flexload(options['DM_start_file'])
+else:
+    rhoi    =  flexload(options['file']+'/Arrays/DM_Ortho.npy')
+randomness  = np.random.random(rhoi.shape)
+randomness += randomness.transpose(0,2,1)
+if options['random_on_diag_only']=='True':
+    for _i in range(randomness.shape[0]):
+        randomness[_i] = np.diag(np.diag(randomness[_i]))
+
+rhoi       += float(options['DM_randomness'])*randomness/2
+tolerance   = float(options['tolerance'])
+
+print(len(SEs))
+if options['UfUd']=='True':
+    print('--> Using simple DM = Uf(E)U^d !!')
+    H = Ham + dH(t0,rhoi)
+    E,V = np.linalg.eigh(H)
+    
+    rhof = np.zeros(H.shape,dtype=complex)
+    for i in range(nk):
+        e,v = E[i], V[i]
+        f   = 1/(1 + np.exp((e - _mu[0])/ _kT[0])) 
+        rhof[i] = v.dot(np.diag(f)).dot(v.T.conj())
+    
+    if options['DM_out_file'] == 'None':
+        os.system('mv '+options['file']+'/Arrays/DM_Ortho.npy '
+                       +options['file']+'/Arrays/oldDM_Ortho.npy')
+        np.save(options['file']+'/Arrays/DM_Ortho.npy', rhof)
+    else:
+        np.save(options['DM_out_file'], rhof)
+    print('Device Charge', np.round(np.trace(rhof,axis1=1,axis2=2), 6))
+    exit()
+
+
+delta   = rhoi.ravel()
+Shape   = rhoi.shape
+I       = np.eye(no)
+
+def ravel(s):
+    return np.hstack([s.ravel().real, s.ravel().imag])
+
+def unravel(s):
+    n = nk*no*no
+    a = np.zeros(Shape, dtype=np.complex128)
+    a[:,:,:] +=    s[0:n  ].reshape(Shape)
+    a[:,:,:] += 1j*s[n:2*n].reshape(Shape)
+    return a
+
+
+if options['real_line_integral']!='True':
+    print('Evaluating SEs')
+    Eg_cntr = Cntr[:,0] + 1j*Cntr[:,1]
+    SE_eval = np.zeros((len(SEs),nk,len(Cntr),no,no), dtype = complex)
+    for ise,se in enumerate(SEs):
+       SE_eval[ise, :,:,:,:] = se.evaluate(Eg_cntr,bias=BIAS[ise],tol=tolerance)
+    print('Done')
+    idx_SE_o,_ = np.where((np.abs(SE_eval)>tolerance).any(axis=(0,1,2)))
+    idx_SE_o   = np.sort(np.unique(idx_SE_o))
+    if options['Nonequilibrium'] == 'True':
+        print('Nonequilibrium calculation uses ' +str( 100*len(idx_SE_o)/no) +'% of orbitals')
+    #print(idx_SE_o)
+
+if True:
+    if options['memory_conserve']=='True':
+        def funci(islice):
+            rhof = np.zeros((nk, no, no), dtype=np.complex128)
+            for i in islice:
+                Er,Ei,Wr,Wi   = Cntr[i]
+                E    = Er + 1j*Ei
+                W    = Wr + 1j*Wi
+                Garr = E * I - H
+                for ise in range(len(SEs)):
+                    Garr -= SE_eval[ise,:,i,:,:]
+                Garr = np.linalg.inv(Garr)
+                rhof += (1j/(2*np.pi))*(W*Garr - W.conj()*Garr.conj().transpose(0,2,1))
+            return rhof
+    else:
+        def funci(islice):
+            cnt    = Cntr[islice]
+            ev, wv = cnt[:,0]+1j*cnt[:,1], cnt[:,2]+1j*cnt[:,3]
+            Garr   = ev[None,:,None,None] * I[None,None,:,:] - H[:,None,:,:]
+            Garr  -= SE_eval[:,:,islice].sum(axis=0)
+            Garr   = wv[None,:, None, None] * np.linalg.inv(Garr)
+            return (1j/(2*np.pi))*((Garr - Garr.conj().transpose(0,1,3,2)).sum(axis=1))
+        
+if True:
+    try:
+        if options['real_line_exact_fermi']=='True':
+            assert 1 == 0
+        N_poles = flexload(options['file'] + '/Arrays/num_poles_fermi.npy')
+        zi, R   = Hu_poles(N_poles)
+        def fdf(E,mu,kT):
+            return FD_expanded(E, zi, 1/kT , mu = mu, coeffs = R)
+    except:
+        print('Using exact Fermi´')
+        def fdf(E,mu,kT):
+            return 1/(1+np.exp((E-mu)/kT))
+    # _RL has start in real part, endpoint in imag part.
+    Cntr_RL    = np.linspace(float(options['real_line_min']), 
+                             float(options['real_line_max']), 
+                               int(options['real_line_N'])  )
+    Cntr_RL    = Cntr_RL[0:-1] + 1j*Cntr_RL[1:]
+    
+    def Sig_l(_E,lead):
+        if isinstance(_E, float): E = np.array([_E])
+        else:                     E = _E
+        fd  = fdf(E, _mu[lead], _kT[lead])
+        Gam = SEs[lead].evaluate_gamma(E, bias = BIAS[lead], tol=tolerance, force_hermitian=True).transpose(1,0,2,3)
+        return (1j * fd[:,None,None,None]) * Gam
+    def G_l(_E):
+        if isinstance(_E, float): E = np.array([_E])
+        else:                     E = _E
+        gr, SE_list = Gr(E)
+        SE_l_tot    = sum([(-fdf(E, _mu[i], _kT[i]))*(SE_list[i] - SE_list[i].conj().transpose(0,1,3,2))
+                            for i in range(len(SE_list))])[:,:,idx_SE_o[:, None], idx_SE_o[None,:]].copy()
+        
+        #Gams     = [Sig_l(E, i) for i in range(len(SEs))]
+        #SE_l_tot = sum([Sig_l(E, i) for i in range(len(SEs))])
+        
+        #out = ((-1j/(2*np.pi))*gr@SE_l_tot@(gr.conj().transpose(0,1,3,2))).transpose(1,2,3,0)
+        out = ((-1j/(2*np.pi))*gr@SE_l_tot@(gr.conj().transpose(0,1,3,2))).transpose(1,2,3,0)
+        if isinstance(_E, float):
+            out = out[...,0]
+        return out
+    
+    def Gr(_E):
+        if isinstance(_E, float): E = np.array([_E])
+        else:                     E = _E
+        SE_list = [self_energy.evaluate(E, bias = BIAS[i], tol=tolerance, hermitian_parts=True)
+                   for i,self_energy in enumerate(SEs) ]
+        SE  = sum(SE_list).transpose(1,0,2,3)
+        SE *= -1
+        SE += E[:,None,None,None] * I[None,None,:,:]
+        SE -= H[None,:,:,:]
+        return np.linalg.solve(SE, I[:, idx_SE_o]), SE_list
+        #return np.linalg.inv(SE), SE_list 
+    
+    def funci_real_line(islice):
+        rhof = np.zeros((nk, no, no), dtype=np.complex128)
+        for i in islice:
+            E0,E1 = Cntr[i].real, Cntr[i].imag
+            r,e    = quad_vec(G_l, E0,E1, epsabs=1e-5,epsrel=1e-5, )
+            rhof += r
+        return rhof
+mu_min = _mu.min()
+kT_min = _kT[np.where(_mu==mu_min)[0][0]]
+fact_kT= float(options['fact_kT'])
+lims = [ mu_min - fact_kT*_kT.max(), _mu.max() +fact_kT*_kT.max()]
+
+counter = 0
+_t1 = time()
+
+while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
+    H = Ham + dH(t0, rhoi)
+    # dont trust the warnings down below, the redifinitions matter
+    if options['real_line_integral']!='True':
+        splitN=nprocs
+    else:
+        splitN=int(options['real_line_N'])
+        del Cntr, funci
+        funci = funci_real_line
+        Cntr  = Cntr_RL.copy()
+    
+    rhof = sum(Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
+               (Jl.delayed(funci)(islice) for islice in np.array_split(np.arange(len(Cntr)), splitN))
+               )
+    #import matplotlib.pyplot as plt
+    if options['Nonequilibrium']=='True' and options['real_line_integral']!='True':
+        del fdf
+        def fdf(E,mu,kT):
+            return (1/(1+np.exp((E-mu)/kT))) - (1/(1+np.exp((E-mu_min)/kT_min)))
+        #def Noneq(el):
+        #    e1,e2 = el
+        e1,e2 = lims
+        _R,_E = quad_vec(G_l, e1,e2, epsabs=1e-5,epsrel=1e-4,
+                         workers = int(options['quadvec_workers']), quadrature='gk21')
+        rhof += _R
+        #   return (_R, _E)
+        #Neq_split = 4*int(options['nprocs'])
+        #ls    = np.linspace(lims[0], lims[1], Neq_split)
+        #elims = [(ls[i], ls[i+1]) for i in range(Neq_split-1)]
+        #res_neq = (Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
+        #                  (Jl.delayed(Noneq)(eslice) for eslice in elims))
+        #rhof += sum([res_neq[i][0] for i in len(res_neq)])
+        
+    delta          = rhof - rhoi
+    outmix         = mixer(ravel(rhoi), ravel(delta))
+    rhoi[:,:,:]    = unravel(outmix)
+    counter       += 1
+    print('Iteration ', counter, 
+          '| dN_max:  ', np.round(np.abs(delta).max(),6),
+          '| Qtot_k',    np.round(np.trace(rhoi,axis1=1,axis2=2), 6))
+_t2 = time()
+print('Converged DM in ' + str(np.round(_t2-_t1,1))+' secs. Bye Bye')
+
+
+if options['DM_out_file'] == 'None':
+    os.system('mv '+options['file']+'/Arrays/DM_Ortho.npy '
+                   +options['file']+'/Arrays/oldDM_Ortho.npy')
+    np.save(options['file']+'/Arrays/DM_Ortho.npy', rhof)
+else:
+    np.save(options['DM_out_file'], rhof)
+
+
+
+
+
+
+
+
+
+
+
+
+
+#npieces= int(options['nprocs'])*4 +1
+#Cntr_BW = np.linspace(lims[0], lims[1], npieces)
+#Cntr_BW = Cntr_BW[0:-1]+1j*Cntr_BW[1:]
+
+# def funci_noneq(islice):
+#     rhof = np.zeros((nk, no, no), dtype=np.complex128)
+#     for i in islice:
+#         E0,E1  = Cntr_BW[i].real, Cntr_BW[i].imag
+#         r,e = quad_vec(G_l, E0,E1,epsabs=1e-6,epsrel=1e-6,
+#                        full_output=False, quadrature='gk21')
+#         #print(op.neval, op.success, op.status,E0,E1)
+#         rhof += r
+#     return rhof
+        #rhof += sum(Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
+        #             (Jl.delayed(funci_noneq)(islice) for islice in np.array_split(np.arange(len(Cntr_BW)), npieces))
+        #           )

@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 17 11:04:21 2022
+
+@author: aleksander
+
+
+Takes a unitary transformation to transform the basis
+of a TDT-type file/directory and applies it to the 
+eigenvectors and matrices in the directory.
+
+The Auxillary mode expansion method has
+a tendency to work better in some bases than others,
+
+
+The unitary transformation should be in the same format
+as the output of the eigendecomposition  of a hermitian 
+matrix:
+
+Diag = v.transpose(0,2,1).conj() @ M @ v
+
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.Loader import flexload
+
+pref = 'Basischange:  '
+print('PROGRAM IS DECOMMISIONED. It hastily written on the assumption that Gamma_p = U^d Gamma U which is not true.')
+print('STOPPING program')
+exit()
+
+args = sys.argv[1:]
+print(pref+'Program Start')
+print('')
+print(pref+'sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'outfile':'NewTDT_file',
+           'mode':'eigenstate',
+           'no_HRC':'False',
+           'U':'U_file.npy',
+           'allownumpybroadcasting':'False',
+           'nested':'False',
+           'testMatvec':'False',
+           'allowbasisreduction':'False',
+           'lanczos_N':'all',
+           'eigenstate_emin':'-10000000000.0',
+           'eigenstate_emax':'+10000000000.0',
+           'DM_transform':'likeG^r',
+           'experimental_mode':'False',
+           }
+
+os.chdir(os.getcwd())
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after Basischange command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+H       = flexload(options['file'] + '/Arrays/H_Ortho.npy')
+HRC     = flexload(options['file'] + '/Arrays/Hamiltonian_renormalisation_correction.npy')
+xi_in   = flexload(options['file'] + '/Arrays/xi.npy')
+Ixi_in  = flexload(options['file'] + '/Arrays/Ixi.npy')
+O_in    = flexload(options['file'] + '/Arrays/S^(-0.5).npy') #  see name
+DM_in   = flexload(options['file'] + '/Arrays/DM_Ortho.npy') 
+
+#                 'Hamiltonian_renormalisation_correction'
+if options['mode'] == 'custom':
+    U       = flexload(options['U'])
+
+elif options['mode'] == 'eigenstate':
+    if   options['no_HRC'] == 'False':  _H = H.copy()
+    elif options['no_HRC'] == 'True':   _H = H - HRC[:,0]
+    _e,U = np.linalg.eigh(_H)
+    idx  = []
+    _emin, _emax = float(options['eigenstate_emin']),float(options['eigenstate_emax'])
+    for i in range(_H.shape[-1]):
+        if (_e[:,i] > _emin) * (_e[:,i] < _emax):
+            idx+=[i]
+    U   = U[:,:,idx].copy()
+    print(pref+'Projected onto ', len(idx),' / ',_H.shape[-1], ' eigenstates of H.')
+elif options['mode'] == 'lanczos':
+    print(pref + 'Importing Lanczos Algorithm from the TimedependentTransport package. Make sure you have this.')
+    from TimedependentTransport.LanczosAlg import Lanczos
+    if options['no_HRC']   == 'False':  _H = H.copy()
+    elif options['no_HRC'] == 'True':   _H = H - HRC[:,0]
+    lN = int(options['lanczos_N']) if options['lanczos_N']!='all' else H.shape[-1]
+    if options['experimental_mode']!='True' and options['lanczos_N']!='all':
+        print(pref+'You have to keep the basis size fixed. Turn on experimental mode else, no garanties for any meaningfull results')
+        print(pref+'Failure')
+        exit()
+    # The randomly initialised first vector is obtained from seeding with np.random with 0
+    _a, _b, U = Lanczos(_H, lN, seed = 0)
+    U = U.transpose(0,2,1)
+    print(pref +'Used ', lN, '/', U.shape[-2],' Lanczos states ')
+if U.shape != H.shape and options['allownumpybroadcasting']=='False':
+    print(pref+'U does not match the shape of the Hamiltonian in the given directory. (maybe allowing numpy broadcasting will help?)')
+    print(pref+'Failure :/')
+    exit()
+    
+infile  = options['file']
+outfile = options['outfile']
+
+# Copy to new directory, where we modify H and the eigedecomposition 
+os.system(
+          'cp -R '+ infile + '  ' + outfile
+          )
+
+os.chdir(outfile+'/Arrays/')
+print(pref + 'Modifying in directory ' + os.getcwd())
+Ud      = U.transpose(0,2,1).conj()
+#print(xi_in.shape)
+if options['allowbasisreduction']=='True':
+    assert options['experimental_mode'] == 'True'
+    print(pref + 'THIS SHOULD NOT BE DONE')
+    pass
+else:
+    if U.shape[1] != U.shape[2]:
+        print(pref + 'Different basis size after transformation. Set allowbasisreduction=True if you really want to do this.')
+        print(pref+'Failure :/')
+        exit()
+    
+if options['testMatvec'] == 'True':
+    # Verbose version with for-loops for testing purposes
+    xi_new  = np.zeros( xi_in.shape, dtype = np.complex128)
+    Ixi_new = np.zeros(Ixi_in.shape, dtype = np.complex128)
+    _nk,_na,_nx,_no = xi_in.shape[0:4]
+    for k in range(_nk):
+        for a in range(_na):
+            for x in range(_nx):
+                for o in range(_no):
+                    xi_new[k,a,x,o]  = Ud[k].dot(xi_in[k,a,x,o])
+                    Ixi_new[k,a,x,o] = Ixi_in[k,a,x,o].dot(U[k])
+else:
+    # xi shape : (nk, n_lead, n_pole, no, no) (or nk, n_lead, n_pole, n_eig, no) in the actual calculation
+    # left hand side of the outer product has V^d * xi. We evaluate U^d * xi_{kaxc} with broadcasting
+    xi_new  = (Ud[:,None, None, :,:] @ xi_in.transpose (0,1,2,4,3)).transpose(0,1,2,4,3)  # Contract over device indices 
+    # right hand side of the outer product has Ixi * V
+    # no need to transpose since the U is coming in from the right 
+    Ixi_new = Ixi_in @ U[:,None, None, :,:]
+    # Normal unitary rotation
+
+H_new   = Ud @ H     @ U
+HRC_new = Ud @ HRC   @ U 
+
+if options['DM_transform'] == 'likeH': 
+    DM_new  = Ud  @ DM_in @ U
+elif options['DM_transform'] == 'likeG^r':
+    DM_new  = U   @ DM_in @ Ud
+
+
+np.save('xi.npy',        xi_new)
+np.save('Ixi.npy',       Ixi_new)
+np.save('Applied_U.npy', U)
+np.save('H_Ortho.npy',   H_new)
+np.save('Hamiltonian_renormalisation_correction.npy',HRC_new)
+np.save('DM_Ortho.npy',  DM_new) 
+print(pref + 'Great Succes')

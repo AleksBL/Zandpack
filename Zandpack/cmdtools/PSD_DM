@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Nov 19 17:34:58 2022
+
+@author: aleksander
+
+Prints information about the density matrix found in the file
+or the specific file specified by DM_start_file keyword.
+
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.FittedSelfEnergy import from_saved_file
+from Zandpack.Loader import flexload
+import sisl
+import joblib as Jl
+
+args = sys.argv[1:]
+print('PSD_DM Program Start')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+
+#Default values
+options = {'file':'TDT_file',
+           'DM_out_file':'None',
+           'DM_start_file':'None',
+           'Set_N_electrons':'None'}
+
+_place = __file__[:-6]
+
+if '--help' in args:
+    print('Keywords and default values. Assign with "keyword=value" argument after PSD_DM command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+if options['DM_start_file']!='None':
+    rhoi    =  flexload(options['DM_start_file'])
+else:
+    rhoi    =  flexload(options['file']+'/Arrays/DM_Ortho.npy')
+idx    = np.arange(rhoi.shape[-1])
+
+N0     = np.trace(rhoi,axis1 = 1,axis2 = 2)
+e,v    = np.linalg.eigh(rhoi)
+e[e<0] = 0.0
+E      = np.zeros(rhoi.shape,dtype = np.complex128)
+for i in idx:
+    E[:,i,i] = e[:,i]
+
+
+rhof   = v@E@(v.conj().transpose(0,2,1))
+N1     = np.trace(rhof,axis1 = 1,axis2 = 2)
+
+print('Minimum eigenvalue of DM', np.linalg.eigh(rhof)[0].min())
+print('Electrons in device DM:', np.trace(rhof, axis1 = 1, axis2 = 2))
+print('DM-dtype ', rhof.dtype)
+
+if options['DM_out_file'] == 'None':
+    os.system('mv '+options['file']+'/Arrays/DM_Ortho.npy '
+                   +options['file']+'/Arrays/oldDM_Ortho.npy')
+    np.save(options['file']+'/Arrays/DM_Ortho.npy', rhof)
+else:
+    np.save(options['DM_out_file'], rhof)

@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 14 14:47:00 2022
+
+@author: aleksander
+
+Set the savetime of a calculation specified in
+the two positional arguments
+
+do a set_time --help to see usage.
+
+"""
+
+import sys
+import os
+import numpy as np
+
+args = sys.argv[1:]
+# print(args)
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+if '--help' in args:
+    print('Usage: set_time Dir=$PWD "folder" "float"')
+    exit()
+
+    
+
+file   = args[1].split('=')[1]
+t_new = float(args[2])
+print(file)
+os.chdir(file)
+for f in os.listdir():
+    if 'last_time' in f:
+        np.save(f, t_new)
+os.chdir('..')
+
+
