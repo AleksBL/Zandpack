@@ -1,13 +1,16 @@
 # Introduction
-Zandpack is an open-source code, which can carry out timedependent quantum transport calculations utilizing the auxiliary mode expansion (AME) method. The technique builts in non-equilibrium Greens function (NEGF) theory and allows one to simulate an open system, with a device coupled to electrodes, evolving under different timedependent biases and fields. The code allows for incorporating dynamic electronic effects in the device by interfacing to e.g SIESTA or DFTB+ simulating electronic dynamics in the device region. Furthermore, any other LCAO-based DFT code can in be used if the user is willing to put in the effort to create a callable interface to the code. A standardized way that utilizes SIESTA, TranSIESTA and TBtrans is already in place and is demonstrated in the available tutorials. 
+License: MPL 2.0
+Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields. The code is designed to interface with SIESTA, DFTB+, or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region.
+
 
 ## Features 
  - Easy handling of the steady-state TranSIESTA and TBtrans calculations using the siesta_python code
- - The AME method utilizes a level-width function expanded in Lorentzian functions. The fitting procedure converting a level-width function sampled on a energy-grid to one expanded in the Lorentzian functions is done with userinput by the Zandpack code. For this purpose algorithms with ensure a positive semidefinite fitted level-width function. 
+ - Auxiliary Mode Expansion (AME): Uses a level-width function expanded in Lorentzian functions, with algorithms ensuring positive semidefinite fits.
  -  Command line tools for determininng both steady-state steady state and the system evolving under external fields:
        - The SCF tool for obtaining the steady-state density matrix.
        - The psinought tool for obtaining the steady state auxiliary mode wave-vectors.
        - The zand code to propagate the full initial state under timedependent bias and fields. This part is implemented using mpi4py and can scale to many compute nodes. 
+ - Extensible: Supports custom interfaces for other LCAO-based DFT codes.
 
 ## Installation
 To install Zandpack, navigate to the Zandpack folder containing the setup.py file in a terminal and execute
