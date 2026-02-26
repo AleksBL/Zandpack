@@ -1,3 +1,5 @@
+(Repo setup in progress. Expect more tutorials and polish over the next week  (26.02.2026))
+
 # Introduction
 License: MPL 2.0
 
