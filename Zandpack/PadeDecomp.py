@@ -1,4 +1,5 @@
 import numpy as np
+from numba import njit
 # The functions found here are either from the Croy 2009 paper
 # or the Jie Hu paper from 2011. Read these to understand these functions.
 # They simply return the poles and weights of an expansion of the fermi function 
@@ -24,7 +25,14 @@ def Pade_Poles(N_F):
     xi = x.imag
     x[xi<0] *= -1
     return x
-
+###
+### 16.01.2026 
+### This Fermi function below is formally wrong,
+### and should be considered errornous, but for the poles obtained 
+### from the JieHu2011 method, it gives the correct result, 
+### as the poles are symmetrically distributed x=0
+### *_v2 is the correct way to write the Fermi function
+###
 def FD_expanded(E, xp, beta , mu = 0.0, coeffs = None):
     Xpp = mu  + xp/beta
     Xpm = mu  - xp/beta
@@ -32,6 +40,40 @@ def FD_expanded(E, xp, beta , mu = 0.0, coeffs = None):
         coeffs = np.ones(len(xp))
     diffs =  (1 / beta) * (1 / np.subtract.outer(E , Xpp)  + 1 / np.subtract.outer(E , Xpm)) * coeffs
     return 1 / 2 - diffs.sum(axis = 1)
+
+def FD_expanded_v2(E, xp, beta , mu = 0.0, coeffs = None):
+    Xpp = mu + xp / beta
+    Xpm = mu + np.conj(xp) / beta
+    # Xpm = mu + xp.conj() / beta
+    if coeffs is None:
+        coeffs = np.ones(len(xp))
+    diff1   = (1 / np.subtract.outer(E , Xpp)) * coeffs
+    diff1  += (1 / np.subtract.outer(E , Xpm)) * np.conj(coeffs)
+    diff1  *= (1 / beta)
+    return 1 / 2 - diff1.sum(axis = 1)
+@njit
+def FD_expanded_v2_opt(E, xp, beta, mu, coeffs, out):
+    Xpp = mu + xp / beta
+    Xpm = mu + np.conj(xp) / beta
+    ne = len(E)
+    npol = len(xp)
+    assert len(out) == ne
+    out[:] = 0.0
+    coeffB = coeffs / beta
+    coeffB_C = np.conj(coeffB)
+    for i in range(ne):
+        Ei = E[i]
+        for j in range(npol):
+            xjp = Xpp[j]
+            xjm = Xpm[j]
+            Rjp = coeffB[j] 
+            Rjm = coeffB_C[j]
+            out[i] -= (Rjp/(Ei - xjp) + Rjm/(Ei - xjm)) 
+    # return out
+
+
+
+
 
 def FD(E, beta, mu = 0.0):
     return 1 / (1 + np.exp((E - mu) * beta))
@@ -69,7 +111,9 @@ def Hu_roots_P(N):
     e = 2/e
     return e
 
-def Hu_coeffs(N):
+def Hu_coeffs(N, _old_behavior = False):
+    if N>40 and _old_behavior == False:
+        return Hu_coeffs_symbolic(N)
     Const =  N * Hu_b(N+1)/2
     Qx = Hu_roots_Q(N)
     Px = Hu_roots_P(N)
@@ -81,10 +125,31 @@ def Hu_coeffs(N):
         p2 = np.prod(Px ** 2 - Qx[i]**2 )
         coeffs += [Const*p2/p1]
     return np.array(coeffs)
+# 18.01 Added sympy version of the Hu_coeffs rutine
+# This allows for getting the residuals for Nl>42
+# 
+def Hu_coeffs_symbolic(N):
+    import sympy as sp
+    Const =  N * Hu_b(N+1)/2
+    Qx = Hu_roots_Q(N)
+    Px = Hu_roots_P(N)
+    Qx = sp.MutableDenseNDimArray(Qx)
+    Px = sp.MutableDenseNDimArray(Px)
+    coeffs = []
+    for i in range(N):
+        p1 = Qx.applyfunc(lambda x: x**2) - sp.Array(np.ones(len(Qx))) * Qx[i]**2
+        for j in range(len(p1)):
+            if abs(p1[j])<1e-15:
+                p1[j] = 1
+        p1 = sp.prod(p1)
+        p2 = sp.prod(Px.applyfunc(lambda x: x**2) -  sp.Array(np.ones(len(Px))) * Qx[i]**2 )
+        coeffs += [Const*p2/p1]
+    return np.array(coeffs).astype(np.float64)
+    
 
 
-def Hu_poles(N):
-    return 1j * Hu_roots_Q(N), Hu_coeffs(N)
+def Hu_poles(N, _old_behavior=False):
+    return 1j * Hu_roots_Q(N), Hu_coeffs(N, _old_behavior=_old_behavior)
 
 ### AAA_algorithm, 
 #"The AAA Algorithm for Rational Approximation"

@@ -28,6 +28,7 @@ def flexload(filepath, force_array = True,return_arc = False):
     except:
         k = 2
     print('flexload error code: ', k)
+    print("input file path: " + filepath)
     assert 1 == 0
 
 class load_dictionary:

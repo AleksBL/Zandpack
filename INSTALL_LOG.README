@@ -1,5 +1,5 @@
 -------
-/home/investigator/Desktop/Code/PythonModules/Zandpack
+/home/aleks/Desktop/Code/PythonModules/Zandpack
 -------
 Executable files should have status (755) or more.
 -------
@@ -13,6 +13,6 @@ If any mistakes are seen in this file, manually set the permissions with chmod.
 The ones printed here are the important ones, but you might encounter
 permission problems on the other files in the cmdtools folder. Fix it with chmod! 
 Examples of adding to your PATH variable for easy execution: 
-    export PATH=$PATH:/home/investigator/Desktop/Code/PythonModules/Zandpack/Zandpack/mpi
-    export PATH=$PATH:/home/investigator/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools
+    export PATH=$PATH:/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/mpi
+    export PATH=$PATH:/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools
 Copy these to your .bashrc file (on linux).

@@ -1,0 +1,468 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T1: Rabi Oscillations in two-level system &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/nbsphinx-code-cells.css?v=2aa19091" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="T2: Simple Chain" href="../T2_TB_Chain/Chain.html" />
+    <link rel="prev" title="Tutorials" href="../../../nbtutorial.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../readme.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../../nbtutorial.html">Tutorials</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">T1: Rabi Oscillations in two-level system</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#Summary:">Summary:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Extra:">Extra:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../T2_TB_Chain/Chain.html">T2: Simple Chain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../T3_Graphene/Graphene.html">T3: Graphene</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../nbtutorial.html">Tutorials</a></li>
+      <li class="breadcrumb-item active">T1: Rabi Oscillations in two-level system</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../../_sources/quickstart/tutorials/TB/T1_Rabi/RabiOscillations.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+</div>
+<section id="T1:-Rabi-Oscillations-in-two-level-system">
+<h1>T1: Rabi Oscillations in two-level system<a class="headerlink" href="#T1:-Rabi-Oscillations-in-two-level-system" title="Link to this heading"></a></h1>
+<p>In this tutorial we will be forgetting about all couplings into external resevoirs and only consider an isolated two-level system. This will both serve as a test and also as a way to get familiar with how to run a calculation using the code. The calculation will be done using a two-site tight-binding model. We will be recreating the plot from Fig. 43.3 on page 414/415 from <a class="reference external" href="http://homes.nano.aau.dk/tgp/master_2021.pdf">here</a>. The code uses sisl-geometries as input and contains the option to
+input the tight-binding model in sisl format, which is what we will use here.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sisl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">Zandpack.TimedependentTransport</span><span class="w"> </span><span class="kn">import</span> <span class="n">TD_Transport</span><span class="p">,</span> <span class="n">hbar</span><span class="p">,</span> <span class="n">AdaptiveRK4</span>
+</pre></div>
+</div>
+</div>
+<p>The needed parameters to run the calculation is defined below. The electrodes defined are purely there because the code needs them to run, but their coupling will be set to zero soon enough.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dipole_moment</span> <span class="o">=</span> <span class="mf">0.3</span> <span class="o">*</span> <span class="n">hbar</span>
+<span class="n">w12</span>           <span class="o">=</span> <span class="mi">1</span>
+<span class="n">Rabi_f</span>        <span class="o">=</span> <span class="n">dipole_moment</span> <span class="o">/</span> <span class="n">hbar</span>
+<span class="n">pert_w</span>        <span class="o">=</span> <span class="mf">0.9</span>
+<span class="n">lat_const</span>     <span class="o">=</span> <span class="mf">2.5</span>
+<span class="n">geom_dev</span>      <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">geom_ep</span>       <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">lat_const</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
+<span class="n">geom_em</span>       <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+<span class="n">geom_dev</span>      <span class="o">=</span> <span class="n">geom_dev</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">geom_em</span>       <span class="o">=</span> <span class="n">geom_em</span><span class="o">.</span> <span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">geom_ep</span>       <span class="o">=</span> <span class="n">geom_ep</span><span class="o">.</span> <span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Now we define the object (R) we will be dealing with for the most part of this tutorial. It takes the electrode geometries, the device geometry, the chemical potentials of each electrode and its temperature in electron-volt</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1">#                 electrode geoms   device geom  steady state chemical potentials   Temperatures of the leads</span>
+<span class="n">R</span> <span class="o">=</span> <span class="n">TD_Transport</span><span class="p">([</span><span class="n">geom_em</span><span class="p">,</span><span class="n">geom_ep</span><span class="p">],</span> <span class="n">geom_dev</span><span class="p">,</span>    <span class="n">mu_i</span><span class="o">=</span><span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>                   <span class="n">kT_i</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.025</span><span class="p">,</span> <span class="mf">0.025</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<p>Generally you’ll have to define a grid where the self energies of the leads are sampled. This is done here with the linspace “line”. “line” is stacked with itself to give an array of shape (#nleads, #samplings). The sampling do not do anything for us right now because the device-lead coupling will be neglected. It is only present so that the code will run.</p>
+<p>Furthermore, the second and third argument of “Make_Contour” tells the code to use 20 poles with Im[<span class="math notranslate nohighlight">\(z_i\)</span>]&gt;0 and 20 poles with Im[<span class="math notranslate nohighlight">\(z_i\)</span>]&lt;0 to approximate the Fermi-function using the approximation from “Padé spectrum decompositions of quantum distribution functions and optimal hierarchical equations of motion construction for quantum open systems” by Jie Hu et al. A plot of the approximation is lastly plotted. Another option is to set pole_mode = ‘Croy2009’, but this is just a worse
+approximation.</p>
+<p>Also, if you decrease the value of the second argument, you’ll see the approximation gets worse. Checks on whenever or not this approximation is good enough are done at a later point in the calculation, and if it is not sufficient, you’ll have to go back here and increase the number of poles</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">line</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>  <span class="o">+</span> <span class="mi">1</span><span class="n">j</span>  <span class="o">*</span> <span class="mf">1e-3</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">line</span><span class="p">,</span><span class="n">line</span><span class="p">))</span>
+<span class="n">R</span><span class="o">.</span><span class="n">Make_Contour</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="n">pole_mode</span> <span class="o">=</span> <span class="s1">&#39;JieHu2011&#39;</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<p>Now we initialise the electrode-part of the input to TBtrans. If we where doing DFT, the “run_electrodes”-command would do the DFT calculation for the electrode electronic structure.</p>
+<p>We need to give many of the same inputs as when you write a .fdf file for TBtrans.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">R</span><span class="o">.</span><span class="n">Electrodes</span> <span class="p">(</span> <span class="n">semi_infs</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;-a1&#39;</span><span class="p">,</span> <span class="s1">&#39;+a1&#39;</span><span class="p">]</span> <span class="p">)</span> <span class="c1"># semi-infinite directions</span>
+<span class="n">R</span><span class="o">.</span><span class="n">make_device</span><span class="p">(</span> <span class="n">elec_inds</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">0</span><span class="p">],[</span><span class="mi">3</span><span class="p">]]</span>      <span class="p">)</span> <span class="c1"># Were the electrode sites are in the device</span>
+<span class="n">elec</span> <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Hamiltonian</span><span class="p">(</span><span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Atom</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span> <span class="mf">3.0</span><span class="p">))</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="c1"># Electrode Hamiltonian</span>
+<span class="n">elec</span><span class="o">.</span><span class="n">construct</span><span class="p">([[</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">lat_const</span> <span class="o">*</span> <span class="mf">1.1</span><span class="p">],</span>
+                <span class="p">[</span><span class="mi">0</span>  <span class="p">,</span> <span class="mi">20</span>             <span class="p">]])</span>
+<span class="c1"># Run TBtrans</span>
+<span class="n">R</span><span class="o">.</span><span class="n">run_electrodes</span><span class="p">(</span><span class="n">manual_H</span> <span class="o">=</span> <span class="p">[</span><span class="n">elec</span><span class="p">,</span> <span class="n">elec</span><span class="p">])</span>
+<br/></pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area stderr docutils container">
+<div class="highlight"><pre>
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;std_lattice&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;std_positions&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;std_types&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;number&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;transformation_matrix&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;international&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+/home/investigator/.local/lib/python3.10/site-packages/spglib/spglib.py:115: DeprecationWarning: dict interface (SpglibDataset[&#39;std_rotation_matrix&#39;]) is deprecated.Use attribute interface ({self.__class__.__name__}.{key}) instead
+  warnings.warn(
+</pre></div></div>
+</div>
+<p>Now we make the device electronic structure and set the coupling to the leads to zero. Furthermore, we also put in the two-level system, which is split symmetrically around zero with <span class="math notranslate nohighlight">\(E = \pm\hbar\omega_{12}/2\)</span>. <span class="math notranslate nohighlight">\(\omega_{12}\)</span> was defined at the top as the variable w12. Lastly the TBtrans in run and the data from the TBtrans calculation is read.</p>
+<p>(note: if you want to rerun the cell below, you’ll have to remake the device, because the siesta.TBT.nc file in the directory will cause TBtbtrans to raise an error. Run the cell above to recreate)</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dev_H</span> <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Hamiltonian</span><span class="p">(</span><span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Atom</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span> <span class="mf">3.0</span><span class="p">))</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+<span class="n">dev_H</span><span class="o">.</span><span class="n">construct</span><span class="p">([[</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">lat_const</span> <span class="o">*</span> <span class="mf">1.1</span><span class="p">],</span>
+                 <span class="p">[</span><span class="mi">0</span><span class="p">,</span>   <span class="mi">1</span>              <span class="p">]</span> <span class="p">])</span>
+
+<span class="n">eps</span>        <span class="o">=</span> <span class="mf">1e-3</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span><span class="o">**</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">eps</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span><span class="o">**</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">eps</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span><span class="o">**</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">eps</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span><span class="o">**</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">eps</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">w12</span><span class="o">*</span><span class="n">hbar</span><span class="o">/</span><span class="mf">2.</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="o">+</span><span class="n">w12</span><span class="o">*</span><span class="n">hbar</span><span class="o">/</span><span class="mf">2.</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">eps</span>
+<span class="n">dev_H</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">eps</span>
+
+<span class="n">R</span><span class="o">.</span><span class="n">run_device</span><span class="p">(</span><span class="n">manual_H</span> <span class="o">=</span> <span class="n">dev_H</span><span class="p">)</span>
+<span class="n">R</span><span class="o">.</span><span class="n">read_data</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Running TB-Trans in Directory: Device!
+
+</pre></div></div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area stderr docutils container">
+<div class="highlight"><pre>
+dep:0: SislDeprecation: tbtncSileTBtrans.geom is deprecated, please use &#39;.geometry&#39;.0.14 [&gt;=0.16]
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Calculating corrections for electrode 0. (Normal electrode)
+Calculating corrections for electrode 1. (Normal electrode)
+
+ Building ES - H - Self Energies
+
+[0]
+Using S = S
+
+ Overlap Included!
+
+</pre></div></div>
+</div>
+<p>At this point in an actual calculation we would have the device region Hamiltonian together with the self-energies of the leads. Because we model a system with no leads attached, this next line doesnt influence what we are doing, but is needed for the code to work. Where the system to have some leads attached, it would fit the self-energies to a sum of Lorentzians. Right now it will just fit a self-energy that is very close to zero, as will be seen below.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">R</span><span class="o">.</span><span class="n">Fit</span><span class="p">()</span>
+<span class="c1"># We plot the (0,0) self-energy matrix element in block (0,0) of lead 0</span>
+<span class="c1">#                           (lead, Block_i, Block_j, idx_i, idx_j)</span>
+<span class="n">R</span><span class="o">.</span><span class="n">Inspect_Lorentzian_fit</span><span class="p">(</span>   <span class="mi">0</span><span class="p">,</span>      <span class="mi">0</span><span class="p">,</span>      <span class="mi">0</span><span class="p">,</span>      <span class="mi">0</span><span class="p">,</span>      <span class="mi">0</span><span class="p">,</span> <span class="n">Emin</span> <span class="o">=</span> <span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="n">Emax</span><span class="o">=</span><span class="mi">10</span><span class="p">);</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">R</span><span class="o">.</span><span class="n">Inspect_Lorentzian_fit</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">Emin</span> <span class="o">=</span> <span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="n">Emax</span><span class="o">=</span><span class="mi">10</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Block-matrix of the device: </span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span><span class="n">R</span><span class="o">.</span><span class="n">BS</span><span class="p">)</span>
+<br/></pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Finding Lambda matrices:
+False
+
+--------------------
+Optimizing Lorentzian Expansion
+--------------------
+
+1
+#Variables optimized for: 6
+Lorentzian fit took 11.127816438674927 seconds.
+Finding Lambda matrices:
+False
+
+--------------------
+Optimizing Lorentzian Expansion
+--------------------
+
+1
+#Variables optimized for: 6
+Lorentzian fit took 0.0008394718170166016 seconds.
+</pre></div></div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_14_1.png" src="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_14_1.png" />
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_14_2.png" src="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_14_2.png" />
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Block-matrix of the device:
+ [[1 1]
+ [1 1]]
+</pre></div></div>
+</div>
+<p>Again,in the following the first three lines are superflous in this context, but needed when there are leads attached to the system. The the RHS of the ODE system, i.e it gives the derivative of the state and auxillary modes. The last three lines are shorthands for the initial values.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">R</span><span class="o">.</span><span class="n">tofile</span><span class="p">(</span><span class="s1">&#39;Rabi&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Finding eigenvalues and eigenvectors
+Maximum of eigenvalues of Lorentzian Gammas: 1e-06
+Minimum of eigenvalues of Lorentzian Gammas: 0.0
+If the minimum is negative, you should take extra care!
+( if minimum negative Check eigenvalues of $\Gamma$)
+</pre></div></div>
+</div>
+<p>We now have a folder called “Rabi” in the folder you’re running this notebook in. Together with the Bias.py and Initial.py files, we can run a timedependent propagation of the density matrix of this system. We simply keep the leads at the chemical potential <span class="math notranslate nohighlight">\(E=0\)</span>eV and add a dipole interaction between the upper and lower levels. See the Bias.py file and see the for yourself how these files should look. The Initial.py file is for toggling flags and controlling the fineness of the
+ODE-solver.</p>
+<p>Propagate it with this command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>mpirun -np 3 zand Dir=$PWD
+</pre></div>
+</div>
+<p>we can read in the density matrix (even while its propagating), and see the so-called Rabi-oscillations:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">Zandpack.mpi_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">combine_dm</span> <span class="k">as</span> <span class="n">CDM</span>
+<span class="n">t</span><span class="p">,</span><span class="n">DM</span> <span class="o">=</span> <span class="n">CDM</span><span class="p">([</span><span class="s1">&#39;Rabi_save&#39;</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">DM</span><span class="p">[:,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">DM</span><span class="p">[:,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">DM</span><span class="p">[:,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imag</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="o">-</span><span class="mi">25</span><span class="p">,</span><span class="mi">160</span><span class="p">])</span>
+<br/></pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+(-25.0, 160.0)
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_18_1.png" src="../../../../_images/quickstart_tutorials_TB_T1_Rabi_RabiOscillations_18_1.png" />
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><br/><span></span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+</div>
+<p>We see on the convergence plot above that we need to put <span class="math notranslate nohighlight">\(\epsilon\)</span> very small (<span class="math notranslate nohighlight">\(10^{-12}\)</span> or so) to converge the the density matrix plot over time. This is a very small value compared to what we will encounter later, and it is because the auxillary modes are not differing from zero by any meaningful amount since we neglected the lead couplings. The auxillary modes will however contain many more entries than the density matrix itself. This means when we later incorporate these modes,
+we’ll be able to converge the calculation with a larger epsilon.</p>
+<section id="Summary:">
+<h2>Summary:<a class="headerlink" href="#Summary:" title="Link to this heading"></a></h2>
+<p>We’ve seen:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>1. Setup device and electrode geometries and pass it to the code.
+2. Define electrode and device Hamiltonians with sisl
+3. Define the timedependence of the bias in the leads and the timedependence of the Hamiltonian of the system          through the Bias.py and Initial.py files.
+</pre></div>
+</div>
+</section>
+<section id="Extra:">
+<h2>Extra:<a class="headerlink" href="#Extra:" title="Link to this heading"></a></h2>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Try to set &quot;eps&quot; in used in the creation of the device Hamiltonian to 1 instead, and see what changes. Try to plot the current over time. Change the perturbing frequency &quot;pert_w&quot; to see how the system responds to different frequencies.
+</pre></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../../../nbtutorial.html" class="btn btn-neutral float-left" title="Tutorials" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../T2_TB_Chain/Chain.html" class="btn btn-neutral float-right" title="T2: Simple Chain" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

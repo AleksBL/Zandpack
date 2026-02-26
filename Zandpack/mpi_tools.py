@@ -13,11 +13,10 @@ def natural_keys(text):
     return [ atoi(c) for c in re.split('(\d+)',text) ]
 
 def combine_currents(dirs, n=2):
-    """
-    
-    dirs :  the *_save directory/ies where a Zand calculation has been done
-    n    : number of electrodes
-    
+    """ 
+        dirs :  the *_save directory/ies where a Zand calculation has been done
+        n    : number of electrodes
+        
     """
     C = [[] for i in range(n)]
     T = []

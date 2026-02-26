@@ -55,18 +55,26 @@ idx    = np.arange(rhoi.shape[-1])
 
 N0     = np.trace(rhoi,axis1 = 1,axis2 = 2)
 e,v    = np.linalg.eigh(rhoi)
-e[e<0] = 0.0
+if (e<0.0).any():
+    print('Found DM eigenvalues less than 0! Correcting...')
+    e[e<0.0] = 0.0
+if (e>1.0).any():
+    print('Found DM eigenvalues greater than 1! Correcting...')
+    e[e>1.0] = 1.0
+
 E      = np.zeros(rhoi.shape,dtype = np.complex128)
 for i in idx:
     E[:,i,i] = e[:,i]
 
-
 rhof   = v@E@(v.conj().transpose(0,2,1))
 N1     = np.trace(rhof,axis1 = 1,axis2 = 2)
 
-print('Minimum eigenvalue of DM', np.linalg.eigh(rhof)[0].min())
-print('Electrons in device DM:', np.trace(rhof, axis1 = 1, axis2 = 2))
+print('Minimum eigenvalue of DM_in ', np.linalg.eigh(rhoi)[0].min())
+print('Minimum eigenvalue of DM_out', np.linalg.eigh(rhof)[0].min())
+print('Electrons in device DM_in: ', np.trace(rhoi, axis1 = 1, axis2 = 2))
+print('Electrons in device DM_out:', np.trace(rhof, axis1 = 1, axis2 = 2))
 print('DM-dtype ', rhof.dtype)
+print('sum|DM_in - DM_out| = ' + str(np.abs(rhof - rhoi).sum()))
 
 if options['DM_out_file'] == 'None':
     os.system('mv '+options['file']+'/Arrays/DM_Ortho.npy '

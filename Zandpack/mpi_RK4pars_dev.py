@@ -24,7 +24,7 @@ import os
 try:
     from k0nfig import RK_Method
 except:
-    print('Warning from RK4pars: Something went wrong with loading k0nfig')
+    # print('Warning from RK4pars: Something went wrong with loading k0nfig')
     import sys
     sys.path.append(__file__[:-18])
     from k0nfig import RK_Method

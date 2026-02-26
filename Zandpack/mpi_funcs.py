@@ -110,8 +110,79 @@ def OuterSubtraction_hard_opti_V2(A,B,C,out):
                             for cc in range(NO2):
                                 out[k,a,x,c,aa,xx,cc] += tmpval*C[k,a,x,c,aa,xx,cc]
 
-###################
 
+@njit(parallel = config.NUMBA_OUTER_SUBTRACTION_PARALLEL, fastmath=config.FASTMATH)
+def OuterSubtraction_hard_opti_V2_Add_fpole_opti(A,B,C,out,Add, fp_loc, fp_all):
+    """ Also adds the term Add under the loop, 
+        and is optimized to not touch the zeros in omega
+    """
+    nk,na,nx,noT = A.shape
+    NA,NX,NO     = B.shape[1:4]
+    NO2          = C.shape[6]
+    assert Add.shape == C.shape
+    assert nx==len(fp_loc)
+    assert NX==len(fp_all)
+    for x in prange(nx):
+        is_fp_loc = fp_loc[x]
+        for k in range(nk):
+            for a in range(na):
+                outer_kax = (A[k,a,x,0] - B[k,:,:,0])
+                for c in range(noT):
+                    for aa in range(NA):
+                        for xx in range(NX):
+                            is_fp_all = fp_all[xx]
+                            if is_fp_loc and is_fp_all:
+                                pass
+                            else:
+                                tmpval = outer_kax[aa,xx]
+                                for cc in range(NO2):
+                                    out[k,a,x,c,aa,xx,cc] += tmpval*C[k,a,x,c,aa,xx,cc] + Add[k,a,x,c,aa,xx,cc]
+
+@njit(parallel = config.NUMBA_OUTER_SUBTRACTION_PARALLEL, fastmath=config.FASTMATH)
+def OuterSubtraction_hard_opti_V2_NOADD_fpole_opti(A,B,C,out, fp_loc, fp_all):
+    """ Also adds the term Add under the loop, 
+        and is optimized to not touch the zeros in omega
+    """
+    nk,na,nx,noT = A.shape
+    NA,NX,NO     = B.shape[1:4]
+    NO2          = C.shape[6]
+    assert nx==len(fp_loc)
+    assert NX==len(fp_all)
+    for x in prange(nx):
+        is_fp_loc = fp_loc[x]
+        for k in range(nk):
+            for a in range(na):
+                outer_kax = (A[k,a,x,0] - B[k,:,:,0])
+                for c in range(noT):
+                    for aa in range(NA):
+                        for xx in range(NX):
+                            is_fp_all = fp_all[xx]
+                            if is_fp_loc and is_fp_all:
+                                pass
+                            else:
+                                tmpval = outer_kax[aa,xx]
+                                for cc in range(NO2):
+                                    out[k,a,x,c,aa,xx,cc] += tmpval*C[k,a,x,c,aa,xx,cc]
+
+
+@njit
+def nullify_omg_part(A, null_idx, nlrz, i):
+    """ Also adds the term Add under the loop, 
+        and is optimized to not touch the zeros in omega
+    """
+    assert A.ndim == 8
+    n1,n2,n3,n4,n5,n6,n7,n8 = A.shape
+    for j in range(n2):
+        for k in range(n3):
+            for l in null_idx:
+                for m in range(n5):
+                    for n in range(n6):
+                        for o in range(nlrz, n7):
+                            for p in range(n8):
+                                A[i,j,k,l,m,n,o,p] = 0.0
+
+###################
+###################
 @njit(parallel = config.NUMBA_OUTER_SUBTRACTION_PARALLEL)
 def OuterSubtractionAssign(A,B,C ,out):
     nk,na,nx,noT = A.shape
@@ -164,7 +235,6 @@ def add_ravelled_hermitian(ravel, out):
 
 
 
-
 # for reworked version
 
 def TERR2_sig(y1, CT):
@@ -182,6 +252,43 @@ def step_fourth_omg(Y3, CH):
     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, Y3[-1])
 
 
+
+
+
+def DM_other_mat_analysis(dm, Lmat):
+    out = [np.zeros((dm.shape[0], 3, 3),dtype=complex)
+           for l in Lmat]
+    for ik in range(dm.shape[0]):
+        L2  = [l[ik] for l in Lmat]
+        res = DM_other_mat_analysis_inner(dm[ik], L2)
+        for i in range(len(Lmat)):
+            out[i][ik] = res[i]
+    return out
+
+            
+            
+def DM_other_mat_analysis_inner(dm, Lmat):
+    e,v = np.linalg.eigh(dm)
+    idx1 =  e >= 0.90
+    idx2 = (e <  0.90)*(e>0.1)
+    idx3 =  e <= 0.1
+    vocc = v[:,idx1]
+    vmed = v[:,idx2]
+    vuoc = v[:,idx3]
+    O = []
+    P   = [vocc, vmed, vuoc]
+    for L in Lmat:
+        out = np.zeros((3, 3),dtype=complex)
+        for m in range(3):
+            for n in range(3):
+                res = (P[m].conj().T) @ L @ P[m]
+                out[m, n] =  np.trace(res)
+        O.append(out)
+    return O
+
+
+    
+    
 
 
 

@@ -503,7 +503,7 @@ class TD_Transport:
         if less_memory:
             self.less_memory()
     
-    def eliminate_small_numbers(self, small = 1e-10):
+    def eliminate_small_numbers(self, small = 1e-7):
         """Use Less memory, its good for your PC. 
            
         """
@@ -1726,7 +1726,7 @@ class TD_Transport:
         return self.NO_fitted_lorentzians[lead].Block(I,J)[ik,iL,i,j]
     
     
-    def run_curvefit(self, lead, I,J,i,j, ik = 0, use_dense_grid = True, fix_L_idx = []):
+    def run_curvefit(self, lead, I,J,i,j, ik = 0, use_dense_grid = True, fix_L_idx = [], lin_ramp_dx = 5.0):
         """
             Runs scipy curvefit on the component of the nonorthognal Gamma 
             denoted by the tuple(lead,I,J,i,j). Can sometimes give better 
@@ -1747,6 +1747,15 @@ class TD_Transport:
             return None, None
         m1     = self.Nonortho_Gammas[lead].Block(I,J)[ik][sidx,i,j]
         line   = self.Contour[sidx].real
+        lb     = np.linspace(line.min()- lin_ramp_dx,  line.min(),              len(line)//2)
+        lu     = np.linspace(line.max()             ,  line.max()+lin_ramp_dx, len(line)//2)
+        m1     = np.hstack((
+                            np.exp((lb - line.min())*10 / lin_ramp_dx) * m1[np.where(line == line.min())[0][0]], 
+                            m1, 
+                            np.exp(-(lu - line.max())*10 / lin_ramp_dx) * m1[np.where(line == line.max())[0][0]] 
+                            ))
+        
+        line   = np.hstack((lb, line, lu))
         ei, wi = self.NO_fitted_lorentzians[lead].ei[ik].copy(),self.fitted_lorentzians[lead].gamma[ik].copy()
         idx0   = np.array(fix_L_idx, dtype=int)
         idx1   = np.setdiff1d(np.arange(len(ei)), idx0)
@@ -1762,6 +1771,9 @@ class TD_Transport:
             _p[2,idx0] = G1.real
             return L_sum(x, _p).real
         poptr, pcov = curve_fit(func, line, m1.real, p0=G0.real,**{'maxfev':50*10**5})
+        ## xtest = np.linspace(line.min(), line.max(), 250)
+        ## plt.plot(xtest, func(xtest, poptr))
+        ## plt.show()
         def func(x, *p):
             _p = np.zeros((3, N))
             _p[0] = wi
@@ -1790,7 +1802,7 @@ class TD_Transport:
                     self.setLval(e, I, J, i, j, rn)
     
     def Inspect_Transmission(self,i, j,lead = 0, kpnt = None,
-                             return_result = False, invinp = None):
+                             return_result = False, invinp = None, xlims = None):
         print('\n Subbed transmission vs TBtrans transmission. \n')
         '''
         This function is for checking the transmission and comparing your subbed 
@@ -1825,6 +1837,8 @@ class TD_Transport:
             plt.ylim(-0.01,None)
             plt.title('Transmissions')
             plt.legend()
+            if xlims is not None:
+                plt.xlim(xlims)
             plt.show()
         else:
             T01 = _T01[kpnt]
@@ -1833,6 +1847,8 @@ class TD_Transport:
             plt.ylim(-0.01,None)
             plt.title('Transmissions')
             plt.legend()
+            if xlims is not None:
+                plt.xlim(xlims)
             plt.show()
     
     def Inspect_Poles(self,lead, ik = 0,size = 5, marker_L = '*', marker_F = '.', fermi_poles=True):

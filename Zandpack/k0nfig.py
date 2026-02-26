@@ -28,3 +28,6 @@ Supress_parallel_K               = False
 FASTMATH                         = True
 RK_Method                        = 'DOP54'
 N_pi_summers                     = 1
+N_blocks_min                     = 5 # For when to start using the bandedness/sparsity of
+                                     # the nonorthogonal Hamiltonian in the sharedmem_nozand code
+

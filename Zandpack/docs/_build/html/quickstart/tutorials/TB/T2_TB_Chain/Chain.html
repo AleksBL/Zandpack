@@ -1,0 +1,357 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T2: Simple Chain &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/nbsphinx-code-cells.css?v=2aa19091" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="T3: Graphene" href="../T3_Graphene/Graphene.html" />
+    <link rel="prev" title="T1: Rabi Oscillations in two-level system" href="../T1_Rabi/RabiOscillations.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../readme.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../../nbtutorial.html">Tutorials</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../T1_Rabi/RabiOscillations.html">T1: Rabi Oscillations in two-level system</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">T2: Simple Chain</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#Fitting-of-the-self-energies">Fitting of the self-energies</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../T3_Graphene/Graphene.html">T3: Graphene</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../nbtutorial.html">Tutorials</a></li>
+      <li class="breadcrumb-item active">T2: Simple Chain</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../../_sources/quickstart/tutorials/TB/T2_TB_Chain/Chain.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="T2:-Simple-Chain">
+<h1>T2: Simple Chain<a class="headerlink" href="#T2:-Simple-Chain" title="Link to this heading"></a></h1>
+<p>In this tutorial, we will be extending the things we learnt in the tutorial on Rabi oscillations in the two-level system to a simple chain. We will use tight-binding to describe the electronic structure and make a pulse go through said chain.</p>
+<p>We define the hopping parameter, repetitions, and energy-sampling of the self energies and sisl-geometries.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sisl</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">Zandpack.TimedependentTransport</span><span class="w"> </span><span class="kn">import</span> <span class="n">TD_Transport</span> <span class="k">as</span> <span class="n">TDT</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.image</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">img</span>
+
+
+<span class="n">tx</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">t_dev</span> <span class="o">=</span>  <span class="mi">1</span>
+<span class="n">t_elec</span> <span class="o">=</span> <span class="mi">1</span>
+
+<span class="n">lat_const</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">4</span> <span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">101</span><span class="p">)</span>  <span class="o">+</span> <span class="mi">1</span><span class="n">j</span><span class="o">*</span><span class="mf">1e-2</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">line</span><span class="p">,</span><span class="n">line</span><span class="p">))</span>
+
+<span class="c1">### Geometries ###</span>
+<span class="n">geom_dev</span>   <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">tx</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">geom_ep</span>    <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">lat_const</span> <span class="o">*</span> <span class="p">(</span><span class="n">tx</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
+<span class="n">geom_em</span>    <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">geom_dev</span>   <span class="o">=</span> <span class="n">geom_dev</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">geom_em</span>    <span class="o">=</span> <span class="n">geom_em</span><span class="o">.</span> <span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">geom_ep</span>    <span class="o">=</span> <span class="n">geom_ep</span><span class="o">.</span> <span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1">### Our Main calculator object ###</span>
+<span class="n">C</span> <span class="o">=</span> <span class="n">TDT</span><span class="p">([</span><span class="n">geom_em</span><span class="p">,</span><span class="n">geom_ep</span><span class="p">],</span> <span class="n">geom_dev</span><span class="p">,</span> <span class="n">kT_i</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.025</span><span class="p">,</span> <span class="mf">0.025</span><span class="p">])</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Make_Contour</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="mi">20</span> <span class="p">,</span><span class="n">pole_mode</span> <span class="o">=</span> <span class="s1">&#39;JieHu2011&#39;</span><span class="p">)</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Electrodes</span><span class="p">(</span> <span class="n">semi_infs</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;-a1&#39;</span><span class="p">,</span> <span class="s1">&#39;+a1&#39;</span><span class="p">]</span> <span class="p">)</span>
+<span class="n">C</span><span class="o">.</span><span class="n">make_device</span><span class="p">(</span><span class="n">elec_inds</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">0</span><span class="p">],</span>  <span class="p">[</span><span class="n">tx</span><span class="o">+</span><span class="mi">1</span><span class="p">]]</span> <span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Device</span><span class="o">.</span><span class="n">Visualise</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<p>Now we make the electronic structures:</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create the electronic structures. These are sisl shorthands for creating the Hamiltonians of the leads and device</span>
+<span class="n">elec</span> <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Hamiltonian</span><span class="p">(</span><span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Atom</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span> <span class="mf">1.1</span><span class="p">),)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">orthogonal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">elec</span><span class="o">.</span><span class="n">construct</span><span class="p">([[</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">lat_const</span> <span class="o">*</span> <span class="mf">1.1</span><span class="p">],</span>
+                <span class="p">[(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="p">(</span><span class="n">t_elec</span><span class="p">,</span> <span class="mf">1e-3</span><span class="p">)]])</span>
+
+<span class="n">dev_H</span> <span class="o">=</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Hamiltonian</span><span class="p">(</span><span class="n">sisl</span><span class="o">.</span><span class="n">geom</span><span class="o">.</span><span class="n">sc</span><span class="p">(</span><span class="n">lat_const</span><span class="p">,</span> <span class="n">sisl</span><span class="o">.</span><span class="n">Atom</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span> <span class="mf">1.1</span><span class="p">))</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">tx</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">add_vacuum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
+                         <span class="n">orthogonal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">dev_H</span><span class="o">.</span><span class="n">construct</span><span class="p">([[</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">lat_const</span> <span class="o">*</span> <span class="mf">1.1</span> <span class="p">],</span>
+                 <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="n">t_dev</span><span class="p">,</span> <span class="mf">1e-3</span><span class="p">)]])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">elec</span><span class="o">.</span><span class="n">nsc</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">lat_const</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">elec</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)])</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run TBtrans and read in data</span>
+<span class="n">C</span><span class="o">.</span><span class="n">run_electrodes</span><span class="p">(</span><span class="n">manual_H</span> <span class="o">=</span> <span class="p">[</span><span class="n">elec</span><span class="p">,</span> <span class="n">elec</span><span class="p">])</span>
+<span class="n">C</span><span class="o">.</span><span class="n">run_device</span><span class="p">(</span><span class="n">manual_H</span> <span class="o">=</span> <span class="n">dev_H</span><span class="p">)</span>
+<span class="n">C</span><span class="o">.</span><span class="n">read_data</span><span class="p">()</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">C</span><span class="o">.</span><span class="n">Contour</span><span class="p">[</span><span class="n">C</span><span class="o">.</span><span class="n">sampling_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span><span class="n">C</span><span class="o">.</span><span class="n">Ortho_Gammas</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">Block</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span><span class="n">C</span><span class="o">.</span><span class="n">sampling_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="n">C</span><span class="o">.</span><span class="n">Ortho_Gammas</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">is_zero</span>
+</pre></div>
+</div>
+</div>
+<p>We now plot the transmissions and density of states of the device region.</p>
+<section id="Fitting-of-the-self-energies">
+<h2>Fitting of the self-energies<a class="headerlink" href="#Fitting-of-the-self-energies" title="Link to this heading"></a></h2>
+<p>Now we have the electronic structures of the leads and device. Contrary to the previous tutorial on Rabi-oscillations, the selfenergies are now non-zero. We therefore have to put some effort into fitting these to sums of Lorentzian functions. The fitting function called as “Fit” on our calculator object, and the keywords for it are elabored on below:</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">NL</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_fit</span><span class="p">(</span><span class="n">its</span><span class="p">):</span>
+    <span class="n">C</span><span class="o">.</span><span class="n">Fit</span><span class="p">(</span><span class="n">fact</span> <span class="o">=</span> <span class="mf">.25</span><span class="p">,</span>             <span class="c1"># a number controlling the broadening on the initial guess</span>
+          <span class="n">NumL</span> <span class="o">=</span> <span class="n">NL</span><span class="p">,</span>               <span class="c1"># number of Lorentzians used for the fitting</span>
+          <span class="n">ebounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>       <span class="c1"># bounds on where the Lorentzian centers can be located</span>
+          <span class="n">wbounds</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span> <span class="c1"># bounds on the linewidths of the Lorentzians</span>
+          <span class="n">gbounds</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="c1"># bounds on the fitting coefficients</span>
+          <span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;disp&#39;</span><span class="p">:</span><span class="kc">True</span><span class="p">,</span> <span class="c1"># options keywords passed to the SciPy minimizer. The the docs for more info</span>
+                     <span class="s1">&#39;maxiter&#39;</span><span class="p">:</span><span class="n">its</span><span class="p">,</span>
+                     <span class="s1">&#39;gtol&#39;</span><span class="p">:</span><span class="mf">1e-5</span><span class="p">,</span>
+                     <span class="s1">&#39;iprint&#39;</span><span class="p">:</span><span class="mi">5</span><span class="p">},</span>
+          <span class="n">force_PSD</span>    <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+          <span class="n">force_PSD_tol</span><span class="o">=</span><span class="p">[</span><span class="n">min_tol1</span><span class="p">,</span> <span class="n">min_tol2</span><span class="p">],</span>
+          <span class="c1">#specific_bounds = None,#[{(0 ,5) :[(-0.1, 0.1), (4,5)]}, {(0 ,5) :[(-0.1, 0.1), (4,5)]}],</span>
+          <span class="n">alpha_PO</span> <span class="o">=</span> <span class="mf">0.001</span><span class="p">,</span>
+          <span class="n">min_method</span><span class="o">=</span><span class="s1">&#39;nelder-mead&#39;</span>
+         <span class="p">)</span>
+<br/></pre></div>
+</div>
+</div>
+<p>Before we run the fitting, it should we noted that the fitting can be reset and continued as will be demonstrated. There are also a couple of more keywords which are not gonna be used for now.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1">#C.reset_all_fits() # Comment this in to reset fit</span>
+                   <span class="c1"># Try to rerun this cell</span>
+                   <span class="c1"># You can also fiddle with the positions and broadenings</span>
+                   <span class="c1"># of the Lorentzians after they&#39;ve been fitted. This is for another tutorial</span>
+
+<span class="n">min_tol1</span><span class="p">,</span> <span class="n">min_tol2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="n">NL</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="n">NL</span><span class="p">))</span>
+<span class="n">run_fit</span><span class="p">(</span><span class="mi">500</span><span class="p">)</span>
+
+
+<span class="c1"># Lastly run it with its = 200 or so to the the fit</span>
+</pre></div>
+</div>
+</div>
+<p>We now have our fit for the self energies. How well does it fit? There are some shorthand functions for this. Many of them start with Inspect_…. and we will take a look at a couple of them.</p>
+<p>Firstly, how well does the fitted self energies reproduce the transmission obtained from tbtrans?</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Try changing eta</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Inspect_transmission_from_hilbert_transform</span><span class="p">(</span><span class="n">E</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">1000</span><span class="p">),</span><span class="n">eta</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Transmission&#39;</span><span class="p">,</span><span class="n">size</span><span class="o">=</span><span class="mi">20</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Energy&#39;</span><span class="p">,</span><span class="n">size</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Pretty Well! It is also just a chain so it is not hard to fit the self-energies and get good agreement between the fitted self-energies and actual sampled self energies. But say we want to find out how well each matrix-element fits. There is a function for this also, which we will use shortly. First we just need to know a bit about how the matrix elements are stored. TBtrans outputs the matrix elements together with a way to write the inverse of the Green’s function of the device region on
+block-tridiagonal form. This allows for very efficient calculations on large structures. This scheme is retained for this code, meaning whenever we want to inspect a matrix element, we have to specify the block and the indices within the block, together with a lead index:</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s1">&#39; Self energy 1 block structure:&#39;</span><span class="p">)</span>
+<span class="c1">#print(C.fitted_self_energies[0].is_zero)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1"> Self energy 2 block structure:&#39;</span><span class="p">)</span>
+<span class="c1">#print(C.fitted_self_energies[1].is_zero)</span>
+
+                            <span class="c1">#Lead_idx,  block_i,  block_j, idx_i,   idx_j</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Inspect_Lorentzian_fit</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span>          <span class="mi">0</span><span class="p">,</span>        <span class="mi">0</span><span class="p">,</span>       <span class="mi">0</span><span class="p">,</span>       <span class="mi">0</span>    <span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Self energy from lead 1&#39;</span><span class="p">)</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Inspect_Lorentzian_fit</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span>          <span class="mi">4</span><span class="p">,</span>        <span class="mi">4</span><span class="p">,</span>       <span class="mi">0</span><span class="p">,</span>       <span class="mi">0</span>    <span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Self energy from lead 2&#39;</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Inspect_Poles</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Poles of Fitting Lorentzians lead 1&#39;</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="mi">5</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Inspect_Poles</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Poles of Fitting Lorentzians lead 2&#39;</span><span class="p">);</span> <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="mi">5</span><span class="p">])</span>
+<br/></pre></div>
+</div>
+</div>
+<p>We do as in the two-level example: Define lead bias and the timedependent correction to the Hamiltonian. We start out with getting the system to steady state. Shorthand functions for this are available in the Pulses module.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">Zandpack.Pulses</span><span class="w"> </span><span class="kn">import</span> <span class="n">zero_bias</span><span class="p">,</span> <span class="n">zero_dH</span>
+<span class="n">C</span><span class="o">.</span><span class="n">tofile</span><span class="p">(</span><span class="s1">&#39;Chain&#39;</span><span class="p">)</span>
+<span class="n">C</span><span class="o">.</span><span class="n">Check_input_to_ODE</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<p>We now have the “Chain” folder in the directory! There are already the Bias.py and Initial.py files lying in this directory, so we can just run SuperZand.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>- Modify &quot;eps&quot; in Initial.py until you have a converged result (1e-12 will definitely(!) do)
+- Modify Bias.py to your liking
+- Look through the output of the calculation. This has additional information
+- Tip, The current files to not get deleted, so sometimes if you get some funny current curves,
+  delete the Chain_save folder and redo the calculation
+</pre></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span>mpirun<span class="w"> </span>-np<span class="w"> </span><span class="m">3</span><span class="w"> </span>zand<span class="w"> </span><span class="nv">Dir</span><span class="o">=</span><span class="nv">$PWD</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span>td_info<span class="w"> </span><span class="nv">Dir</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span><span class="nv">file</span><span class="o">=</span>Chain<span class="w"> </span><span class="nv">plotcurrent</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">label</span><span class="o">=</span>Current<span class="w"> </span><span class="nv">format</span><span class="o">=</span>png<span class="w"> </span><span class="nv">tmin</span><span class="o">=</span>-20<span class="w"> </span><span class="nv">tmax</span><span class="o">=</span><span class="m">30</span>
+<span class="n">im</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="s1">&#39;CurrentCurrentplot.png&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;figure.figsize&#39;</span><span class="p">]</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">9</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">im</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>We have now converged this simple calculation. Great! But, you might noticing the code is not starting out very fast, this is because the initial condition we have set is not the steady state of the system. Here we just propagate the system until we get to the steady-state because it is not so computationally expensive, but it is possible to find the actual steady-state without doing this. It is for another tutorial, but the SCF &amp; psinought codes are meant for this job.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>-  Try now to put in the bias and dH functions below and do the calculation again!
+-  Tune the amplitude, t0,t1, etc.
+</pre></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">s</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">A</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">w</span> <span class="o">=</span> <span class="mf">0.05</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">Pulse</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">A</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">t</span><span class="o">/</span><span class="n">s</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="n">w</span><span class="o">*</span><span class="n">t</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bias</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">a</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="k">return</span> <span class="o">-</span><span class="n">Pulse</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">a</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="k">return</span> <span class="o">+</span><span class="n">Pulse</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;Chain/Arrays/Positions.npy&#39;</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;Chain/Arrays/pivot.npy&#39;</span><span class="p">),</span><span class="mi">0</span><span class="p">]</span>
+<span class="c1"># Remember the pivot here because tbtrans may have switched some rows</span>
+<span class="c1"># the electrode incices has also been removed in pivot</span>
+<span class="n">tx</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">dH</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">sig</span><span class="p">):</span>
+    <span class="n">A</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">sig</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+    <span class="n">xm</span> <span class="o">=</span> <span class="n">tx</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">A</span><span class="p">[</span><span class="mi">0</span><span class="p">,:,:]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">X</span><span class="o">-</span><span class="n">xm</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">-</span> <span class="n">X</span><span class="o">.</span><span class="n">min</span><span class="p">()))</span> <span class="o">*</span> <span class="n">Pulse</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">A</span>
+<br/></pre></div>
+</div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../T1_Rabi/RabiOscillations.html" class="btn btn-neutral float-left" title="T1: Rabi Oscillations in two-level system" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../T3_Graphene/Graphene.html" class="btn btn-neutral float-right" title="T3: Graphene" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

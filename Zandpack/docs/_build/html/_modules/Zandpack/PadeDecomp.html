@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zandpack.PadeDecomp &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/readme.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/nbtutorial.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">Zandpack.PadeDecomp</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for Zandpack.PadeDecomp</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numba</span><span class="w"> </span><span class="kn">import</span> <span class="n">njit</span>
+<span class="c1"># The functions found here are either from the Croy 2009 paper</span>
+<span class="c1"># or the Jie Hu paper from 2011. Read these to understand these functions.</span>
+<span class="c1"># They simply return the poles and weights of an expansion of the fermi function </span>
+<span class="c1"># in terms of simple poles</span>
+
+<div class="viewcode-block" id="Pade_poles_and_coeffs">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Pade_poles_and_coeffs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Pade_poles_and_coeffs</span><span class="p">(</span><span class="n">N_F</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Pade_Poles</span><span class="p">(</span><span class="n">N_F</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Pade_Poles">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Pade_Poles">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Pade_Poles</span><span class="p">(</span><span class="n">N_F</span><span class="p">):</span>
+    <span class="n">Z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N_F</span><span class="p">,</span> <span class="n">N_F</span><span class="p">),</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_F</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_F</span><span class="p">):</span> 
+            <span class="n">I</span> <span class="o">=</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+            <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">Z</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">I</span> <span class="o">*</span> <span class="p">(</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">I</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">N_F</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">Z</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">2</span> <span class="o">*</span> <span class="n">N_F</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">N_F</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="n">eig</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">Z</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">eig</span><span class="p">)</span>
+    <span class="n">xr</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">real</span>
+    <span class="n">xi</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">imag</span>
+    <span class="n">x</span><span class="p">[</span><span class="n">xi</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">]</span> <span class="o">*=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="k">return</span> <span class="n">x</span></div>
+
+<span class="c1">###</span>
+<span class="c1">### 16.01.2026 </span>
+<span class="c1">### This Fermi function below is formally wrong,</span>
+<span class="c1">### and should be considered errornous, but for the poles obtained </span>
+<span class="c1">### from the JieHu2011 method, it gives the correct result, </span>
+<span class="c1">### as the poles are symmetrically distributed x=0</span>
+<span class="c1">### *_v2 is the correct way to write the Fermi function</span>
+<span class="c1">###</span>
+<div class="viewcode-block" id="FD_expanded">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.FD_expanded">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">FD_expanded</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">xp</span><span class="p">,</span> <span class="n">beta</span> <span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">coeffs</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="n">Xpp</span> <span class="o">=</span> <span class="n">mu</span>  <span class="o">+</span> <span class="n">xp</span><span class="o">/</span><span class="n">beta</span>
+    <span class="n">Xpm</span> <span class="o">=</span> <span class="n">mu</span>  <span class="o">-</span> <span class="n">xp</span><span class="o">/</span><span class="n">beta</span>
+    <span class="k">if</span> <span class="n">coeffs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">coeffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xp</span><span class="p">))</span>
+    <span class="n">diffs</span> <span class="o">=</span>  <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">beta</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">E</span> <span class="p">,</span> <span class="n">Xpp</span><span class="p">)</span>  <span class="o">+</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">E</span> <span class="p">,</span> <span class="n">Xpm</span><span class="p">))</span> <span class="o">*</span> <span class="n">coeffs</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">diffs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FD_expanded_v2">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.FD_expanded_v2">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">FD_expanded_v2</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">xp</span><span class="p">,</span> <span class="n">beta</span> <span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">coeffs</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="n">Xpp</span> <span class="o">=</span> <span class="n">mu</span> <span class="o">+</span> <span class="n">xp</span> <span class="o">/</span> <span class="n">beta</span>
+    <span class="n">Xpm</span> <span class="o">=</span> <span class="n">mu</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">xp</span><span class="p">)</span> <span class="o">/</span> <span class="n">beta</span>
+    <span class="c1"># Xpm = mu + xp.conj() / beta</span>
+    <span class="k">if</span> <span class="n">coeffs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">coeffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xp</span><span class="p">))</span>
+    <span class="n">diff1</span>   <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">E</span> <span class="p">,</span> <span class="n">Xpp</span><span class="p">))</span> <span class="o">*</span> <span class="n">coeffs</span>
+    <span class="n">diff1</span>  <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">E</span> <span class="p">,</span> <span class="n">Xpm</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">coeffs</span><span class="p">)</span>
+    <span class="n">diff1</span>  <span class="o">*=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">beta</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">diff1</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FD_expanded_v2_opt">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.FD_expanded_v2_opt">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">FD_expanded_v2_opt</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">xp</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">mu</span><span class="p">,</span> <span class="n">coeffs</span><span class="p">,</span> <span class="n">out</span><span class="p">):</span>
+    <span class="n">Xpp</span> <span class="o">=</span> <span class="n">mu</span> <span class="o">+</span> <span class="n">xp</span> <span class="o">/</span> <span class="n">beta</span>
+    <span class="n">Xpm</span> <span class="o">=</span> <span class="n">mu</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">xp</span><span class="p">)</span> <span class="o">/</span> <span class="n">beta</span>
+    <span class="n">ne</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">E</span><span class="p">)</span>
+    <span class="n">npol</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">xp</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">)</span> <span class="o">==</span> <span class="n">ne</span>
+    <span class="n">out</span><span class="p">[:]</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">coeffB</span> <span class="o">=</span> <span class="n">coeffs</span> <span class="o">/</span> <span class="n">beta</span>
+    <span class="n">coeffB_C</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">coeffB</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ne</span><span class="p">):</span>
+        <span class="n">Ei</span> <span class="o">=</span> <span class="n">E</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npol</span><span class="p">):</span>
+            <span class="n">xjp</span> <span class="o">=</span> <span class="n">Xpp</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">xjm</span> <span class="o">=</span> <span class="n">Xpm</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">Rjp</span> <span class="o">=</span> <span class="n">coeffB</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> 
+            <span class="n">Rjm</span> <span class="o">=</span> <span class="n">coeffB_C</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-=</span> <span class="p">(</span><span class="n">Rjp</span><span class="o">/</span><span class="p">(</span><span class="n">Ei</span> <span class="o">-</span> <span class="n">xjp</span><span class="p">)</span> <span class="o">+</span> <span class="n">Rjm</span><span class="o">/</span><span class="p">(</span><span class="n">Ei</span> <span class="o">-</span> <span class="n">xjm</span><span class="p">))</span> </div>
+
+    <span class="c1"># return out</span>
+
+
+
+
+
+<div class="viewcode-block" id="FD">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.FD">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">FD</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">((</span><span class="n">E</span> <span class="o">-</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">beta</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="diff">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.diff">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">diff</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">xp</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">FD</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="n">mu</span><span class="p">)</span> <span class="o">-</span> <span class="n">FD_expanded</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">xp</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="n">mu</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Hu_b">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_b">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_b</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">m</span> <span class="o">-</span><span class="mi">1</span></div>
+
+
+<div class="viewcode-block" id="Hu_RN">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_RN">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_RN</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">1</span><span class="o">/</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span><span class="n">Hu_b</span><span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Hu_Gamma">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_Gamma">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_Gamma</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+    <span class="n">Mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span><span class="n">M</span><span class="p">),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+            <span class="n">I</span> <span class="o">=</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+            <span class="n">J</span> <span class="o">=</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span>
+            <span class="k">if</span>  <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span> <span class="ow">or</span> <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">Mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Hu_b</span><span class="p">(</span><span class="n">I</span><span class="p">)</span> <span class="o">*</span> <span class="n">Hu_b</span><span class="p">(</span><span class="n">J</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">Mat</span><span class="p">,</span><span class="n">Mat</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Mat</span></div>
+
+
+<div class="viewcode-block" id="Hu_roots_Q">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_roots_Q">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_roots_Q</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">N</span>
+    <span class="n">e</span><span class="p">,</span><span class="n">v</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">Hu_Gamma</span><span class="p">(</span><span class="n">M</span><span class="p">))</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="n">e</span><span class="o">&gt;</span><span class="mf">1e-15</span><span class="p">])[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="mi">2</span><span class="o">/</span><span class="n">e</span></div>
+
+
+<div class="viewcode-block" id="Hu_roots_P">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_roots_P">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_roots_P</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">N</span>
+    <span class="n">e</span><span class="p">,</span><span class="n">v</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">Hu_Gamma</span><span class="p">(</span><span class="n">M</span><span class="p">)[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">1</span><span class="p">:])</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">e</span><span class="p">[</span><span class="n">e</span><span class="o">&gt;</span><span class="mf">1e-15</span><span class="p">]</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="mi">2</span><span class="o">/</span><span class="n">e</span>
+    <span class="k">return</span> <span class="n">e</span></div>
+
+
+<div class="viewcode-block" id="Hu_coeffs">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_coeffs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_coeffs</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">_old_behavior</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">N</span><span class="o">&gt;</span><span class="mi">40</span> <span class="ow">and</span> <span class="n">_old_behavior</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Hu_coeffs_symbolic</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+    <span class="n">Const</span> <span class="o">=</span>  <span class="n">N</span> <span class="o">*</span> <span class="n">Hu_b</span><span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">Qx</span> <span class="o">=</span> <span class="n">Hu_roots_Q</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+    <span class="n">Px</span> <span class="o">=</span> <span class="n">Hu_roots_P</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+    <span class="n">coeffs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">p1</span> <span class="o">=</span> <span class="n">Qx</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="n">Qx</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span>
+        <span class="n">p1</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">p1</span><span class="p">)</span><span class="o">&lt;</span><span class="mf">1e-15</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+        <span class="n">p1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">p1</span><span class="p">)</span>
+        <span class="n">p2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">Px</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">Qx</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="p">)</span>
+        <span class="n">coeffs</span> <span class="o">+=</span> <span class="p">[</span><span class="n">Const</span><span class="o">*</span><span class="n">p2</span><span class="o">/</span><span class="n">p1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">coeffs</span><span class="p">)</span></div>
+
+<span class="c1"># 18.01 Added sympy version of the Hu_coeffs rutine</span>
+<span class="c1"># This allows for getting the residuals for Nl&gt;42</span>
+<span class="c1"># </span>
+<div class="viewcode-block" id="Hu_coeffs_symbolic">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_coeffs_symbolic">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_coeffs_symbolic</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">sympy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sp</span>
+    <span class="n">Const</span> <span class="o">=</span>  <span class="n">N</span> <span class="o">*</span> <span class="n">Hu_b</span><span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">Qx</span> <span class="o">=</span> <span class="n">Hu_roots_Q</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+    <span class="n">Px</span> <span class="o">=</span> <span class="n">Hu_roots_P</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+    <span class="n">Qx</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">MutableDenseNDimArray</span><span class="p">(</span><span class="n">Qx</span><span class="p">)</span>
+    <span class="n">Px</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">MutableDenseNDimArray</span><span class="p">(</span><span class="n">Px</span><span class="p">)</span>
+    <span class="n">coeffs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">p1</span> <span class="o">=</span> <span class="n">Qx</span><span class="o">.</span><span class="n">applyfunc</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">sp</span><span class="o">.</span><span class="n">Array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">Qx</span><span class="p">)))</span> <span class="o">*</span> <span class="n">Qx</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">p1</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">p1</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">&lt;</span><span class="mf">1e-15</span><span class="p">:</span>
+                <span class="n">p1</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">p1</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">p1</span><span class="p">)</span>
+        <span class="n">p2</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">Px</span><span class="o">.</span><span class="n">applyfunc</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span>  <span class="n">sp</span><span class="o">.</span><span class="n">Array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">Px</span><span class="p">)))</span> <span class="o">*</span> <span class="n">Qx</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="p">)</span>
+        <span class="n">coeffs</span> <span class="o">+=</span> <span class="p">[</span><span class="n">Const</span><span class="o">*</span><span class="n">p2</span><span class="o">/</span><span class="n">p1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">coeffs</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span></div>
+
+    
+
+
+<div class="viewcode-block" id="Hu_poles">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.PadeDecomp.Hu_poles">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hu_poles</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">_old_behavior</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">Hu_roots_Q</span><span class="p">(</span><span class="n">N</span><span class="p">),</span> <span class="n">Hu_coeffs</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">_old_behavior</span><span class="o">=</span><span class="n">_old_behavior</span><span class="p">)</span></div>
+
+
+<span class="c1">### AAA_algorithm, </span>
+<span class="c1">#&quot;The AAA Algorithm for Rational Approximation&quot;</span>
+<span class="c1"># by Yuji Nakatsukasa, Olivier Sète, and Lloyd N. Trefethen, </span>
+<span class="c1"># SIAM Journal on Scientific Computing 2018 40:3, A1494-A1522. (doi)</span>
+<span class="c1">#from aaa import aaa</span>
+<span class="c1">#def AAA_poles(Emin, Emax, tol, kT):</span>
+<span class="c1">#     Eg = np.arange(Emin/kT, Emax/kT, step = 0.01)</span>
+<span class="c1">#     F  = FD(Eg, 1.0, mu = 0.0)-1/2</span>
+<span class="c1">#     r  = aaa(F, Eg, tol = tol, )</span>
+<span class="c1">#     pol, res = r.polres()</span>
+<span class="c1">#     idx = pol.imag&gt;=0</span>
+<span class="c1">#     return  pol[idx], res[idx]</span>
+     <span class="c1">#return  pol, res</span>
+
+
+<span class="c1"># def Hu_coeffs_testing(N):</span>
+<span class="c1">#     Const =  N * Hu_b(N+1)/2</span>
+<span class="c1">#     Qx = np.array(Hu_roots_Q(N),dtype=np.float128)</span>
+<span class="c1">#     Px = np.array(Hu_roots_P(N),dtype=np.float128)</span>
+<span class="c1">#     coeffs = []</span>
+<span class="c1">#     for i in range(N):</span>
+<span class="c1">#         p1 = Qx**2 - Qx[i]**2</span>
+<span class="c1">#         #p1[np.abs(p1)&lt;1e-15] = 1.0</span>
+<span class="c1">#         p1 = np.prod(p1, where=(np.abs(p1)&gt;1e-15), dtype=np.float128)</span>
+<span class="c1">#         p2 = Px ** 2 - Qx[i]**2</span>
+<span class="c1">#         p2 = np.prod(p2,  where=(np.abs(p2)&gt;1e-15), dtype=np.float128)</span>
+<span class="c1">#         coeffs += [Const*p2/p1]</span>
+<span class="c1">#     return np.array(coeffs)</span>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

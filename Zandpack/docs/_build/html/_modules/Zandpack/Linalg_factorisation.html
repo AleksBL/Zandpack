@@ -1,0 +1,311 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zandpack.Linalg_factorisation &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/readme.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/nbtutorial.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">Zandpack.Linalg_factorisation</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for Zandpack.Linalg_factorisation</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Created on Wed Feb  1 11:02:44 2023</span>
+
+<span class="sd">@author: aleksander</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy</span><span class="w"> </span><span class="kn">import</span> <span class="n">linalg</span> <span class="k">as</span> <span class="n">LA</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
+
+
+<div class="viewcode-block" id="SVD">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.Linalg_factorisation.SVD">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">SVD</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">equality_check</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns svd decomposition in format</span>
+<span class="sd">    such that</span>
+<span class="sd">    for i in range(num_sing): </span>
+<span class="sd">    M[...,:,:] += (U[...,i,:,None]@V[...,i,None,:]) * s[...,i][...,None,None]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">U</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">V</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">svd</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span> <span class="o">=</span> <span class="n">hermitian</span><span class="p">)</span>
+    <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">U</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span>
+    <span class="n">U</span> <span class="o">=</span> <span class="n">U</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">equality_check</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">acc</span><span class="p">[</span><span class="o">...</span><span class="p">,:,:]</span> <span class="o">+=</span> <span class="p">(</span><span class="n">U</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,:,</span><span class="kc">None</span><span class="p">]</span><span class="nd">@V</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="kc">None</span><span class="p">,:])</span> <span class="o">*</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">][</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="n">M</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">U</span><span class="p">,</span><span class="n">s</span><span class="p">,</span><span class="n">V</span></div>
+
+
+<div class="viewcode-block" id="TAKAGI">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.Linalg_factorisation.TAKAGI">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">TAKAGI</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">zero_tol</span> <span class="o">=</span> <span class="mf">1e-14</span><span class="p">,</span> <span class="n">equality_check</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Paper:</span>
+
+<span class="sd">    Singular value decomposition for the Takagi factorization</span>
+<span class="sd">    of symmetric matrices</span>
+<span class="sd">    Alexander M. Chebotarev a,⇑,1, Alexander E. Teretenkov</span>
+
+
+<span class="sd">    Computes Takagi factorisation on giving a </span>
+<span class="sd">    matrix on the form A = UDU^T</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">U</span><span class="p">,</span><span class="n">s</span><span class="p">,</span><span class="n">V</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">svd</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span><span class="o">=</span><span class="n">hermitian</span><span class="p">)</span>
+    
+    <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dag</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
+    
+    <span class="n">Z</span>      <span class="o">=</span> <span class="n">dag</span><span class="p">(</span><span class="n">U</span><span class="p">)</span><span class="o">@</span><span class="p">(</span><span class="n">dag</span><span class="p">(</span><span class="n">V</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">())</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">[</span><span class="nb">range</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span>
+    
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">3</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">4</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">5</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+    
+    <span class="n">matpow</span> <span class="o">=</span> <span class="n">LA</span><span class="o">.</span><span class="n">fractional_matrix_power</span>
+    <span class="n">Uz</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ij</span> <span class="ow">in</span> <span class="n">ITER</span><span class="p">:</span>
+        <span class="n">zi</span> <span class="o">=</span> <span class="n">Z</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span>
+        <span class="n">ui</span> <span class="o">=</span> <span class="n">U</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span>
+        <span class="n">uzi</span><span class="o">=</span> <span class="n">Uz</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span>
+        <span class="n">uzi</span><span class="p">[:,:]</span> <span class="o">=</span> <span class="n">ui</span><span class="o">@</span><span class="p">(</span><span class="n">matpow</span><span class="p">(</span><span class="n">zi</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">))</span>
+    
+    <span class="n">vecs</span> <span class="o">=</span> <span class="n">dag</span><span class="p">(</span><span class="n">Uz</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">lambs</span><span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">equality_check</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">acc</span><span class="p">[</span><span class="o">...</span><span class="p">,:,:]</span> <span class="o">+=</span> <span class="p">(</span><span class="n">vecs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,:,</span><span class="kc">None</span><span class="p">]</span><span class="nd">@vecs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="kc">None</span><span class="p">,:])</span> <span class="o">*</span> <span class="n">lambs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">][</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="n">M</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">vecs</span><span class="p">,</span> <span class="n">lambs</span><span class="p">,</span> <span class="n">vecs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="LDL">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.Linalg_factorisation.LDL">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">LDL</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">equality_check</span><span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+    <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dag</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
+    
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">[</span><span class="nb">range</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">3</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">4</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">5</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+    <span class="n">L</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="n">d</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ij</span> <span class="ow">in</span> <span class="n">ITER</span><span class="p">:</span>
+        <span class="n">_l</span><span class="p">,</span> <span class="n">_d</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">LA</span><span class="o">.</span><span class="n">ldl</span><span class="p">(</span><span class="n">M</span><span class="p">[</span><span class="n">ij</span><span class="p">],</span> <span class="n">hermitian</span> <span class="o">=</span> <span class="n">hermitian</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">L</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span> <span class="o">=</span> <span class="n">_l</span>
+        <span class="n">d</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">_d</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">_d</span><span class="p">)),</span><span class="n">_d</span><span class="p">)</span>
+    
+    <span class="n">vecl</span> <span class="o">=</span> <span class="n">dag</span><span class="p">(</span><span class="n">L</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span>
+    <span class="n">vecr</span> <span class="o">=</span> <span class="n">vecl</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span>
+    
+    <span class="c1"># np.allclose(L@d@(dag(L).conj()), M)</span>
+    <span class="k">if</span> <span class="n">equality_check</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">acc</span><span class="p">[</span><span class="o">...</span><span class="p">,:,:]</span> <span class="o">+=</span> <span class="p">(</span><span class="n">vecl</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,:,</span><span class="kc">None</span><span class="p">]</span><span class="nd">@vecr</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="kc">None</span><span class="p">,:])</span> <span class="o">*</span> <span class="n">d</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">][</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="n">M</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">vecl</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">vecr</span></div>
+
+
+<div class="viewcode-block" id="QR">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.Linalg_factorisation.QR">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">QR</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">hermitian</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">equality_check</span><span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+    <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dag</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
+    
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">[</span><span class="nb">range</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">3</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">4</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">5</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+    <span class="n">Q</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="n">R</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="n">lambs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ij</span> <span class="ow">in</span> <span class="n">ITER</span><span class="p">:</span>
+        <span class="n">q</span><span class="p">,</span><span class="n">r</span> <span class="o">=</span> <span class="n">LA</span><span class="o">.</span><span class="n">qr</span><span class="p">(</span><span class="n">M</span><span class="p">[</span><span class="n">ij</span><span class="p">])</span>
+        <span class="n">Q</span><span class="p">[</span><span class="n">ij</span><span class="p">][:,:]</span>   <span class="o">=</span> <span class="n">q</span>
+        <span class="n">R</span><span class="p">[</span><span class="n">ij</span><span class="p">][:,:]</span>   <span class="o">=</span> <span class="n">r</span>
+        <span class="n">lambs</span><span class="p">[</span><span class="n">ij</span><span class="p">][:]</span> <span class="o">=</span><span class="mf">1.0</span>
+    <span class="n">vecl</span> <span class="o">=</span> <span class="n">dag</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span>
+    <span class="n">vecr</span> <span class="o">=</span> <span class="n">R</span>
+    
+    <span class="k">if</span> <span class="n">equality_check</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">lambs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">acc</span><span class="p">[</span><span class="o">...</span><span class="p">,:,:]</span> <span class="o">+=</span> <span class="p">(</span><span class="n">vecl</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,:,</span><span class="kc">None</span><span class="p">]</span><span class="nd">@vecr</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="kc">None</span><span class="p">,:])</span> <span class="o">*</span> <span class="n">lambs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">][</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="n">M</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">vecl</span><span class="p">,</span> <span class="n">lambs</span><span class="p">,</span> <span class="n">vecr</span></div>
+
+
+<div class="viewcode-block" id="EIG">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.Linalg_factorisation.EIG">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">EIG</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">Hermitian</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">equality_check</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">perm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">[</span><span class="nb">range</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">3</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">4</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="o">==</span><span class="mi">5</span><span class="p">:</span> <span class="n">ITER</span> <span class="o">=</span> <span class="n">product</span><span class="p">(</span><span class="n">rng</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">rng</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">rng</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">dag</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
+    <span class="n">s</span><span class="p">,</span> <span class="n">_vecf1</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">M</span><span class="p">)</span>
+    <span class="n">no</span>           <span class="o">=</span> <span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">_ivecf1</span>      <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">_vecf1</span><span class="p">)</span>
+    <span class="n">_vecf1</span>       <span class="o">=</span> <span class="n">dag</span><span class="p">(</span><span class="n">_vecf1</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">()</span>
+    
+    <span class="n">vecf1</span>  <span class="o">=</span> <span class="n">_ivecf1</span><span class="c1">#dag(_ivecf1)#.conj()</span>
+    <span class="n">ivecf1</span> <span class="o">=</span> <span class="n">_vecf1</span><span class="c1">#dag(vecf1)#.conj()</span>
+    
+    
+    <span class="k">if</span> <span class="n">equality_check</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">acc</span><span class="p">[</span><span class="o">...</span><span class="p">,:,:]</span> <span class="o">+=</span> <span class="p">(</span><span class="n">vecf1</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,:,</span><span class="kc">None</span><span class="p">]</span><span class="nd">@ivecf1</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="kc">None</span><span class="p">,:])</span> <span class="o">*</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">][</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="n">M</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">vecf1</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">ivecf1</span></div>
+
+
+<span class="n">M</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">20</span><span class="p">,</span><span class="mi">50</span><span class="p">,</span><span class="mi">50</span><span class="p">))</span>  <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">20</span><span class="p">,</span><span class="mi">50</span><span class="p">,</span><span class="mi">50</span><span class="p">))</span>
+<span class="n">M</span> <span class="o">+=</span> <span class="n">M</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># TAKAGI(M)</span>
+<span class="c1">#LDL(M)</span>
+<span class="c1"># QR(M)</span>
+<span class="n">EIG</span><span class="p">(</span><span class="n">M</span><span class="p">)</span>
+
+
+        
+    
+    
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,10 +1,10 @@
 import os
-IL = "INSTALL_LOG.README"
+IL = "INSTALL_LOG.txt"
 WD = os.getcwd()
 #os.chdir('Zandpack')
 with open(IL, "w") as f:
     print('-------',file=f)
-    print('We are working in folder: ')
+    print('We are working in folder: ',file=f)
     print(WD,file=f)
     print('-------',file=f)
     print('Executable files should have status (755) or more.', file=f)
@@ -55,6 +55,8 @@ setup(name='Zandpack',
                           "scipy", 
                           "siesta_python",
                           "Block_matrices",
-                          "Gf_Module"
+                          "Gf_Module",
+                          "psutil",
+                          "joblib",
        ])
 

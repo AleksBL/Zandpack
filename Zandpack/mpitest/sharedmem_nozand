@@ -1,0 +1,1108 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri May 27 12:00:31 2022
+
+@author: aleksander
+"""
+import numpy as np
+from mpi4py import MPI
+import os, sys, inspect
+import Zandpack.k0nfig as config
+from Zandpack.mpi_RK4pars_dev import A, B, CT, CH, RK_N, idxholder, hnew_func
+from Zandpack.mpi_splitter import (
+    partition_scheme3,
+    get_sources_scheme2,
+    find_max_orbital_idx_per_lead,
+)
+from Zandpack.mpi_funcs import MM ##, TERR2_sig, TERR2_psi, TERR2_omg
+from Zandpack.mpi_funcs import (
+   step_fourth_sig,
+   step_fourth_psi,
+   step_fourth_omg,
+)
+
+from Zandpack.func_step_forward import (
+    step_sig_forward_nb,
+    step_psi_forward_nb,
+    step_omg_forward_nb,
+    TERR2_sig_nb,
+    TERR2_psi_nb,
+    TERR2_omg_nb,
+)
+
+from Zandpack.mpi_funcs import _multiply, OuterSubtraction_hard_opti_V2
+from Zandpack.docstrings import DocString_MPI_implementation as docstring
+#  Zandpack.docstrings import CoolLine
+from Zandpack.mpi_timer import TimeBot
+from time import time #, sleep
+from Zandpack.banded_matrix_funcs import bandedmatmat# , bandedmatvec
+from scipy.linalg import bandwidth
+
+SourceCode = inspect.getsource
+# Initial Navigation to directory given
+args = sys.argv[1:]
+original_folder = os.getcwd()
+ChDir = False
+Check = ["Dir" in v for v in args]
+if sum(Check) > 1:
+    print("Dont specify several directories. Stopping processes")
+    print("\n\n\n")
+    assert 1 == 0
+if True in Check:
+    i = Check.index(True)
+    if "=" not in args[i]:
+        print("Specify path like this: ")
+        print("Dir = /path/to/somewhere/ ")
+        print("Stopping processes")
+        print("\n\n\n")
+
+        assert 1 == 0
+
+    path = args[0].replace(" ", "").split("=")[1]
+    os.chdir(path)
+    new_folder = os.getcwd()
+    sys.path.append(new_folder)
+
+# Initial Handling of keywords given
+
+from Initial import Arrs as D
+from Initial import (
+    t0,
+    t1,
+    stepsize,
+    print_timings,
+    usesave,
+    saveevery,
+    name,
+    eps,
+    hbar,
+    n_dm_compress,
+    save_PI,
+)
+from Initial import checkpoints, save_checkpoints, LoadFromFull
+
+checkpoints = np.array(checkpoints)
+checkpoints = checkpoints[checkpoints > t0]
+checkpoints = checkpoints[checkpoints < t1]
+checkpoint_bookkeeper = np.zeros(len(checkpoints), dtype=int)
+from Bias import dH, bias, dissipator
+
+# MPI stardard import
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+# Shorthands
+nax = np.newaxis
+DT = np.complex128
+mpi_dtype_size = MPI.DOUBLE_COMPLEX.Get_size() # complex128 datatype
+
+multidot = np.linalg.multi_dot
+
+def CZ(s):
+    return np.zeros(s, dtype=DT)
+def str_sign(numb):
+    if np.sign(numb)>= 0.0:
+        return '+'
+    else:
+        return '-'
+
+def PI_np(psi_a, ixi, nonzero_idx=None):
+    """ 
+        04.1.2024 change: copied this function from TimedependentTransport.py to here
+        to avoid matplotlib load together with the other modules.
+        Copy from TimedependentTransport.py, see docstring there
+    """
+    assert len(psi_a.shape) == 4
+    nk, nx, nc_top, nc = psi_a.shape
+    if nonzero_idx is None:
+        res = np.matmul(psi_a.reshape(nk, nx*nc_top, nc).transpose(0, 2, 1),
+                        ixi[:, :, :nc_top, :].reshape(nk, nx*nc_top, nc))
+    else:
+        res = np.zeros((nk, nc, nc), dtype=np.complex128)
+        subres = np.matmul(psi_a.reshape(nk, nx*nc_top, nc).transpose(0, 2, 1),
+                           ixi[:, :, :nc_top, nonzero_idx
+                               ].reshape(nk, nx*nc_top, len(nonzero_idx)),
+                           )
+        res[:, :, nonzero_idx] = subres[:, :, :]
+    # Removed addition of complex conjugate here
+    res *= (1 / hbar)
+    return res
+
+
+Nblocks_min_banded = config.N_blocks_min
+
+# Readins from saved folder, imported from "Initial"
+NK = D["H_Ortho"].shape[0]
+NO = D["H_Ortho"].shape[-1]
+NL = D["psi_shape"][1]
+NX = D["psi_shape"][2]
+# Bookkeeping MPI
+src = get_sources_scheme2(size)
+# Upper cutoff for nonzero eigenvalues per lead
+noT_lead = find_max_orbital_idx_per_lead(D["GG_P"], D["GL_P"], D["zero_tol"])
+NOT = max(noT_lead)
+ROLE_INFO = partition_scheme3(rank, size, NK, NL, NX, noT_lead)
+ROLE = ROLE_INFO[0]
+tag_count = 10
+Worker_tags = []
+Worker_idx = []
+for v in src:
+    Worker_idx += [partition_scheme3(v, size, NK, NL, NX, noT_lead)[1:]]
+    Worker_tags += [tag_count]
+    tag_count += 1
+# Timer class for printing timings
+_Timer = TimeBot(ROLE, print_timings)  # simple timing class
+
+
+def start_print():
+    print(docstring)
+    print("\nMASTER PROCESS STARTED\n")
+    print("Running on " + str(size) + " nodes")
+    print("Using Tolerance: " + str(eps))
+    print("Using Folder: " + str(name))
+    print("Using PI version:", str(config.PI_VERSION))
+    print("Using Parallel PI:", str(config.PARALLEL_PI))
+    print(
+        "Using Parallel outer subtraction:",
+        str(config.NUMBA_OUTER_SUBTRACTION_PARALLEL),
+    )
+    print("Lazy Omega: " + str(config.MPI_LAZY_OMEGA))
+    print("OMP_NUM_THREADS: " + str(os.environ["OMP_NUM_THREADS"]))
+    try:
+        print("NUMBA_NUM_THREADS: " + str(os.environ["NUMBA_NUM_THREADS"]))
+    except:
+        print("NUMBA_NUM_THREADS: UNKNOWN")
+    print("Folder Path: " + os.getcwd())
+    print("Propagation algorithm: Adaptive Runge-Kutta " + config.RK_Method)
+    print("NumPy Config:")
+    np.show_config()
+    print("\n")
+    print("Args: " + str(args))
+    print("Source-scheme:\n")
+    print("Master Node: " + str(rank))
+    print("Worker Nodes: " + str(src)[1:-1])
+    print("Index splitting: ")
+    for i, widx in enumerate(Worker_idx):
+        print("Worker Node " + str(src[i]) + " has indecies:")
+        print("k-indices: ")
+        print(widx[0])
+        print("lead-indices: ")
+        print(widx[1])
+        print("pole-indices: ")
+        print(widx[2])
+        print("eig-indices: ")
+        print(widx[3])
+        print("\n")
+
+    print("\n")
+    print("Zand program sourcecode location: \n", __file__)
+    print("\n")
+    print("Timedependent Bias:")
+    print(SourceCode(bias))
+    print("\n")
+    print("Timedependent part of Hamiltonian dH:")
+    print(SourceCode(dH))
+    print("\n")
+    print("Dissipator ")
+    print(SourceCode(dissipator))
+    print("\n\n")
+    print("hbar = " + str(hbar))
+    print("\n\n")
+    print("Will save checkpoints: ", save_checkpoints)
+    print("Checkpoints: ")
+    print(checkpoints, " \n")
+    print("Using previous save: ", usesave)
+    print("\n\nStart of Run!")
+
+
+def transform_vec_Tv(vec, T):
+    for i1 in range(vec.shape[0]):
+        for i2 in range(vec.shape[1]):
+            for i3 in range(vec.shape[2]):
+                for i4 in range(vec.shape[3]):
+                    vec[i1, i2, i3, i4, :] = T[i1] @ vec[i1, i2, i3, i4, :]
+
+
+def transform_vec_vT(vec, T):
+    for i1 in range(vec.shape[0]):
+        for i2 in range(vec.shape[1]):
+            for i3 in range(vec.shape[2]):
+                for i4 in range(vec.shape[3]):
+                    vec[i1, i2, i3, i4, :] = vec[i1, i2, i3, i4, :] @ T[i1]
+
+# Function for density matrix EOM
+
+
+def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
+    dot_prod_zero_tol = 1e-10
+    try:
+        dot_prod_zero_tol = float(os.environ["dot_prod_zero_tol"])
+    except:
+        pass
+
+    start_print()
+    filename = name + ".MASTER"
+    with open(filename, "w") as file:
+        file.write("\nfile for Master node\n\n")
+
+    # Stepsize updater, hnew(eps, TE)
+    # eps: error-tolerance
+    # TE : calculated error
+    def hnew(hin, TEin):
+        return hnew_func(hin, TE, eps)
+
+    Sm05 = D["S^(-0.5)"]  # NEW
+    S05  = np.linalg.inv(Sm05)  # NEW
+    Sm1  = Sm05 @ Sm05  # NEW
+    if np.abs((S05 @ S05) - np.eye(Sm1.shape[-1])).max() < 1e-10:
+        _orthogonal = True
+    else:
+        _orthogonal = False
+    ####
+    H0  = S05 @ D["H_Ortho"] @ S05  # NEW
+    H0[np.abs(H0)<1e-13] = 0.0
+    H0_BW_L,H0_BW_U = bandwidth(H0)
+    H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
+    assert H0_BW_L == H0_BW_U
+    MM_nblocks = NO // H0_BW_L
+    if MM_nblocks < Nblocks_min_banded:
+        skip_bw = True
+    else:
+        skip_bw = False
+    del H0_BW_L, H0_BW_U, MM_nblocks
+    ####
+    
+    Ht = CZ(H0.shape)
+    D_tmp_sig = CZ(H0.shape)
+    assert Sm1.shape == H0.shape
+    # Possibly load in saved files
+    if usesave == False:
+        sig0 = Sm05 @ D["DM_Ortho"] @ Sm05  # NEW
+        t0 = T0
+        h = stepsize
+    else:
+        try:
+            sig0 = np.load(name + "_save/" + "last_sig.npy")
+        except:
+            print("Using /Arrays/DM_Ortho.npy!")
+            sig0 = Sm05 @ D["DM_Ortho"] @ Sm05  # NEW
+        try:
+            t0 = float(np.load(name + "_save/" + "last_time.npy"))
+            h = float(np.load(name + "_save/" + "last_stepsize.npy"))
+        except:
+            t0 = 0.0 + T0
+            h = 0.0 + stepsize
+    # Arrays to place values of various intermediate samplings in the Runge-Kutta-method
+    tmp_sig = CZ((NK,     NO, NO))  # D["DM_Ortho"].copy() ## NEW
+    tmp_PI  = CZ((NK, NL, NO, NO))
+    Q_sum   = CZ((NK, NO, NO))
+    SIGS    = CZ((RK_N + 1,) + tmp_sig.shape)
+    Delta_a = np.zeros(NL)
+    ####### global_psi = CZ((NK, NL, NX, NOT, NO))
+    # Shared memory array for global_psi
+    gpsi_shape   = (NK, NL, NX, NOT, NO)
+    gpsi_size    = np.prod(gpsi_shape)
+    gpsi_nbytes  = gpsi_size * mpi_dtype_size
+    win          = MPI.Win.Allocate_shared(gpsi_nbytes, mpi_dtype_size, comm=comm)
+    gpsi_buf, gpsi_itemsize = win.Shared_query(0)
+    global_psi   = np.ndarray(buffer=gpsi_buf, 
+                              dtype=DT, 
+                              shape=gpsi_shape)
+    comm.Barrier() # Barrier 1, make global_psi
+    
+    
+    # Shared memery array for sig and H
+    sigHt_shape  = (2 * NK, NO, NO)
+    sigHt_size   = np.prod(sigHt_shape)
+    sigHt_nbytes = sigHt_size * mpi_dtype_size
+    win          = MPI.Win.Allocate_shared(sigHt_nbytes, mpi_dtype_size, comm=comm)
+    sigHt_buf, sigHt_itemsize = win.Shared_query(0)
+    sigHt        = np.ndarray(buffer=sigHt_buf, 
+                              dtype=DT, 
+                              shape=sigHt_shape)
+    comm.Barrier() # Barrier 2, make global sigHt
+    
+    
+    # Initial Values for sigma
+    SIGS[-1] = sig0
+    del sig0
+    # Arrays to assemble PI and PSI in.
+    # the MPI4py needs them to be preallocated.
+    PSI_buff = []
+    for v in Worker_idx:
+        #             local nk     # local na  local nx     orb  orb
+        PSI_buff += [CZ((len(v[0]), len(v[1]), len(v[2]), len(v[3]), NO))]
+
+    # Create save directory
+    try:
+        os.mkdir(name + "_save")
+    except:
+        pass
+
+    files = os.listdir(name + "_save")
+    for f in files:
+        if f[0:2] == "DM":
+            os.remove(name + "_save/" + f)
+    TIME_START = time()
+    step_count = 0
+    currents = [[] for i in range(NL)]
+    DM = [SIGS[-1].copy()]
+    times = [t0]
+    PI_holder = []
+    worker_errors = [np.zeros(2) for i in range(len(src))]
+    Ixi_all = D["Ixi"][:, :, :, :NOT].copy()  # For Omega calculation
+    transform_vec_vT(Ixi_all, S05)  # NEW
+
+    orbidx_alpha = [
+        np.where(
+            (np.abs(Ixi_all[:, _ia, :, :]) > dot_prod_zero_tol).any(
+                axis=(0, 1, 2)
+            ))[0]
+        for _ia in range(NL)
+    ]
+    
+    orbidx_uall = np.unique(np.sort(np.hstack(orbidx_alpha)))
+    assert len(orbidx_uall.shape) == 1
+    
+    with open(filename, "a") as file:
+        import psutil
+        process = psutil.Process(os.getpid())
+        file.write(
+            "\n\nAllocated total initial memory usage: "
+            + str(process.memory_info().rss / 1024**2)
+            + " MiB\n\n"
+        )
+        del psutil, process
+        file.write("orbidx, MASTER node: \n")
+        for _ia in range(NL):
+            file.write("lead + "+str(_ia)+"\n")
+            file.write("    idx: \n")
+            file.write(str(orbidx_alpha[_ia]))
+
+    while t0 < t1:
+        Step_Fourth = 0  # 0 or 1. 0 repeats same step smaller h, 1 propagates
+        _Timer.reset()
+        _Timer.time(["Main Loop"])
+        while Step_Fourth == 0:
+            dt = A * h
+            for i in range(RK_N):
+                _Timer.time(["Initial Matrix Multiplication"])
+                # Indexing for computing intermediate result, see mpi_funcs.py
+                _idx_i = idxholder[i]
+                if i == 0:
+                    tmp_sig[:, :, :] = SIGS[-1]
+                else:
+                    ##MM(SIGS[_idx_i].transpose(1, 2, 3, 0),
+                    ##    B[i, _idx_i],
+                    ##    tmp_sig, )
+                    step_sig_forward_nb(SIGS, B[i].copy(), 
+                                        tmp_sig, np.array(_idx_i) )
+                    
+                _Timer.time(
+                    ["Initial Matrix Multiplication", "System creation at ts"]
+                )
+                # system parameters at the time ts
+                ts = t0 + dt[i]
+                Ht = H0 + dH(ts, tmp_sig)
+                for _not_i in range(NL):
+                    Delta_a[_not_i] = bias(ts, _not_i)
+                _Timer.time(
+                    ["System creation at ts", "Broadcast System at ts"]
+                )
+                # Broadcast system parameters to worker nodes
+                h_ts = (h, ts)
+                h_ts = comm.bcast(h_ts, root=0)
+                h, ts = h_ts
+                # sigHt is for broadcasting the combined Ht and sig matrices
+                sigHt[0:NK, :, :] = Ht[:, :, :]
+                sigHt[NK:, :, :]  = tmp_sig[:, :, :]
+                _Timer.time(
+                    ["Broadcast System at ts", "Barrier 3 wait"]
+                )
+                comm.Barrier() # Barrier 3, wait for assignment of values to
+                               # global sigHt
+                # shared_memory_instead!
+                ### comm.Bcast(sigHt,   root=0)
+                _Timer.time(
+                    ["Barrier 3 wait", "Broadcast Deltas"]
+                )
+                comm.Bcast(Delta_a, root=0)
+                _Timer.time(
+                    ["Broadcast Deltas", "Commutator for sigma"]
+                )
+                
+                # While the worker nodes compute, the master node computes
+                # the RHS of the sigma EOM.
+                #   Commutator simplifies when H(t) and sigma are hermitian
+                #   hbar multiplied with here, gets divided with later
+                
+                # Original
+                # D_tmp_sig  = Sm1 @ Ht @ tmp_sig  # NEW
+                bandedmatmat(Ht,  tmp_sig, # Ht @ tmp_sig
+                             D_tmp_sig,    # write to 
+                             Nblocks_min_banded, skip_bw)
+                if _orthogonal == False:
+                    D_tmp_sig = Sm1 @ D_tmp_sig
+                
+                D_tmp_sig -= D_tmp_sig.transpose(0, 2, 1).conj()  # NEW
+                D_tmp_sig *= -1j
+                D_tmp_sig -= hbar * dissipator(ts, tmp_sig)
+                ########### D_tmp_sig = -1j*(HS - HS.transpose(0,2,1).conj()) - hbar*dissipator(ts, tmp_sig)
+                _Timer.time(["Commutator for sigma", "Assemble global Psi"])
+                # Collect PSI parts, assemble and resend to nodes
+                comm.Barrier()# Barrier 4, wait for assignm. to global_psi (psi conj.)
+                _Timer.time(["Assemble global Psi", "Calculate PI"])
+                # Calculate PI
+                # global_psi is actually psi_conj!
+                for _ia in range(NL):
+                    tmp_PI[:, _ia, :, :] = PI_np(global_psi[:, _ia].conj(), # double conjugate, see worker function
+                                                 Ixi_all[:, _ia],
+                                                 orbidx_alpha[_ia])
+
+                _Timer.time(["Calculate PI", "Calculate Currents"])
+                if i == 0:  # Calculate currents from Q
+                    for elec_count in range(NL):
+                        _cur  = np.trace(tmp_PI[:, elec_count, :, :], 
+                                         axis1=1, axis2=2)
+                        _cur += np.trace(tmp_PI[:, elec_count, :, :].conj().transpose(0, 2, 1), 
+                                         axis1=1, axis2=2)
+                        currents[elec_count] += [_cur.real/hbar]
+                    if save_PI:
+                        PI_holder += [tmp_PI.copy()]
+                _Timer.time(["Calculate Currents", "Sigma EOM"])
+                # Q_sum  = tmp_PI.sum(axis=1) @ Sm1  # NEW
+                #+#+#+#+#+#+# NEW
+                np.sum(tmp_PI, axis=1, out=Q_sum)
+                if (len(orbidx_uall) < (0.75 * NO)):
+                    Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1[:, orbidx_uall,:]
+                else:
+                    Q_sum = Q_sum @ Sm1
+                #+#+#+#+#+#+#
+                Q_sum += Q_sum.transpose(0, 2, 1).conj()  # NEW
+                D_tmp_sig += Q_sum
+                D_tmp_sig *= h/hbar
+                SIGS[i, :, :, :] = D_tmp_sig[:, :, :]
+                _Timer.time(["Sigma EOM"])
+            _Timer.time(["Collect Error"])
+            TE2_1 = TERR2_sig_nb(SIGS[0:RK_N], CT)
+            for kk in range(len(src)):
+                comm.Recv(
+                    worker_errors[kk], source=src[kk], tag=Worker_tags[kk]
+                )
+            _Timer.time(["Collect Error", "Calculate Error"])
+            TE = (TE2_1 + sum(sum(worker_errors))) ** 0.5
+            Step_Fourth = 1 if TE < eps else 0
+            if Step_Fourth == 0:
+                for elec_count in range(NL):
+                    currents[elec_count] = currents[elec_count][:-1]
+                if save_PI:
+                    PI_holder = PI_holder[:-1]
+            _Timer.time(["Calculate Error", "Broadcast Succes or Failure"])
+            Step_Fourth = comm.bcast(Step_Fourth, root=0)
+            _Timer.time(["Broadcast Succes or Failure", "Update Stepsize"])
+            old_h = 0.0 + h
+            h = hnew(h, TE)
+            _Timer.time(["Update Stepsize"])
+        _Timer.time(["Main Loop"])
+        _Timer.time(["Save State"])
+
+        pass_checkpoint_and_not_saved = (t0 > checkpoints) * (
+            checkpoint_bookkeeper == 0
+        )
+        if save_checkpoints and pass_checkpoint_and_not_saved.any():
+            np.save(name + "_save/" + "last_sig", SIGS[-1])
+            np.save(name + "_save/" + "last_time", t0)
+            np.save(name + "_save/" + "last_stepsize", old_h)
+            idx = np.where(pass_checkpoint_and_not_saved)[0][0]
+            checkpoint_bookkeeper[idx] = 1
+
+        _Timer.time(["Save State"])
+        _Timer.time(["Update Sigma"])
+        step_fourth_sig(SIGS, CH)
+        _Timer.time(["Update Sigma"])
+        _Timer.time(["Intermediate Save"])
+        t0 += h
+        DM += [SIGS[-1].copy()]
+        times += [t0 + 0.0]
+        step_count += 1
+        _Timer.time(["Intermediate Save"])  # , skip_next = [True])
+        _Timer.time(["Full Save"])
+        if np.mod(step_count, saveevery) == 0 and step_count >= saveevery:
+            np.save(
+                name + "_save/DM" + str(step_count),
+                np.array(DM[::n_dm_compress]).astype(np.complex64),
+            )
+            dm_times = np.array(times[-len(DM):])
+            if len(dm_times) > len(DM):
+                dm_times = dm_times[1:]
+            np.save(
+                name + "_save/DMt" + str(step_count), dm_times[::n_dm_compress]
+            )
+            if save_PI:
+                np.save(
+                    name + "_save/PIa" + str(step_count),
+                    np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
+                )
+
+            np.save(name + "_save/times" + str(step_count), times[-len(DM):])
+            for k, c in enumerate(currents):
+                np.save(
+                    name
+                    + "_save/"
+                    + "current_"
+                    + str(k)
+                    + "_"
+                    + str(step_count),
+                    c[-len(DM):],
+                )
+            DM = []
+            PI_holder = []
+            _uno = "t=" + str(np.round(t0, 3))
+            if len(_uno)<8:
+                _uno += ' '*( 8- len(_uno) ) 
+            print(
+                _uno
+                + " | #steps="
+                + str(step_count)
+                + " | eps="
+                + str(format(TE, ".3e"))
+                + " | dt="
+                + str(np.round(h,4))
+            )
+            for k, c in enumerate(currents):
+                _cur = np.array(c[-1])
+                _bias  = Delta_a[k]
+                _bias2 = str(np.round(_bias, 6))
+                _cur_str = str(np.round(_cur, 6))[1:9]
+                if '-' not in _bias2:
+                    _bias2 = '+'+_bias2
+                if '-' not in _cur_str:
+                    _cur_str = '+'+ _cur_str[:-1]
+                print(
+                    "   \u237A = "
+                    + str(k)
+                    + " | \u0394 = "
+                    + _bias2 #str(np.round(_bias, 6))
+                    + " | J_"
+                    + str(k)
+                    + ": "
+                    + _cur_str # str(np.round(_cur, 6))[1:9]
+                    + "| Total: "
+                    + str(np.round(sum(c[-1]), 6))
+                )
+        _Timer.time(["Full Save"], skip_next=[True])
+        mystring = _Timer.generate_timings()
+        if print_timings:
+            with open(filename, "a") as file:
+                file.write(mystring)
+    TIME_STOP = time()
+    print("RUNTIME: ", TIME_STOP - TIME_START)
+    comm.bcast(None, root=0)
+    return
+
+# Function for Psi and Omega EOM.
+
+
+def Worker(role_info):
+    assert "Worker" in role_info[0]
+    dot_prod_zero_tol = 1e-10
+    try:
+        dot_prod_zero_tol = float(os.environ["dot_prod_zero_tol"])
+    except:
+        pass
+
+    filename = name + "." + role_info[0]
+    with open(filename, "w") as file:
+        file.write("\nfile for " + role_info[0] + " node\n\n")
+        file.write("\ndot-product zero tol:" + str(dot_prod_zero_tol))
+        file.write("\nrole_info \n")
+        for v in role_info:
+            file.write(str(v) + "\n")
+
+    h, ts = 0.0, 0.0
+    k_idx = role_info[1]
+    nk = len(k_idx)
+    lead_idx = role_info[2]
+    nl = len(lead_idx)
+    pole_idx = role_info[3]
+    nx = len(pole_idx)
+    eig_idx = role_info[4]
+    neig = len(eig_idx)
+    
+    # _frmi_pole_all = np.arange(D["num_poles_fermi"]) + D["num_lorentzians"]
+    # _lrnz_pole_all = np.arange(D["num_lorentzians"]) 
+    # _frmi_pole_loc = np.array([i for i in pole_idx if i in _lrnz_pole_all])
+    # _lrnz_pole_loc = np.array([i for i in pole_idx if i in _frmi_pole_all])
+    
+    
+    Sm05 = D["S^(-0.5)"]  # NEW
+    S05  = np.linalg.inv(Sm05)  # NEW
+    Sm1  = Sm05 @ Sm05  # NEW
+    if np.abs((S05 @ S05) - np.eye(Sm1.shape[-1])).max() < 1e-10:
+        _orthogonal = True
+    else:
+        _orthogonal = False
+    def pickout(Arr):
+        return np.ascontiguousarray(
+            Arr[
+                k_idx[:, None, None, None],
+                lead_idx[None, :, None, None],
+                pole_idx[None, None, :, None],
+                eig_idx[None, None, None, :],
+            ]
+        )
+
+    number = int(role_info[0].replace("Worker", ""))
+    if usesave == False:
+        psi0 = pickout(CZ(D["psi_shape"]))
+        omg0 = pickout(CZ((NK, NL, NX, neig, NL, NX, NOT)))
+    elif usesave and LoadFromFull:
+        psi0 = pickout(np.load(name + "_save/last_psi.npy"))
+        transform_vec_Tv(psi0, Sm05)  # NEW
+        omg0 = pickout(np.load(name + "_save/last_omg.npy"))
+    elif usesave and LoadFromFull == False:
+        psi0 = np.load(name + "_save/last_Psi_" + role_info[0] + ".npy")
+        omg0 = np.load(name + "_save/last_Omg_" + role_info[0] + ".npy")
+        assert psi0.shape[0] == len(k_idx)
+        assert psi0.shape[1] == len(lead_idx)
+        assert psi0.shape[2] == len(pole_idx)
+        assert omg0.shape[0] == len(k_idx)
+        assert omg0.shape[1] == len(lead_idx)
+        assert omg0.shape[2] == len(pole_idx)
+
+    # # global_psi = CZ((NK, NL, NX, NOT, NO))
+    # # psi_tilde  = CZ((nk, NL, NX, NOT, NO))
+    
+    # Shared memory array for global_psi
+    gpsi_shape   = (NK, NL, NX, NOT, NO)
+    gpsi_size    = np.prod(gpsi_shape)
+    gpsi_nbytes  = gpsi_size * mpi_dtype_size
+    win          = MPI.Win.Allocate_shared(gpsi_nbytes, mpi_dtype_size, comm=comm)
+    gpsi_buf, gpsi_itemsize = win.Shared_query(0)
+    global_psi   = np.ndarray(buffer=gpsi_buf, 
+                              dtype=DT, 
+                              shape=gpsi_shape)
+    comm.Barrier() # Barrier 1, make global_psi
+    ###  global_sigHt = CZ((2*NK, NO, NO))
+    
+    ####################################
+    # Shared memery array for sig and H
+    ####################################
+    sigHt_shape  = (2 * NK, NO, NO)
+    # sigHt_size   = np.prod(sigHt_shape)
+    sigHt_nbytes = 0 # sigHt_size * mpi_dtype_size
+    win          = MPI.Win.Allocate_shared(sigHt_nbytes, mpi_dtype_size, comm=comm)
+    sigHt_buf, sigHt_itemsize = win.Shared_query(0)
+    global_sigHt = np.ndarray(buffer=sigHt_buf, 
+                              dtype=DT, 
+                              shape=sigHt_shape)
+    comm.Barrier() # Barrier 2, make global sigHt
+    
+    ####################################
+    #############+++++++++++############
+    ####################################
+    
+    global_sig   = CZ((NK, NO, NO))
+    global_Ht    = CZ((NK, NO, NO))
+    Delta_a      = np.zeros(NL)
+    local_error  = np.zeros(2)
+    tmp_psi      = CZ((nk, nl, nx, neig, NO))
+    tmp_psi_conj = CZ((nk, nl, nx, neig, NO))
+    tmp_omg      = CZ((nk, nl, nx, neig, NL, NX, NOT))
+    tmp_Ht       = CZ((nk, NO, NO))
+    
+    ####
+    H0  = S05 @ D["H_Ortho"] @ S05  # NEW
+    H0[np.abs(H0)<1e-13] = 0.0
+    H0_BW_L,H0_BW_U = bandwidth(H0)
+    H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
+    assert H0_BW_L == H0_BW_U
+    MM_nblocks = NO // H0_BW_L
+    if MM_nblocks < Nblocks_min_banded:
+        skip_bw = True
+    else:
+        skip_bw = False
+    del H0, H0_BW_L, H0_BW_U, MM_nblocks
+    ####
+    
+    # tmp_upper_Q = CZ((nk, nk, NO*(NO+1)))
+    PSIS = CZ((RK_N + 1,) + tmp_psi.shape)
+    OMGS = CZ((RK_N + 1,) + (nk, nl, nx, neig, NL, NX, NOT))
+
+    PSIS[-1] = psi0[:, :, :, :, :]
+    OMGS[-1] = omg0[:, :, :, :, :, :, :]
+    del psi0, omg0
+    Ixi_all  = D["Ixi"][k_idx, :, :, :NOT].copy()  # For Omega calculation
+    xi       = pickout(D["xi"])  ### [:, :, :, eig_idx].copy()#for Psi and Omega calc.
+    all_xi_1 = D["xi"][k_idx, :, :, :NOT] / (hbar**2)  # for Psi calc
+    transform_vec_vT(Ixi_all,  S05[k_idx])
+    transform_vec_Tv(xi,       S05[k_idx])
+    transform_vec_Tv(all_xi_1, S05[k_idx])
+
+    GL_P = pickout(D["GL_P"]).copy()
+    diff_GGP_GLP = pickout(D["diff_GGP_GLP"]).copy()
+    diff_GGM_GLM_all = D["diff_GGM_GLM"][k_idx][:, :, :, :NOT].copy()
+    Xpp = pickout(D["Xpp"]).copy()
+    Xpm_all = D["Xpm"][k_idx, :, :, :NOT].copy()
+
+    for i in range(Xpp.shape[-1]):
+        assert np.allclose(Xpp[:, :, :, i], Xpp[:, :, :, 0])
+    for i in range(Xpm_all.shape[-1]):
+        assert np.allclose(Xpm_all[:, :, :, i], Xpm_all[:, :, :, 0])
+    om_shape = (nk, nl * nx * neig, NL * NX * NOT)
+    alloc_psi_1 = CZ(tmp_psi.shape)
+    alloc_omg_1 = CZ((nk, NL * NX * NOT, NO))
+    alloc_omg_2_shape = (nk, nl * nx * neig, NX * NOT)
+
+    alloc_omg_3 = CZ((nk, nl * nx * neig, NO))
+    alloc_omg_4 = CZ((nk, nl * nx * neig, NL * NX * NOT))
+    orbidx_xi_nonzero = np.where(
+        (np.abs(xi) > dot_prod_zero_tol).any(axis=(0, 1, 2, 3))
+    )[0]
+    orbidx_Ixi_all_nonzero = np.where(
+        (np.abs(Ixi_all) > dot_prod_zero_tol).any(axis=(0, 1, 2, 3))
+    )[0]
+    orbidx_alpha = [
+        np.where(
+            (np.abs(Ixi_all[:, _ia, :, :]) > dot_prod_zero_tol).any(
+                axis=(0, 1, 2)
+            )
+        )[0]
+        for _ia in range(NL)
+    ]
+    xi_orbred = xi[..., orbidx_xi_nonzero].copy()
+    with open(filename, "a") as file:
+        file.write("idx_xi: " + str(orbidx_xi_nonzero) + "\n")
+        file.write(
+            "idx_xi fraction: "
+            + str(
+                np.abs(xi[:, :, :, :, orbidx_xi_nonzero]).sum()
+                / np.abs(xi).sum()
+            )
+            + "\n"
+        )
+        file.write("idx_Ixi: " + str(orbidx_Ixi_all_nonzero) + "\n")
+        file.write(
+            "idx_Ixi fraction: "
+            + str(
+                np.abs(xi[:, :, :, :, orbidx_Ixi_all_nonzero]).sum()
+                / np.abs(xi).sum()
+            )
+            + "\n"
+        )
+        for _ia in range(NL):
+            file.write(
+                "idx_Ixi, lead "
+                + str(_ia)
+                + " is "
+                + str(orbidx_alpha[_ia])
+                + "!\n"
+            )
+            file.write(
+                "idx_Ixi, lead "
+                + str(_ia)
+                + ", fraction: "
+                + str(
+                    np.abs(Ixi_all[:, _ia, :, :, orbidx_alpha[_ia]]).sum()
+                    / np.abs(Ixi_all[:, _ia]).sum()
+                )
+                + "\n"
+            )
+
+    alloc_psi_2 = CZ((nk, nl * nx * neig, len(orbidx_Ixi_all_nonzero)))
+    all_xi_1 = all_xi_1[:, :, :, :, orbidx_Ixi_all_nonzero].copy()
+    all_xi_shape_2 = (nk, NL * NX * NOT, alloc_psi_2.shape[-1])
+    psi_shape_2 = (nk, nl, nx, neig, alloc_psi_2.shape[-1])
+
+    alligned_arrs_1 = [
+        CZ((nk, nl * nx * neig, len(orbidx_alpha[_ia]))) for _ia in range(NL)
+    ]
+    alligned_arrs_2 = [
+        CZ((nk, NX * NOT, len(oidx))).transpose(0, 2, 1).copy()
+        for oidx in orbidx_alpha
+    ]
+    alligned_arr_3 = CZ((nk, nl * nx * neig, len(orbidx_xi_nonzero)))
+    alligned_arr_4 = (
+        CZ((nk, NL * NX * NOT, len(orbidx_xi_nonzero)))
+        .transpose(0, 2, 1)
+        .copy()
+    )
+    # Unchanging arrays
+    _multiply(
+        diff_GGM_GLM_all.reshape(nk, NL * NX * NOT, 1),
+        Ixi_all.reshape(nk, NL * NX * NOT, NO),
+        out=alloc_omg_1,
+    )
+    _multiply(
+        diff_GGP_GLP.reshape(nk, nl * nx * neig, 1),
+        xi.reshape(nk, nl * nx * neig, NO),
+        alloc_omg_3,
+    )
+    dPsi_const = _multiply(np.expand_dims(GL_P, 4), xi)
+    transform_vec_Tv(dPsi_const, Sm1[k_idx])  # Multiply with S^-1 factor
+
+    del Sm05, S05
+
+    for _ia in range(NL):
+        _vals = alloc_omg_1[:, _ia * NX * NOT: (_ia + 1) * NX * NOT]
+        alligned_arrs_2[_ia][:, :, :] = _vals[
+            :, :, orbidx_alpha[_ia]
+        ].transpose(0, 2, 1)
+        assert alligned_arrs_2[_ia].flags["OWNDATA"] == True
+    alligned_arr_3[:, :, :] = alloc_omg_3[:, :, orbidx_xi_nonzero]
+    assert alligned_arr_3.flags["OWNDATA"] == True
+
+    with open(filename, "a") as file:
+        import psutil
+        process = psutil.Process(os.getpid())
+        file.write(
+            "\n\nAllocated total initial memory usage: "
+            + str(process.memory_info().rss / 1024**2)
+            + " MiB\n\n"
+        )
+        file.write("dPSI - array shape: " + str(PSIS.shape))
+        file.write("\ndOMG - array shape: " + str(OMGS.shape))
+        del process, psutil
+
+    Sm1_sub = Sm1[k_idx][:, :, orbidx_Ixi_all_nonzero].copy()
+
+    h_ts = (0.0, 0.0)
+    while True:
+        Step_Fourth = 0
+        _Timer.reset()
+        _Timer.time(["Main Loop"])
+        while Step_Fourth == 0:
+            for i in range(RK_N):
+                _Timer.time(["Recieve System at ts"])
+                _idx_i = idxholder[i]
+                h_ts = comm.bcast(h_ts, root=0)
+                h, ts = h_ts
+                if h is None:
+                    return
+                if i == 0:
+                    _t0_ = 0.0 + ts
+                #comm.Bcast(global_sigHt, root=0)
+                # Recieve sigHt
+                _Timer.time(["Recieve System at ts", "Barrier 3 waittime"])
+                comm.Barrier() # Barrier 3, wait for assignment of values to
+                               # global sigHt
+                _Timer.time(["Barrier 3 waittime", "Recieve Delta and assign HSig"])
+                comm.Bcast(Delta_a,   root=0)
+                global_Ht[:, :, :]  = global_sigHt[0:NK, :, :]
+                global_sig[:, :, :] = global_sigHt[NK:, :, :]
+                
+                _Timer.time(
+                    ["Recieve Delta and assign HSig", "Make Xpp, Xpm, tmp_sig & tmp_Ht"]
+                )
+                loc_delta = Delta_a[lead_idx]
+                Xpp_delta =     Xpp     + loc_delta[nax, :, nax, nax]
+                Xpm_all_delta = Xpm_all + Delta_a[nax, :, nax, nax]
+                tmp_sig = global_sig[k_idx]
+                
+                # tmp_Ht  = Sm1[k_idx] @ global_Ht[k_idx]  # 1. part of 1. term
+                # Compute (H^T @ S^-T) and conjugate after to get S^-1 @ H
+                if _orthogonal == False:
+                    bandedmatmat(global_Ht[k_idx].transpose(0,2,1), 
+                                 Sm1[k_idx].transpose(0,2,1), 
+                                 tmp_Ht, Nblocks_min_banded, skip_bw)
+                    tmp_Ht[:,:,:] = tmp_Ht.transpose(0,2,1)
+                else:
+                    tmp_Ht[:,:,:] = global_Ht[k_idx,:,:]
+                
+                tmp_Ht /= hbar
+
+                _Timer.time(
+                    ["Make Xpp, Xpm, tmp_sig & tmp_Ht",
+                     "Initial Matrix Multiplication"]
+                )
+                if i == 0:
+                    tmp_psi[:, :, :, :, :] = PSIS[-1]
+                    tmp_omg[:, :, :, :, :, :, :] = OMGS[-1]
+                else:
+                    ## BOTTLENECK RIGHT HERE AT THE MOMENT
+                    ## THIS SUM IS BOTTLENECKED BY MEMORY SPEED
+                    ## MM( PSIS[_idx_i].transpose(1, 2, 3, 4, 5, 0),
+                    ##    B[i, _idx_i],
+                    ##    tmp_psi,   )
+                    ## MM( OMGS[_idx_i].transpose(1, 2, 3, 4, 5, 6, 7, 0),
+                    ##    B[i, _idx_i],
+                    ##    tmp_omg,   )
+                    ## print( PSIS.shape, B[i].copy(), np.array(_idx_i))
+                    ## NEW FUNCTIONS TO DO THIS
+                    step_psi_forward_nb(PSIS, B[i].copy(),tmp_psi,
+                                       np.array(_idx_i) )
+                    step_omg_forward_nb(OMGS, B[i].copy(),tmp_omg,
+                                       np.array(_idx_i) )
+                
+                _Timer.time(["Initial Matrix Multiplication",
+                             "Send local Psi, recieve Global Psi, conjugate"] )
+                ####comm.Send(tmp_psi, dest=0, tag=Worker_tags[number])
+                # Shared Memory
+                np.conj(tmp_psi, # write to tmp_psi_conj
+                        out=tmp_psi_conj )
+                global_psi[
+                       k_idx[None, :, None, None],
+                       lead_idx[None, :, None, None],
+                       pole_idx[None, None, :, None],
+                       eig_idx [None, None, None, :],
+                       :,
+                   ] = tmp_psi_conj[:,:,:,:] # Insert complex conjugate
+                comm.Barrier() # Wait for all processes to assign their values.
+                               # Barrier 4, wait for assignm. to global_psi (psi conj.)
+                _Timer.time(["Send local Psi, recieve Global Psi, conjugate",
+                             "Calculate local dPsi/dt P1 (new matvec)"] )
+                
+                # Calculation of dΨ/dt
+                # Original: 
+                # NOTE: tmp_Ht is not sparse, its really S^-1 @ H
+                MM( tmp_psi,
+                   np.expand_dims(
+                       tmp_Ht.transpose((0,2,1)),(1, 2)
+                   ),
+                   PSIS[i],
+                )
+                
+                _Timer.time(["Calculate local dPsi/dt P1 (new matvec)",
+                             "Calculate local dPsi/dt P2"] )
+                
+                _multiply(
+                    np.expand_dims(Xpp_delta/hbar, 4),
+                    tmp_psi,
+                    out=alloc_psi_1,
+                )  # - x_axc(t)Ψ_axc  term
+                PSIS[i] -= alloc_psi_1
+                _Timer.time(["Calculate local dPsi/dt P2",
+                             "Calculate local dPsi/dt P3"]
+                            )
+                
+                # constant inhomogenous term
+                PSIS[i] += dPsi_const
+                _Timer.time(["Calculate local dPsi/dt P3",
+                             "Calculate local dPsi/dt P4"]
+                            )
+                # Reduced orbitals to nonzero xi
+                sig_red = np.expand_dims(tmp_sig[:,:,orbidx_xi_nonzero
+                                                 ].transpose((0, 2, 1)), (1, 2))
+                MM(xi_orbred,
+                   sig_red,
+                   alloc_psi_1,
+                   )  # diff * sig * xi    term
+                
+                # original
+                # MM(xi,
+                #    np.expand_dims(tmp_sig.transpose((0, 2, 1)), (1, 2)),
+                #    alloc_psi_1,
+                #    )  # diff * sig * xi    term
+                
+                _multiply(
+                    np.expand_dims(diff_GGP_GLP, 4),
+                    alloc_psi_1,
+                    out=alloc_psi_1,
+                )
+                PSIS[i] += alloc_psi_1
+                _Timer.time(["Calculate local dPsi/dt P4",
+                             "Calculate local dPsi/dt P5"]
+                            )
+                
+                MM(
+                    tmp_omg.reshape(om_shape),
+                    all_xi_1.reshape(all_xi_shape_2),
+                    alloc_psi_2,
+                )  # new term           sum over omega xi term
+                _Timer.time(["Calculate local dPsi/dt P5",
+                             "Calculate local dPsi/dt P6"]
+                            )
+                
+                PSIS[i] += np.matmul(Sm1_sub[:, nax, :, :], 
+                                     alloc_psi_2[:, :, :, nax]
+                                     )[..., 0].reshape(nk, nl, nx, neig, NO)
+                PSIS[i] *= (-1j * h)
+                
+                _Timer.time(["Calculate local dPsi/dt P6",
+                             "Calculate local dOmega/dt"]
+                            )
+                
+                # Calculation of dΩ/dt
+                # Ψ * xi^T  term
+                for _ia in range(NL):
+                    alligned_arrs_1[_ia][:, :, :] = tmp_psi.reshape(
+                        nk, nl * nx * neig, NO
+                    )[:, :, orbidx_alpha[_ia]]
+                    alligned_arrs_1[_ia] *= h
+                    MM(alligned_arrs_1[_ia],
+                       alligned_arrs_2[_ia],
+                       OMGS[i, :, :, :, :, _ia, :, :].reshape(
+                        alloc_omg_2_shape
+                    ),      # assign, used, resets from last step
+                    )       # Be sure the arr. given to MM can be assigned to!
+                # Ψ^T * xi         term
+                
+                alligned_arr_4[:, :, :] = global_psi.reshape(
+                    nk, NL * NX * NOT, NO
+                ).transpose((0, 2, 1))[:, orbidx_xi_nonzero, :]
+                alligned_arr_4 *= h
+                MM(alligned_arr_3, alligned_arr_4, alloc_omg_4)
+                
+                OMGS[i] += alloc_omg_4.reshape(nk, nl, nx, neig, NL, NX, NOT)
+                # *hard_opti assumes Xpp_delta[:,:,:,c] is the same for all c
+                # *hard_opti assumes Xpm_all_delta[:,:,:,c] is the same for all c
+                OuterSubtraction_hard_opti_V2(
+                    Xpp_delta * (1j * h / hbar),
+                    Xpm_all_delta * (1j * h / hbar),
+                    tmp_omg,
+                    OMGS[i],
+                )
+                
+                _Timer.time(["Calculate local dOmega/dt"])
+
+            _Timer.time(["Calculate Psi error"])
+            local_error[0] = TERR2_psi_nb(PSIS[0:RK_N], CT)
+            _Timer.time(["Calculate Psi error",
+                         "Calculate Omega error"])
+            local_error[1] = TERR2_omg_nb(OMGS[0:RK_N], CT)
+            _Timer.time(["Calculate Omega error",
+                         "Send local error and recieve Succes/Failure"])
+            comm.Send(local_error, dest=0, tag=Worker_tags[number])
+            Step_Fourth = comm.bcast(Step_Fourth, root=0)
+            _Timer.time(["Send local error and recieve Succes/Failure"])
+
+        _Timer.time(["Save State"])
+
+        pass_checkpoint_and_not_saved = (_t0_ > checkpoints) * (
+            checkpoint_bookkeeper == 0
+        )
+        if save_checkpoints and pass_checkpoint_and_not_saved.any():
+            np.save(
+                name + "_save/" + "last_Psi_" + role_info[0] + ".npy", PSIS[-1]
+            )
+            np.save(
+                name + "_save/" + "last_Omg_" + role_info[0] + ".npy", OMGS[-1]
+            )
+            np.save(
+                name + "_save/" + "last_time_" + role_info[0] + ".npy", _t0_
+            )
+            np.save(
+                name + "_save/" + "last_stepsize_" + role_info[0] + ".npy", h
+            )
+            idx = np.where(pass_checkpoint_and_not_saved)[0][0]
+            checkpoint_bookkeeper[idx] = 1
+        _Timer.time(["Save State"])
+        _Timer.time(["Update Psi"])
+        step_fourth_psi(PSIS, CH)
+        _Timer.time(["Update Psi", "Update Omega"])
+        step_fourth_omg(OMGS, CH)
+        _Timer.time(["Update Omega"])
+        _Timer.time(["Main Loop"])
+        mystring = _Timer.generate_timings()
+        if print_timings:
+            with open(filename, "a") as file:
+                file.write(mystring)
+
+
+if ROLE == "Sigma":
+    SIGMA()
+elif "Worker" in ROLE:
+    Worker(ROLE_INFO)
+comm.Abort()

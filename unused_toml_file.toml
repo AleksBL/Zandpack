@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+[project]
+dynamic = ["version"]
+name = "Zandpack"
+dependencies = ["numpy",
+                "numba",
+                "sisl",
+                "matplotlib",
+                "scipy",
+                "siesta_python",
+                "Block_matrices",
+                "Gf_Module"
+               ]
+authors = [
+  {name = "Aleksander Bach Lorentzen", email = "aleksander.bl@proton.me"},
+]
+maintainers = [
+  {name = "Aleksander Bach Lorentzen", email = "aleksander.bl@proton.me"}
+]
+description = "Package for calculating timedependent electronic transport in open quantum systems using LCAO models from DFT or tight-binding. Allows for doing real time TD-DFT level calculations within a Lorentzian expansion of the electrode level-width functions. An efficient eigenvalue decomposition hereof is used. Developed at the Technical University of Denmark, in the group of Prof. Mads Brandbyge. The package is intended for use in conjunction with the SIESTA code, but can also be used with DFTB+ and any other code one can make a python wrapper for."
+readme = "README.md"
+license = "MPL-2.0"
+license-files = ["LICENCE"]
+keywords = ["NEGF", "timedependent", "quantum", "transport", "open system", "siesta", "TDDFT"]
+classifiers = [
+  "Development Status :: 5 - Beta",
+  "Intended Audience :: Theoretical physicists",
+  "Topic :: Software Development :: Modelling software",
+  "Programming Language :: Python :: 3",
+]
+[project.urls]
+Homepage = "https://github.com/AleksBL/Zandpack"
+
+

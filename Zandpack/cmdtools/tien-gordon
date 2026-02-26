@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Feb  8 14:33:20 2026
+
+@author: aleks
+"""
+
+import sys, os
+import numpy as np
+from pickle import load
+from scipy.special import jn
+import sisl
+from mpi4py import MPI
+from time import time, sleep
+from scipy.integrate import quad_vec
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+args = sys.argv[1:]
+if rank == 0:
+    print('tien-gordon program start')
+    print('')
+    print('sys.argv:', sys.argv)
+    print('OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)')
+    print('')
+_check = True
+#Default values
+options = {'file': 'SaveFile',   # directory
+           'dE':0.1,
+           'eta':1e-3,
+           'device':None,
+           'ampl_min':None,
+           'ampl_max':None,
+           'hw_min': None,
+           'hw_max': None,
+           'bias': None,
+           'kT':None,
+           'Emin':-5.0,
+           'Emax': 5.0,
+           'k':'0,0,0',
+           'device_set':'1,1,1',
+           'outfile':'tgout.npz',
+           'showplot':'False',
+           'wtol':'1e-6',
+           'int_epsrel':'1e-3',
+           'int_epsabs':'1e-4'
+           }
+
+pref = 'tien-gordon: '
+if '--help' in args and rank==0:
+    print('Keywords and default values. Assign with "keyword=value" argument after tien-gordon command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+if rank == 0:
+    print( options )
+if options["device"]==None:
+    assert 1 == 0, "No a device Hamiltonian"
+#if options["amplitudes"]==None:
+#    assert 1 == 0, "Specify amplitudes of periodic perturbation"
+#if options["hw"]==None:
+#    assert 1 == 0, "Specify frequencies of periodic perturbations"
+if options["bias"]==None:
+    assert 1 == 0, "Specify starting bias"
+if '.SiP' in options['device']:
+    mode = 'sisl'
+    Dev  = load(open(options["device"], "rb"))
+    dset = [int(t) for t in options['device_set'].split(',')]
+    Hd   = Dev.read_TSHS()
+    Hd.set_nsc(dset)
+    def convert(a):
+        if a=='-a1': return '-A'
+        if a=='+a1': return '+A'
+        if a=='-a2': return '-B'
+        if a=='+a2': return '+B'
+        if a=='-a3': return '-C'
+        if a=='+a3': return '+C'
+    SE   = [sisl.physics.RecursiveSI(e.read_TSHS(), 
+                                     convert(e.semi_inf)) 
+            for e in Dev.elecs]
+    eidx = [Hd.a2o(e, all=True) 
+            for e in Dev.elec_inds ]
+    kp = np.array([float(k) for k in options['k'].split(',')])
+if os.path.isdir(options['device']):
+    mode='fitted'
+    from Zandpack.FittedSelfEnergy import from_saved_file
+    H    = np.load(options["device"] + "/Arrays/SCF_Hlast_Ortho.npy")
+    _SE   = from_saved_file(options["device"]+"/Arrays")
+    class dummy_se:
+        # Wrapper for the fittedSE from Zandpack.FittedSelfEnergy
+        def __init__(self, fitSE, kidx):
+            self.SE   = fitSE
+            self.kidx = kidx
+            self.no   = fitSE.Gi.shape[-1]
+        def self_energy(self, E, _kp):
+            # _kp is not used
+            _E = np.array([E])
+            return self.SE.evaluate(_E)[self.kidx, 0]
+    eidx = [np.arange(H.shape[-1])] * len(SE)
+    kidx = int(options['k'])
+    # We do this in the orthogonalized basis
+    S    = np.eye(H.shape[-1])
+    H    = H[kidx]
+    assert H.ndim == 2
+    assert S.ndim == 2
+    SE = [dummy_se(se, kidx) for se in _SE]
+    
+
+# N    = int(options['n_terms'])
+hw_min = float(options['hw_min'])
+hw_max = float(options['hw_max'])
+
+bias   = np.array([float(b) for b in options['bias'].split(',') ])
+
+ampl_min = float(options['ampl_min'])
+ampl_max = float(options['ampl_max'])
+epsrel   = float(options['int_epsrel'])
+epsabs   = float(options['int_epsabs'])
+
+_eta = 1j * float(options['eta'])
+Eg = np.arange(float(options['Emin']), 
+               float(options['Emax']), 
+               float(options['dE'])  ) + _eta
+
+nE    = len(Eg)
+nelec = len(SE)
+T   = np.zeros((nE, len(SE), len(SE)),dtype=complex)
+PIT = np.zeros((nE, len(SE)         ),dtype=complex)
+
+if options['kT'] is None:
+    kTa = np.array([0.025] * nelec)
+else:
+    kTa = np.array([float(k) for k in options['kT'].split(',')])
+
+SEr_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
+SEl_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
+SEg_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
+
+if mode=='sisl':
+    Sk = Hd.Sk(k=kp); Hk = Hd.Hk(k=kp)
+elif mode=='fitted':
+    Hk = H; Sk = S
+
+wtol = float(options['wtol'])
+def get_nmax(ampl, hw, nsamps = 4):
+    n  =   nsamps//2
+    n2 = -(nsamps//2) 
+    cond = True
+    while cond:
+        tester = np.array([jn(_n, ampl / hw) * (1j**_n) 
+                           for _n in range(n-nsamps//2, n + nsamps//2+1)])
+        tester2 = np.array([jn(_n, ampl / hw) * (1j**_n) 
+                           for _n in range(n2-nsamps//2, n2 + nsamps//2+1)])
+        
+        if (np.abs(tester)<wtol).all() and (np.abs(tester2)<wtol).all():
+            cond = False
+        n += nsamps // 2
+        n2-= nsamps // 2
+    
+    return n - nsamps//2
+def fd(E, kT):
+    x = E/kT
+    if x>150.0:
+        return 0.0
+    if x<-150.0:
+        return 1.0
+    return 1/(np.exp(x) + 1.0)
+def calc_J(E, AMPL, HW, BIAS, KTA):
+    Nmax =  get_nmax(np.abs(ampl).max(), np.abs(hw).max())
+    Ei = E + _eta
+    NELEC = len(AMPL)
+    for j in range(NELEC):
+        SEr_eval[j] = 0.0
+        SEl_eval[j] = 0.0
+        SEg_eval[j] = 0.0
+        Aj   = AMPL[j]
+        hwj  = HW[j]
+        eV0j = BIAS[j]
+        kTj  = KTA[j]
+        for n in range(-Nmax,Nmax + 1):
+            fact = jn(n, Aj / hwj) * (1j**n)
+            ser  = SE[j].self_energy(Ei - n*hwj - eV0j, k=kp)
+            gam  = 1j * (ser - ser.conj().T)
+            fx   = fd(Ei.real - n*hwj - eV0j, kTj)
+            SEr_eval[j] += fact * ser
+            SEl_eval[j] += (1j *  fact *      fx  ) * gam
+            SEg_eval[j] -= (1j * (fact * (1 - fx) ))* gam
+    Gr = Sk * Ei
+    Gr-= Hk
+    SEg = np.zeros(Gr.shape,dtype=complex)
+    SEl = np.zeros(Gr.shape,dtype=complex)
+    for ie in range(NELEC):
+        Gr [eidx[ie][:, None], eidx[ie][None,:]] -= SEr_eval[ie]
+        SEg[eidx[ie][:, None], eidx[ie][None,:]] += SEg_eval[ie]
+        SEl[eidx[ie][:, None], eidx[ie][None,:]] += SEl_eval[ie]
+    if mode == 'sisl':
+        Gr  = np.linalg.inv(  Gr.toarray()    )
+    elif mode=='fitted':
+        Gr = np.linalg.inv(Gr)
+    Ga = Gr.T.conj()
+    # Gl = Gr @ SEl @ Ga
+    # Gg = Gr @ SEg @ Ga
+    out = np.zeros(NELEC)
+    for ie in range(NELEC):
+        idx  = eidx[ie]#[:, None]
+        ## out[ie]  = 2 * np.einsum('ij,ji',Gg[idx, idx.T], SEl_eval[ie]).real
+        ## out[ie] -= 2 * np.einsum('ij,ji',Gl[idx, idx.T], SEg_eval[ie]).real
+        Gg2  = Gr[idx] @ SEg @ Ga[:, idx]
+        Gl2  = Gr[idx] @ SEl @ Ga[:, idx]
+        out[ie]  = 2 * np.einsum('ij,ji',Gg2, SEl_eval[ie]).real
+        out[ie] -= 2 * np.einsum('ij,ji',Gl2, SEg_eval[ie]).real
+    return out
+
+N_hw   = int((hw_max - hw_min)/float(options['dE'])) + 1
+N_ampl = int((ampl_max - ampl_min)/float(options['dE'])) + 1
+hw_v   = np.logspace(np.log10(hw_min), np.log10(hw_max),     N_hw)
+ampl_v = np.logspace(np.log10(ampl_min), np.log10(ampl_max), N_ampl)
+PI     = np.zeros((len(hw_v), len(ampl_v), 2))
+ERR    = np.zeros((len(hw_v), len(ampl_v)   ))
+
+it     = 0
+for i in range(len(hw_v)):
+    for j in range(len(ampl_v)):
+        if np.mod(it, size) == rank:
+            t1 = time()
+            hw = np.array([hw_v[i], 
+                           hw_v[i]])
+            ampl = np.array([ ampl_v[j], 
+                             -ampl_v[j] ])
+            nmax = get_nmax(ampl_v[j], hw_v[i])
+            limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.1
+            limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.1
+            if options['showplot']=='True':
+                import matplotlib.pyplot as plt
+                Egrid = np.linspace(limlow, limhigh, 500) + _eta
+                res = np.array([calc_J(Ei, ampl, hw, bias, kTa) 
+                                for Ei in Egrid])
+                plt.plot(Egrid.real, res[:,1] - res[:,0])
+                plt.title("hw="+str(np.round(hw_v[i],3)) + ", ampl=" + str(np.round(ampl_v[j],3)))
+                plt.show()
+            out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
+            lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
+            higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
+            
+            PI[i,j,0] = out[0][0]+lower[0][0]+higher[0][0]
+            PI[i,j,1] = out[0][1]+lower[0][1]+higher[0][1]
+            ERR[i,j]  = out[1] +lower[1]+higher[1]
+            t2 = time()
+            print(  "rank " + str(rank) + ", progress: " 
+                  + str(np.round(it*100 /(len(hw_v) * len(ampl_v)), 1)) 
+                  + ", T="+str(np.round(t2-t1, 1))+"s, res="+str(out[0]) 
+                  + " #Bessel="+str(nmax) + " lims"+str(np.round(limlow,1)) 
+                  + " "+str(np.round(limhigh,1))
+                  )
+        it += 1
+
+np.savez_compressed("rank"+str(rank)+options["outfile"], 
+                    Jrect = PI,
+                    err   = ERR,
+                    )
+comm.Barrier()
+sleep(0.05)
+if rank == 0:
+    Jout = np.zeros((len(hw_v), len(ampl_v), 2))
+    Err  = np.zeros((len(hw_v), len(ampl_v)))
+    for i in range(size):
+        f   = np.load("rank"+str(i)+options["outfile"])
+        res = f["Jrect"]
+        Jout += res
+        Err  += f["err"]
+    np.savez_compressed(options["outfile"],
+                        Jrect = Jout, err = Err,
+                        hw = hw_v, ampl=ampl_v)

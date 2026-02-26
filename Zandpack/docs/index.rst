@@ -42,7 +42,7 @@ It has been released in relation to the publication here:
         
     .. grid-item-card:: -- Support
 
-        E-mail: aleksander.bach@dipc.org
+        E-mail: aleksander.bl@proton.me
         
 
 .. toctree::

@@ -59,7 +59,9 @@ options = {'Contour':'None',
            'fact_kT': '10.0',
            'tolerance':'1e-8',
            'quadvec_workers':'1',
-           'Bias':'None'}
+           'Bias':'None',
+           'save_last_H':'True',
+           }
 
 SCF_place = __file__[:-3]
 
@@ -314,6 +316,8 @@ if options['DM_out_file'] == 'None':
     np.save(options['file']+'/Arrays/DM_Ortho.npy', rhof)
 else:
     np.save(options['DM_out_file'], rhof)
+if options['save_last_H'] == 'True':
+    np.save(options['file']+'/Arrays/SCF_Hlast_Ortho.npy', rhof)
 
 
 
@@ -321,16 +325,9 @@ else:
 
 
 
-
-
-
-
-
-
-#npieces= int(options['nprocs'])*4 +1
-#Cntr_BW = np.linspace(lims[0], lims[1], npieces)
-#Cntr_BW = Cntr_BW[0:-1]+1j*Cntr_BW[1:]
-
+# npieces= int(options['nprocs'])*4 +1
+# Cntr_BW = np.linspace(lims[0], lims[1], npieces)
+# Cntr_BW = Cntr_BW[0:-1]+1j*Cntr_BW[1:]
 # def funci_noneq(islice):
 #     rhof = np.zeros((nk, no, no), dtype=np.complex128)
 #     for i in islice:

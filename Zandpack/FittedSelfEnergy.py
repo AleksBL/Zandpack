@@ -66,7 +66,7 @@ def from_eigendecomp(vals, vecs, ivecs, out):
         out += vals[io] * vecs[io,:].reshape(-1, 1) * ivecs[io,:].reshape(1,-1)
     
 
-def from_saved_file(directory, ik = None):
+def from_saved_file(directory, ik = None, print_nonherm_warning=True):
     """
         directory: A saved directory containing the needed quantities for the
         propagation scheme, plus the eigenvalues and eigenvectors of the 
@@ -100,6 +100,8 @@ def from_saved_file(directory, ik = None):
             eigval  =  EigVal_Gl[i,kidx,:, :]
             eigvec  =  xi [kidx,i,0:Nl, :, :]
             ieigvec =  Ixi[kidx,i,0:Nl, :, :]
+            if np.allclose(ieigvec.conj(), eigvec)==False:
+                print('WARNING: YOUR LOADED EIGENVECTORS ARE NOT RELATED BY A COMPLEX CONJUGATION. PLEASE FIND OUT WHY.')
             no      =  xi.shape[-1]
             Coeffs  =  np.zeros((len(kidx), Nl, no, no), dtype = np.complex128)
             for jk in range(len(kidx)):
