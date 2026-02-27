@@ -38,7 +38,7 @@ Zandpack depends on the following packages:
     - siesta_python
     - Block_matrices
     - Gf_Module
-The "Block_matrices" and "Gf_Module" codes can be found on GitHub https://github.com/AleksBL
+The "Block_matrices", "Gf_Module" and siesta_python codes can be found on GitHub https://github.com/AleksBL and are installed analogously to this code (download and pip install...).
 
 ## Documentation
 A html file can be found in the docs/_build/html directory. 
