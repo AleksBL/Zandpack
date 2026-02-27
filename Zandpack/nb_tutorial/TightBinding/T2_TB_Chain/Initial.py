@@ -4,7 +4,7 @@ from time import time
 from Zandpack.td_constants import hbar
 from Zandpack.Loader import load_dictionary
 name             = 'Chain'
-eps              = 1e-6        # RK45 error tolerance
+eps              = float(np.load("epsilon.npy"))        # RK45 error tolerance
 t0, t1           = -100.0, 200.0  # Start and End
 usesave          = False        # Should the code use a previously saved run?
 LoadFromFull     = False       # Have you stiched the previous run results?

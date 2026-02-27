@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from time import time
+from Zandpack.Loader import load_dictionary
 from Zandpack.td_constants import hbar
 
 name             = 'RSSE'
@@ -16,26 +17,8 @@ stepsize         = 0.1         # Initial stepsize. Overwritten when usesave=True
 n_dm_compress    = 10
 save_PI          = True
 
-# Read in stuff, you probably dont need to change anything here
 Adir             = name + '/Arrays/'
-Arrs             = {}
-files = os.listdir(Adir)
-class load_dictionary:
-    def __init__(self, dir):
-        self.dir = dir
-        self.timer = time
-        self.times = [self.timer()]
-    def __getitem__(self, x):
-        self.times += [time()]
-        if max(self.times) - min(self.times)>120:
-            assert  1 == 0
-        return np.load(self.dir+x+'.npy')
-
 Arrs = load_dictionary(name+'/Arrays/')
-
-#for f in files:
-#    Arrs.update({f[:-4]: np.load(Adir+f)})
-# hbar is currently doubly defined in the code, this should be equal to the hbar used in the TimedepependentTransport module. Bug fix for the future
-
 steps_for_bondcurrent = 10    # ??
+
 

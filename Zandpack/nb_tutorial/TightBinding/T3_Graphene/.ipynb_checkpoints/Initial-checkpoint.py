@@ -20,3 +20,5 @@ steps_for_bondcurrent = 10    # ??
 # Read in stuff, you probably dont need to change anything here
 Adir             = name + '/Arrays/'
 Arrs = load_dictionary(name+'/Arrays/')
+
+

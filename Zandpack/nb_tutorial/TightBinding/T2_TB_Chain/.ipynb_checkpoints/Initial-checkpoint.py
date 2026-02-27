@@ -3,11 +3,11 @@ import os
 from time import time
 from Zandpack.td_constants import hbar
 from Zandpack.Loader import load_dictionary
-name             = 'Gr'
+name             = 'Chain'
 eps              = 1e-6        # RK45 error tolerance
 t0, t1           = -100.0, 200.0  # Start and End
-usesave          = True       # Should the code use a previously saved run?
-LoadFromFull     = True       # Have you stiched the previous run results?
+usesave          = False        # Should the code use a previously saved run?
+LoadFromFull     = False       # Have you stiched the previous run results?
 saveevery        = 50          # How often to write the current and DM to file
 checkpoints      = [40.0]       # When to save full system state
 save_checkpoints = True        # If to save full system state
