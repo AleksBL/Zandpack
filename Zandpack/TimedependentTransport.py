@@ -1572,10 +1572,14 @@ class TD_Transport:
             mm2 = M(m1.imag)
             plt.scatter(line, mm1,label = r'Re[Sampled $\Gamma$]',marker = '*',s = size, color='b')
             plt.scatter(line, mm2,label = r'Im[Sampled $\Gamma$]',marker = '*',s = size, color='y')
-            diff = min((mm1.min(), mm2.min())) - max((mm1.max(), mm2.max()))
+            diff = max((mm1.max(), mm2.max())) - min((mm1.min(), mm2.min()))
             plt.ylim(min((mm1.min(), mm2.min())) - diff*0.05,
                      max((mm1.max(), mm2.max())) + diff*0.05
                     )
+            diff = (self.Contour.real.max() - self.Contour.real.min())
+            plt.xlim(self.Contour.real.min() - diff*0.05,
+                     self.Contour.real.max() + diff*0.05)
+            
         if hasattr(self, 'NO_fitted_lorentzians'):
             if NO:
                 m2 = self.NO_fitted_lorentzians[lead]
@@ -1658,14 +1662,16 @@ class TD_Transport:
             g    = m2.gamma.copy()
             
             if cl_lims[1] is None:
-                ymax =  max((y.real.max(), y.imag.max()))
+                ymax =  max((y.real.max() , y.imag.max()))* 1.05
             else:
                 ymax = cl_lims[1]
             
             if cl_lims[0] is None:
-                ymin =  max((y.real.min(), y.imag.min()))
+                ymin =  min((y.real.min(), y.imag.min())) * 1.05
             else:
                 ymin = cl_lims[0]
+            ymax += (ymax-ymin) / 50
+            ymax -= (ymax-ymin) / 50
             
             for i in range(len(ei[ik])):
                 plt.vlines(ei[ik, i], ymin, ymax, alpha = 0.25)
@@ -1799,7 +1805,7 @@ class TD_Transport:
                 I,J,i,j = idx[count]
                 rn, ro  = self.run_curvefit(e,I,J,i,j, ik = ik , fix_L_idx=fix_L_idx)
                 if rn is not None:
-                    self.setLval(e, I, J, i, j, rn)
+                    self.setLval(e, I, J, i, j, rn, ik=ik)
     
     def Inspect_Transmission(self,i, j,lead = 0, kpnt = None,
                              return_result = False, invinp = None, xlims = None):
