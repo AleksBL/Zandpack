@@ -1,6 +1,6 @@
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
-[![Version: 1.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)]
+[![Version: 1.0](https://img.shields.io/badge/Version%201.0)]
 
 # Introduction
 (Repo setup in progress. Expect more tutorials and polish over the next week  (26.02.2026))
