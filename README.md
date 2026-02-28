@@ -29,7 +29,6 @@ Additionally, add the these two folders to your PATH environment variable:
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/cmdtools:$PATH"
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpi:$PATH"
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpitest:$PATH"
-   
 ```
 Zandpack depends on the following packages: 
 - numpy
@@ -46,13 +45,13 @@ Zandpack depends on the following packages:
 The "Block_matrices", "Gf_Module" and siesta_python codes can be found on GitHub https://github.com/AleksBL and are installed analogously to this code (download and pip install...).
 
 ## Documentation
-A html file can be found in the docs/_build/html directory. 
+A html file can be found in the docs/_build/html directory. This containes additional information about the code usage and structure. 
 
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
 
-## Support 
-Users can get support by submitting an issue on the Zandpack Github page. Requests can also be directed at aleksander.bl@proton.me.
+## Contact 
+Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me.
 ## Licence
 Zandpack is released under the Mozilla Public License v2.0. See the LICENCE file in the Zandpack directory.
 
