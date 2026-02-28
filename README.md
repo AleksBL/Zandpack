@@ -30,14 +30,17 @@ Additionally, add the these two folders to your PATH environment variable:
    
 ```
 Zandpack depends on the following packages: 
-    - numpy
-    - numba
-    - scipy
-    - sisl
-    - matplotlib
-    - siesta_python
-    - Block_matrices
-    - Gf_Module
+- numpy
+- numba
+- scipy
+- sisl
+- psutil
+- joblib 
+- matplotlib
+- siesta_python
+- Block_matrices
+- Gf_Module
+
 The "Block_matrices", "Gf_Module" and siesta_python codes can be found on GitHub https://github.com/AleksBL and are installed analogously to this code (download and pip install...).
 
 ## Documentation
