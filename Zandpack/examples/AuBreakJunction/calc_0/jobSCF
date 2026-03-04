@@ -1,0 +1,41 @@
+#!/bin/bash
+#SBATCH --partition=general # This is the default partition
+#SBATCH --qos=test
+#SBATCH --job-name=calc0
+#SBATCH --output=run0.out
+#SBATCH --error=run0.error
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --time=00:09:00
+#SBATCH --mem=10G
+#SBATCH --mail-user=aleksander.bach@dipc.org
+#SBATCH --mail-type=ALL
+
+# module load Siesta/5.0.1-foss-2023a
+module load intel
+module load Anaconda3
+
+conda activate /scratch/abalo/conda-env/scc-test
+
+
+
+
+export filename=TDT2T_G0
+rm *.npy 
+rm *.npz
+
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export linearize=False
+python3 DFTCalculator.py &
+sleep 15s
+
+SCF Dir=$PWD file=$filename
+export linearize=True
+python3 Bias.py
+SCF Dir=$PWD file=$filename DM_randomness=0.0
+
+kill %1
+

@@ -1,0 +1,27 @@
+#!/bin/bash
+#SBATCH --partition=general # This is the default partition
+#SBATCH --qos=regular
+#SBATCH --job-name=3E
+#SBATCH --output=run.out
+#SBATCH --error=run.error
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --time=04:00:00
+#SBATCH --mem=100G
+#SBATCH --mail-user=aleksander.bach@dipc.org
+#SBATCH --mail-type=ALL
+
+# module load Siesta/5.0.1-foss-2023a
+module load intel
+module load Anaconda3
+
+conda activate /scratch/abalo/conda-env/scc-test
+
+export PATH="/scratch/abalo/dftbplus-24.1.x86_64-linux/bin:$PATH"
+export PATH="/scratch/abalo/Code/PythonModules/Zandpack/Zandpack/cmdtools:$PATH"
+export PATH="/scratch/abalo/Code/PythonModules/Zandpack/Zandpack/mpi:$PATH"
+export OMP_NUM_THREADS=12
+export NUMBA_NUM_THREADS=1
+export LINEARIZE="True"
+psinought Dir=$PWD file=3E_new Axb_solver=lgmres steptol=1e-7

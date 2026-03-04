@@ -1,0 +1,24 @@
+#!/bin/bash
+#SBATCH --partition=general # This is the default partition
+#SBATCH --qos=regular
+#SBATCH --job-name=calc0
+#SBATCH --output=run0.out
+#SBATCH --error=run0.error
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --time=23:00:00
+#SBATCH --mem=200G
+#SBATCH --mail-user=aleksander.bach@dipc.org
+#SBATCH --mail-type=ALL
+
+module load intel
+module load Anaconda3
+conda activate /scratch/abalo/conda-env/scc-test
+
+export filename=TDT2T_G1
+export linearize=True
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMBA_NUM_THREADS=1
+Adiabatic Dir=$PWD file=$filename DOS_dE=0.002 outfile=SSf2 num_procs=12 dt=1.0 eta=0.0 dE=0.005 xkT=15

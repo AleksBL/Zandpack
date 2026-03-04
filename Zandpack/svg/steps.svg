@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="200.40062"
+   height="55.384838"
+   viewBox="0 0 185.59427 0"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   sodipodi:docname="steps.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="5.4800094"
+     inkscape:cx="92.426849"
+     inkscape:cy="9.2153127"
+     inkscape:window-width="1920"
+     inkscape:window-height="1052"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-35.148967,-120.89699)">
+    <rect
+       style="fill:#cccccc;stroke-width:0.264583"
+       id="rect1"
+       width="60.245552"
+       height="54.960854"
+       x="36.254314"
+       y="121.32098" />
+    <rect
+       style="fill:#cccccc;stroke-width:0.264583"
+       id="rect1-3"
+       width="60.245552"
+       height="54.960854"
+       x="105.81976"
+       y="121.25935" />
+    <rect
+       style="fill:#cccccc;stroke-width:0.264583"
+       id="rect1-1"
+       width="60.245552"
+       height="54.960854"
+       x="175.30403"
+       y="121.24857" />
+    <path
+       style="fill:#cccccc;stroke-width:0.264583"
+       d="M 35.148967,120.89699 H 220.74323"
+       id="path1" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.49156px;writing-mode:lr-tb;direction:ltr;fill:#1a1a1a;stroke-width:0.374297"
+       x="56.018997"
+       y="125.98226"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="56.018997"
+         y="125.98226"
+         style="stroke-width:0.374297">DFT-NEGF</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.49156px;writing-mode:lr-tb;direction:ltr;fill:#1a1a1a;stroke-width:0.374297"
+       x="119.36266"
+       y="125.3633"
+       id="text1-2"><tspan
+         sodipodi:role="line"
+         id="tspan1-3"
+         x="119.36266"
+         y="125.3633"
+         style="stroke-width:0.374297">Electrode Fitting</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.49156px;writing-mode:lr-tb;direction:ltr;fill:#1a1a1a;stroke-width:0.374297"
+       x="178.00592"
+       y="125.78596"
+       id="text1-2-2"><tspan
+         sodipodi:role="line"
+         id="tspan1-3-8"
+         x="178.00592"
+         y="125.78596"
+         style="stroke-width:0.374297">Time-dependent Transport</tspan></text>
+  </g>
+</svg>

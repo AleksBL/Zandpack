@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --partition=general # This is the default partition
+#SBATCH --qos=long
+#SBATCH --job-name=calc1
+#SBATCH --output=run1.out
+#SBATCH --error=run1.error
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=24
+#SBATCH --time=47:00:00
+#SBATCH --mem=60G
+#SBATCH --mail-user=aleksander.bach@dipc.org
+#SBATCH --mail-type=ALL
+
+module load intel
+module load Anaconda3
+conda activate /scratch/abalo/conda-env/scc-test
+
+export filename=TDT2T_G1
+# export OMP_NUM_THREADS=12
+# export MKL_NUM_THREADS=12
+export linearize=True
+# psinought Dir=$PWD file=$filename
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMBA_NUM_THREADS=1
+mpirun -np 24 zand Dir=$PWD 
+
+
+
