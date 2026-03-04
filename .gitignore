@@ -1,3 +1,11 @@
-./Zandpack.egg-info/
+./Zandpack.egg-info/PKG-INFO
+./Zandpack.egg-info/SOURCES.txt
+./Zandpack.egg-info/dependency_links.txt
+./Zandpack.egg-info/not-zip-safe.txt
+./Zandpack.egg-info/requires.txt
+./Zandpack.egg-info/top_level.txt
+
+
+
 ./INSTALL_LOG.txt
 ./Zandpack/__pycache__
