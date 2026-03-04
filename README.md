@@ -5,7 +5,7 @@
 Version 1.0
 
 
-<img src="./Zandpack/svg/logo3.svg" width="150">
+<img src="./Zandpack/svg/logo3.svg" width="200">
 
 
 # Introduction
