@@ -2,10 +2,12 @@
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 
 
-Version 1.0
-
 
 <img src="./Zandpack/svg/logo3.svg" width="200">
+
+
+Version 1.0
+
 
 
 # Introduction
