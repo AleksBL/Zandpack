@@ -3,7 +3,7 @@
 
 Version 1.0
 
-<img src="./Zandpack/svg/logo3.svg", width="150">
+<img src="./Zandpack/svg/logo3.svg" width="150">
 
 # Introduction
 (Repo setup in progress. Expect more tutorials and polish over the next week  (26.02.2026))
