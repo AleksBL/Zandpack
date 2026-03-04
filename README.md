@@ -35,7 +35,6 @@ Additionally, add the these two folders to your PATH environment variable:
 ```console
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/cmdtools:$PATH"
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpi:$PATH"
-   export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpitest:$PATH"
 ```
 Zandpack depends on the following packages: 
 - numpy
