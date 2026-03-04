@@ -24,7 +24,7 @@ if rank == 0:
     print('tien-gordon program start')
     print('')
     print('sys.argv:', sys.argv)
-    print('OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)')
+    print('its recommed to use mpi for this program!')
     print('')
 _check = True
 #Default values
@@ -38,9 +38,10 @@ options = {'file': 'SaveFile',   # directory
            'hw_max': None,
            'bias': None,
            'kT':None,
-           'Emin':-5.0,
-           'Emax': 5.0,
+           # 'Emin':-5.0,
+           # 'Emax': 5.0,
            'k':'0,0,0',
+           'kidx':'None',
            'device_set':'1,1,1',
            'outfile':'tgout.npz',
            'showplot':'False',
@@ -98,12 +99,16 @@ if os.path.isdir(options['device']):
             self.SE   = fitSE
             self.kidx = kidx
             self.no   = fitSE.Gi.shape[-1]
-        def self_energy(self, E, _kp):
-            # _kp is not used
+        def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
+            # _kp is not used, only there for immitating the sisl method.
             _E = np.array([E])
             return self.SE.evaluate(_E)[self.kidx, 0]
-    eidx = [np.arange(H.shape[-1])] * len(SE)
-    kidx = int(options['k'])
+    eidx = [np.arange(H.shape[-1])] * len(_SE)
+    kidx = int(options['kidx'])
+    if options['kidx'] != 'None':
+        print('warning, you are responsible for giving the right kidx and k values!')
+    
+    kp = np.array([float(k) for k in options['k'].split(',')])
     # We do this in the orthogonalized basis
     S    = np.eye(H.shape[-1])
     H    = H[kidx]
@@ -124,14 +129,14 @@ epsrel   = float(options['int_epsrel'])
 epsabs   = float(options['int_epsabs'])
 
 _eta = 1j * float(options['eta'])
-Eg = np.arange(float(options['Emin']), 
-               float(options['Emax']), 
-               float(options['dE'])  ) + _eta
+#Eg = np.arange(float(options['Emin']), 
+#               float(options['Emax']), 
+#               float(options['dE'])  ) + _eta
 
-nE    = len(Eg)
+# nE    = len(Eg)
 nelec = len(SE)
-T   = np.zeros((nE, len(SE), len(SE)),dtype=complex)
-PIT = np.zeros((nE, len(SE)         ),dtype=complex)
+# T   = np.zeros((nE, len(SE), len(SE)),dtype=complex)
+# PIT = np.zeros((nE, len(SE)         ),dtype=complex)
 
 if options['kT'] is None:
     kTa = np.array([0.025] * nelec)
@@ -171,7 +176,7 @@ def fd(E, kT):
     if x<-150.0:
         return 1.0
     return 1/(np.exp(x) + 1.0)
-def calc_J(E, AMPL, HW, BIAS, KTA):
+def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
     Nmax =  get_nmax(np.abs(ampl).max(), np.abs(hw).max())
     Ei = E + _eta
     NELEC = len(AMPL)
@@ -200,30 +205,36 @@ def calc_J(E, AMPL, HW, BIAS, KTA):
         SEg[eidx[ie][:, None], eidx[ie][None,:]] += SEg_eval[ie]
         SEl[eidx[ie][:, None], eidx[ie][None,:]] += SEl_eval[ie]
     if mode == 'sisl':
-        Gr  = np.linalg.inv(  Gr.toarray()    )
+        Gr = np.linalg.inv(  Gr.toarray()    )
     elif mode=='fitted':
-        Gr = np.linalg.inv(Gr)
-    Ga = Gr.T.conj()
-    # Gl = Gr @ SEl @ Ga
-    # Gg = Gr @ SEg @ Ga
+        Gr = np.linalg.inv(  Gr  )
+    Ga  = Gr.T.conj()
     out = np.zeros(NELEC)
     for ie in range(NELEC):
-        idx  = eidx[ie]#[:, None]
-        ## out[ie]  = 2 * np.einsum('ij,ji',Gg[idx, idx.T], SEl_eval[ie]).real
-        ## out[ie] -= 2 * np.einsum('ij,ji',Gl[idx, idx.T], SEg_eval[ie]).real
+        idx  = eidx[ie]
         Gg2  = Gr[idx] @ SEg @ Ga[:, idx]
         Gl2  = Gr[idx] @ SEl @ Ga[:, idx]
-        out[ie]  = 2 * np.einsum('ij,ji',Gg2, SEl_eval[ie]).real
-        out[ie] -= 2 * np.einsum('ij,ji',Gl2, SEg_eval[ie]).real
+        out[ie]  = 2*np.einsum('ij,ji',Gg2, SEl_eval[ie]).real
+        out[ie] -= 2*np.einsum('ij,ji',Gl2, SEg_eval[ie]).real
+    DOS_list.append(1j*np.trace(Gr - Ga)/np.pi)
+    Eg_list.append(E)
     return out
 
 N_hw   = int((hw_max - hw_min)/float(options['dE'])) + 1
 N_ampl = int((ampl_max - ampl_min)/float(options['dE'])) + 1
-hw_v   = np.logspace(np.log10(hw_min), np.log10(hw_max),     N_hw)
-ampl_v = np.logspace(np.log10(ampl_min), np.log10(ampl_max), N_ampl)
+#hw_v   = np.logspace(np.log10(hw_min), np.log10(hw_max),     N_hw)
+#ampl_v = np.logspace(np.log10(ampl_min), np.log10(ampl_max), N_ampl)
+hw_v   = np.linspace(hw_min,   hw_max,     N_hw)
+ampl_v = np.linspace(ampl_min, ampl_max, N_ampl)
 PI     = np.zeros((len(hw_v), len(ampl_v), 2))
 ERR    = np.zeros((len(hw_v), len(ampl_v)   ))
+if rank == 0:
+    print('hw array: '   + str(hw_v))
+    print('ampl array: ' + str(ampl_v))
 
+Eg_v  = []
+DOS_v = []
+hwa_inp=[]
 it     = 0
 for i in range(len(hw_v)):
     for j in range(len(ampl_v)):
@@ -236,17 +247,19 @@ for i in range(len(hw_v)):
             nmax = get_nmax(ampl_v[j], hw_v[i])
             limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.1
             limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.1
-            if options['showplot']=='True':
-                import matplotlib.pyplot as plt
-                Egrid = np.linspace(limlow, limhigh, 500) + _eta
-                res = np.array([calc_J(Ei, ampl, hw, bias, kTa) 
-                                for Ei in Egrid])
-                plt.plot(Egrid.real, res[:,1] - res[:,0])
-                plt.title("hw="+str(np.round(hw_v[i],3)) + ", ampl=" + str(np.round(ampl_v[j],3)))
-                plt.show()
-            out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
-            lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
-            higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa))
+            #if options['showplot']=='True':
+            #    import matplotlib.pyplot as plt
+            #    Egrid = np.linspace(limlow, limhigh, 500) + _eta
+            #    res = np.array([calc_J(Ei, ampl, hw, bias, kTa) 
+            #                    for Ei in Egrid])
+            #    plt.plot(Egrid.real, res[:,1] - res[:,0])
+            #    plt.title("hw="+str(np.round(hw_v[i],3)) + ", ampl=" + str(np.round(ampl_v[j],3)))
+            #    plt.show()
+            El = []
+            Dl = []
+            out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
+            lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
+            higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
             
             PI[i,j,0] = out[0][0]+lower[0][0]+higher[0][0]
             PI[i,j,1] = out[0][1]+lower[0][1]+higher[0][1]
@@ -258,11 +271,18 @@ for i in range(len(hw_v)):
                   + " #Bessel="+str(nmax) + " lims"+str(np.round(limlow,1)) 
                   + " "+str(np.round(limhigh,1))
                   )
+            Eg_v.append(  np.array(El) )
+            DOS_v.append( np.array(Dl) )
+            hwa_inp.append(np.hstack([hw, ampl]))
         it += 1
 
-np.savez_compressed("rank"+str(rank)+options["outfile"], 
-                    Jrect = PI,
-                    err   = ERR,
+Eg_v  = np.array(Eg_v, dtype=object)
+DOS_v = np.array(DOS_v, dtype=object)
+hwa_inp = np.array(hwa_inp)
+
+np.savez_compressed("rank_tmp_"+str(rank)+options["outfile"], 
+                    Jrect = PI,  Eg_v  = Eg_v,
+                    err   = ERR, DOS_v = DOS_v, hwa_inp = hwa_inp
                     )
 comm.Barrier()
 sleep(0.05)
@@ -270,7 +290,7 @@ if rank == 0:
     Jout = np.zeros((len(hw_v), len(ampl_v), 2))
     Err  = np.zeros((len(hw_v), len(ampl_v)))
     for i in range(size):
-        f   = np.load("rank"+str(i)+options["outfile"])
+        f   = np.load("rank_tmp_"+str(i)+options["outfile"])
         res = f["Jrect"]
         Jout += res
         Err  += f["err"]
