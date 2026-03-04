@@ -1,0 +1,10 @@
+numpy
+numba
+sisl
+matplotlib
+scipy
+siesta_python
+Block_matrices
+Gf_Module
+psutil
+joblib
