@@ -56,7 +56,7 @@ The [Block matrices](https://github.com/AleksBL/Block_TD_block_sparse), [Gf_Modu
 A html file can be found (after you build it) in the docs/_build/html directory. This containes additional information about the code usage and structure. 
 
 ## Demonstration of use
-You can find a demonstration of the use of Zandpack on the [here](https://gnulinux.tube/w/dLTgJsfmDSCk2ggop9uUw9) for the Zandpack/examples/C60 calculation. 
+You can find a demonstration of the use of Zandpack [here](https://gnulinux.tube/w/dLTgJsfmDSCk2ggop9uUw9) for the Zandpack/examples/C60 calculation. 
 
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
