@@ -9,7 +9,7 @@
 
 
 # Introduction
-Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code solves the driven Heisenberg equation for the density matrix
+Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code propagates the driven Heisenberg equation for the density matrix
 
 $\frac{\mathrm{d}\sigma}{\mathrm{d}t} = [H(t), \sigma(t)] + i\sum_\alpha\left[\Pi_\alpha(t) + \Pi_\alpha^\dagger(t) \right]$. 
 
@@ -54,6 +54,9 @@ The [Block matrices](https://github.com/AleksBL/Block_TD_block_sparse), [Gf_Modu
 
 ## Documentation
 A html file can be found (after you build it) in the docs/_build/html directory. This containes additional information about the code usage and structure. 
+
+## Demonstration of use
+You can find a demonstration of the use of Zandpack on the [here](https://gnulinux.tube/w/dLTgJsfmDSCk2ggop9uUw9). 
 
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
