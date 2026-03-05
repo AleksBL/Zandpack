@@ -424,6 +424,7 @@ class TD_Transport:
         S = _READ_get_S(Dev.dir)
         
         self.read_SE = SE
+        print(self.read_SE[0].shape)
         self.read_coupling_inds = inds
         self.tbtE    = t.E.copy()
         self.tbtT    = t.transmission().copy()
@@ -448,12 +449,15 @@ class TD_Transport:
         # We orthogonalize the device basis and the lead bases through
         # a transformation proposed in Yan Ho Kwok et al. (2013)
         if D_lead_ortho:
+            print("Calculating lead-device orthogonalization corrections to overlap and Hamiltonian....")
             Sig0, Sig1 = read_overlap_data(t, self_inds[0], Dev, H, S)
         else:
-            Sig0 = [np.zeros((len(t.k), H.no, H.no), dtype=np.complex128) 
+            print("Excluding lead-device orthogonalization corrections, use this when the lead-device basis is actually orthogonal, or if you want to calculate these yourself.")
+            Sig0 = [np.zeros((len(t.k),) + SE[i].shape[-2:], dtype=np.complex128) 
                     for i in range(len(SE))]
-            Sig1 = [np.zeros((len(t.k), H.no, H.no), dtype=np.complex128) 
+            Sig1 = [np.zeros((len(t.k),) + SE[i].shape[-2:], dtype=np.complex128) 
                     for i in range(len(SE))]
+            
         #Sig0, Sig1 = [_Sig0], [_Sig1]
         #if any( [elec.is_RSSE() for elec in self.Device.elecs]):
         #    Sig0 = None
