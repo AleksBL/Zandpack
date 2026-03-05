@@ -415,8 +415,8 @@ for IK in range(nk):
         for a in range(na):
             for x in range(nx):
                 for c in range(noT):
-                    dPsi[0,a,x,c]  = (h0 - I*xpp[a,x,c])@PSI[0,a,x,c] + hbar * glp[a,x,c]*xi[a,x,c]+ hbar*deltaP[a,x,c]*(dm0@xi[a,x,c])
-                    dPsi[0,a,x,c] += (xi.reshape(na*nx*noT,no).T@(OMG[0,a,x,c].reshape(na*nx*noT)))/hbar
+                    dPsi[0,a,x,c]  = (h0 - I*xpp[a,x,c])@PSI[IK,a,x,c] + hbar * glp[a,x,c]*xi[a,x,c]+ hbar*deltaP[a,x,c]*(dm0@xi[a,x,c])
+                    dPsi[0,a,x,c] += (xi.reshape(na*nx*noT,no).T@(OMG[IK,a,x,c].reshape(na*nx*noT)))/hbar
         print('sum over |Derivative| of psi_axc')
         print(np.abs(dPsi).sum())
         PI = np.zeros((na,no,no),dtype=complex)
