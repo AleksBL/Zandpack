@@ -18,13 +18,13 @@ R = load(Open("Hub.xz", "rb"))
 Eg = np.linspace(-5.9, 5.9, 250)
 # R.reset_all_fits()
 Name  = "AGNRTD"
-NL    = 71
+NL    = 63
 opts  = {'height': 1., 'distance': 5}
 Emin, Emax = -7.5, 7.5
 pdist = 0.1
 fact  = 0.9
-pfact = 0.8
-cf    = 0.1
+pfact = 0.9
+cf    = 0.01
 fm    = 'adaptive'
 E01, G01 = R.PoleGuess(
     0,
@@ -114,8 +114,8 @@ min_tol[:] = -100000
 min_tol1, min_tol2, min_tol3 = min_tol.copy(), min_tol.copy(), min_tol.copy()
 
 sb1 = {}
-eps = 1e-6
-tol_ele = 1e-10
+eps = 1e-4
+tol_ele = 1e-4
 # In[]
 def run_mini(its, method, which_e=None):
     R.Fit(
@@ -143,14 +143,17 @@ def run_mini(its, method, which_e=None):
         init_G=init_G,
         which_e=which_e,
     )
-run_mini(0,'COBYLA')
-R.curvefit_all(.1)
-R.NO_fitted_lorentzians[0].iterative_PSD(maxit=130, n=40,nW=15)
-R.NO_fitted_lorentzians[1].iterative_PSD(maxit=130, n=40,nW=15)
+run_mini(0,'SLSQP')
+R.curvefit_all(.01)
+# assert 1 == 0
+R.NO_fitted_lorentzians[0].iterative_PSD(maxit=160, n=10,nW=5, 
+                                         lbtol = -1e-3,  fact=0.25)
+R.NO_fitted_lorentzians[1].iterative_PSD(maxit=160, n=10,nW=5, 
+                                         lbtol = -1e-3,  fact=0.25)
 R.FitNO2O()
-C = find_correction(R, Emin = -1., Emax=1.)
+C = find_correction(R, Emin = -1, Emax=1)
 R.Renormalise_H(C)
-R.Inspect_transmission_from_hilbert_transform(E=Eg*1.5,eta=1e-2)
+R.Inspect_transmission_from_hilbert_transform(E=Eg,eta=2e-2)
 
 
-
+R.tofile("TDHub")

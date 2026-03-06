@@ -17,11 +17,14 @@ gd = D.to_sisl()
 #D.elecs[1].sl = 'Hubbard_' + D.elecs[1].sl
 
 R  = TDT([ge1, ge2], gd, kT_i=[0.025, 0.025])
-line = np.linspace(-8, 8, 200) + 1e-2j + 1e-3
+line = np.linspace(-8, 8, 200) + 2e-2j + 1e-3
 line = np.vstack((line, line))
-R.Make_Contour(line, 18)
+R.Make_Contour(line, 15)
 D.calculate_hubbard_transport(R.Contour)
 
 R.Device = D
-R.read_data()
+R.read_data(D_lead_ortho=False) # Using the manual calculator gives 
+                                # a format where we need to not attempt to 
+                                # calculate the overlap corrections, 
+                                # even though they are zero
 R.pickle("Hub")

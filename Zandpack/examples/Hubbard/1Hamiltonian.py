@@ -11,8 +11,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from hubbard import HubbardHamiltonian, NEGF
 from ase.visualize import view
-tx   = 16
-ty   = 11
+# !!!!!!
+# PLEASE NOTE IF THE HUBBARD CODE
+# HAS NOT BEEN PATCHED, YOULL HAVE
+# TO CHANGE THE "tostring" array method
+# TO "tobytes" INSIDE THE "hamiltonian.py"
+# INSIDE THE HUBBARD CODE, OR RUN IT WITH
+# NUMPY<1.19 (?)
+tx   = 10
+ty   = 7
 U    = 3.0
 kT   = 0.025
 ZGNR = sisl.geom.zgnr(ty)
@@ -32,7 +39,6 @@ elif ty == 11 and tx == 16:
     remove = [131, 153, 175, 197, 142, 164, 186, 141, 163, 185, 152, 174,
               167, 156, 178, 144, 177, 155, 144, 166, 188, 143, 165, 187, 132, 154, 176, 198]
     #remove = []
-    
 
 dev  = dev.remove(remove)
 #assert 1 == 0
@@ -70,7 +76,6 @@ nup = np.where(epg.xyz[:, 1] > emg.center()[1])[0]  # + np.random.random(len(ZGN
 ndn = np.where(epg.xyz[:, 1] < emg.center()[1])[0]  # + np.random.random(len(ZGNR))
 MFH_EP = ep.Hubbard_electrode(nup, ndn, return_MFH=True, U=U, kT=kT)
 
-#assert 1 == 0
 Dev = SiP(dev.cell, dev.xyz, dev.atoms.Z, directory_name="Dev", elecs=[em, ep],
           Chem_Pot = [.0, .0], spin_pol='polarized', )
 Dev.find_elec_inds()

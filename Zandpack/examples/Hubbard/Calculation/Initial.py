@@ -2,10 +2,11 @@ import numpy as np
 import os
 from time import time
 from Zandpack.td_constants import hbar
+from Zandpack.Loader import load_dictionary
 
-name             = 'HubbardLarge'
+name             = 'TDHub'
 eps              = 1e-9        # RK45 error tolerance
-t0, t1           = -80.0, 800.0  # Start and End
+t0, t1           = -50.0, 400.0  # Start and End
 usesave          = True        # Should the code use a previously saved run?
 LoadFromFull     = True       # Have you stiched the previous run results?
 saveevery        = 50          # How often to write the current and DM to file
@@ -17,25 +18,6 @@ n_dm_compress    = 5
 save_PI          = False
 
 # Read in stuff, you probably dont need to change anything here
-Adir             = name + '/Arrays/'
-Arrs             = {}
-files = os.listdir(Adir)
-class load_dictionary:
-    def __init__(self, dir):
-        self.dir = dir
-        self.timer = time
-        self.times = [self.timer()]
-    def __getitem__(self, x):
-        self.times += [self.timer()]
-        if max(self.times) - min(self.times)>120:
-            assert  1 == 0
-        return np.load(self.dir+x+'.npy')
-
 Arrs = load_dictionary(name+'/Arrays/')
-
-#for f in files:
-#    Arrs.update({f[:-4]: np.load(Adir+f)})
-# hbar is currently doubly defined in the code, this should be equal to the hbar used in the TimedepependentTransport module. Bug fix for the future
-
 steps_for_bondcurrent = 10    # ??
 
