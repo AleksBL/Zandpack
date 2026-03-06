@@ -13,7 +13,7 @@ Zandpack is an open-source Python package for performing time-dependent quantum 
 
 $i\hbar\frac{\mathrm{d}\sigma}{\mathrm{d}t} = [H(t), \sigma(t)] + i\sum_\alpha\left[\Pi_\alpha(t) + \Pi_\alpha^\dagger(t) \right]$. 
 
-and allows for numerically exact open-system dynamics at the mean-field level. You have access to the reduced density matrix throughout the calculation and you can build your own density dependence into the time-dependent Hamiltonian. See the [publication](https://doi.org/10.1016/j.cpc.2026.110087) for the full details.
+and allows for numerically exact open-system dynamics at the mean-field level. You have access to the reduced density matrix throughout the calculation and you can build your own density dependence into the time-dependent Hamiltonian. See the [publication](https://doi.org/10.1016/j.cpc.2026.110087) for the full details or read the [Ph.D thesis](https://orbit.dtu.dk/en/publications/quantum-transport-theory-of-nanostructures-transient-response-and/).
 
 
 ## Features 
