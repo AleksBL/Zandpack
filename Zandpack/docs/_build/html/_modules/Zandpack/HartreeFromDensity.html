@@ -1,0 +1,483 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zandpack.HartreeFromDensity &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/readme.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/nbtutorial.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">Zandpack.HartreeFromDensity</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for Zandpack.HartreeFromDensity</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numba</span><span class="w"> </span><span class="kn">import</span> <span class="n">njit</span><span class="p">,</span> <span class="n">objmode</span><span class="p">,</span> <span class="n">jit</span><span class="p">,</span> <span class="n">prange</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numba.typed</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">Zandpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">k0nfig</span> 
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.fftpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">fftn</span><span class="p">,</span><span class="n">ifftn</span>
+<span class="n">FT</span> <span class="o">=</span> <span class="n">fftn</span>
+<span class="n">iFT</span><span class="o">=</span> <span class="n">ifftn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">time</span><span class="w"> </span><span class="kn">import</span> <span class="n">time</span>
+
+
+<div class="viewcode-block" id="numba_fft3">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.numba_fft3">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">numba_fft3</span><span class="p">(</span><span class="nb">input</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">objmode</span><span class="p">(</span><span class="n">out</span><span class="o">=</span><span class="s1">&#39;complex64[:,:,:]&#39;</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">FT</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="c1">#np.fft.fftn(input)</span>
+    <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="numba_ifft3">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.numba_ifft3">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">numba_ifft3</span><span class="p">(</span><span class="nb">input</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">objmode</span><span class="p">(</span><span class="n">out</span><span class="o">=</span><span class="s1">&#39;complex64[:,:,:]&#39;</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">ifftshift</span><span class="p">(</span><span class="n">iFT</span><span class="p">(</span><span class="nb">input</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="fftZP">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.fftZP">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fftZP</span><span class="p">(</span><span class="n">A</span><span class="p">):</span>
+    <span class="c1">#Nx=A.shape[0]; Ny=A.shape[1]; Nz=A.shape[2]; </span>
+    <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">Nz</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">t1</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">t2</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">t3</span><span class="o">=</span><span class="mi">0</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t1</span><span class="o">=</span><span class="mi">1</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Ny</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t2</span><span class="o">=</span><span class="mi">1</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Nz</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t3</span><span class="o">=</span><span class="mi">1</span>
+    <span class="n">p00</span><span class="o">=</span><span class="n">Nx</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t1</span><span class="p">;</span> <span class="n">p01</span><span class="o">=</span><span class="n">Nx</span><span class="o">//</span><span class="mi">2</span>
+    <span class="n">p10</span><span class="o">=</span><span class="n">Ny</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t2</span><span class="p">;</span> <span class="n">p11</span><span class="o">=</span><span class="n">Ny</span><span class="o">//</span><span class="mi">2</span>
+    <span class="n">p20</span><span class="o">=</span><span class="n">Nz</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t3</span><span class="p">;</span> <span class="n">p21</span><span class="o">=</span><span class="n">Nz</span><span class="o">//</span><span class="mi">2</span>
+    
+    <span class="k">with</span> <span class="n">objmode</span><span class="p">(</span><span class="n">out</span><span class="o">=</span><span class="s1">&#39;complex64[:,:,:]&#39;</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">A</span><span class="p">,((</span><span class="n">p00</span><span class="p">,</span><span class="n">p01</span><span class="p">),(</span><span class="n">p10</span><span class="p">,</span><span class="n">p11</span><span class="p">),(</span><span class="n">p20</span><span class="p">,</span><span class="n">p21</span><span class="p">)))</span>
+    
+    <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="Pil_ud">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.Pil_ud">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">Pil_ud</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">Nx</span><span class="p">,</span><span class="n">Ny</span><span class="p">,</span><span class="n">Nz</span><span class="p">):</span>
+    <span class="n">dim</span><span class="o">=</span><span class="n">A</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">t1</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">t2</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">t3</span><span class="o">=</span><span class="mi">0</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t1</span><span class="o">=</span><span class="mi">1</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Ny</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t2</span><span class="o">=</span><span class="mi">1</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">Nz</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="n">t3</span><span class="o">=</span><span class="mi">1</span>
+    <span class="n">p00</span><span class="o">=</span><span class="n">Nx</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t1</span><span class="p">;</span> <span class="n">p01</span><span class="o">=</span><span class="n">Nx</span><span class="o">//</span><span class="mi">2</span>
+    <span class="n">p10</span><span class="o">=</span><span class="n">Ny</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t2</span><span class="p">;</span> <span class="n">p11</span><span class="o">=</span><span class="n">Ny</span><span class="o">//</span><span class="mi">2</span>
+    <span class="n">p20</span><span class="o">=</span><span class="n">Nz</span><span class="o">//</span><span class="mi">2</span><span class="o">-</span><span class="n">t3</span><span class="p">;</span> <span class="n">p21</span><span class="o">=</span><span class="n">Nz</span><span class="o">//</span><span class="mi">2</span>
+    <span class="k">return</span> <span class="n">A</span><span class="p">[</span><span class="n">p00</span><span class="p">:</span><span class="n">dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">p01</span><span class="p">,</span><span class="n">p10</span><span class="p">:</span><span class="n">dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">p11</span><span class="p">,</span><span class="n">p20</span><span class="p">:</span><span class="n">dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">p21</span><span class="p">]</span>    </div>
+
+
+<div class="viewcode-block" id="gdv">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.gdv">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">gdv</span><span class="p">(</span><span class="n">dr</span><span class="p">,</span><span class="n">k</span><span class="p">):</span>
+    <span class="n">n</span>   <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dr</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mf">1e-10</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mi">1</span><span class="n">j</span><span class="o">*</span><span class="n">k</span><span class="o">*</span><span class="n">n</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="n">n</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">res</span></div>
+
+
+<div class="viewcode-block" id="get_g">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.get_g">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_g</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dx</span><span class="p">):</span>
+    <span class="n">nx</span><span class="p">,</span><span class="n">ny</span><span class="p">,</span><span class="n">nz</span> <span class="o">=</span> <span class="n">shape</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">nx</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">nx</span><span class="p">)</span> <span class="o">*</span> <span class="n">dx</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">ny</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">ny</span><span class="p">)</span> <span class="o">*</span> <span class="n">dx</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">nz</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">nz</span><span class="p">)</span> <span class="o">*</span> <span class="n">dx</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">nx</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">ny</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">nz</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">r_sing</span> <span class="o">=</span> <span class="p">((</span><span class="mi">3</span><span class="o">/</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">nx</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">ny</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">nz</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">nx</span><span class="o">-</span><span class="mi">1</span> <span class="ow">and</span> <span class="n">j</span> <span class="o">==</span> <span class="n">ny</span><span class="o">-</span><span class="mi">1</span> <span class="ow">and</span> <span class="n">k</span> <span class="o">==</span> <span class="n">nz</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                    <span class="c1">#g[i,j,k] = r_sing**2/dx**3</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">g</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">z</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">g</span><span class="o">**</span><span class="mf">0.5</span><span class="p">)</span> <span class="o">*</span> <span class="n">dx</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span> </div>
+
+
+
+<div class="viewcode-block" id="Poisson">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.Poisson">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">Poisson</span><span class="p">(</span><span class="n">rho</span><span class="p">,</span> <span class="n">g_fft</span><span class="p">):</span>
+    <span class="n">nx</span><span class="p">,</span><span class="n">ny</span><span class="p">,</span><span class="n">nz</span> <span class="o">=</span> <span class="n">rho</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">return</span>  <span class="o">-</span> <span class="n">Pil_ud</span><span class="p">(</span> <span class="n">numba_ifft3</span><span class="p">(</span><span class="n">numba_fft3</span><span class="p">(</span><span class="n">fftZP</span><span class="p">(</span><span class="n">rho</span><span class="p">))</span> <span class="o">*</span> <span class="n">g_fft</span><span class="p">)</span> <span class="p">,</span><span class="n">nx</span><span class="p">,</span><span class="n">ny</span><span class="p">,</span><span class="n">nz</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="intersecting_inds">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.intersecting_inds">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">fastmath</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">intersecting_inds</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">):</span>
+    <span class="n">I1</span> <span class="o">=</span> <span class="n">List</span><span class="p">()</span>
+    <span class="n">I2</span> <span class="o">=</span> <span class="n">List</span><span class="p">()</span>
+    <span class="n">where</span> <span class="o">=</span> <span class="n">List</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i1</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i2</span><span class="p">,</span><span class="n">vv</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">vv</span> <span class="o">==</span> <span class="n">v</span><span class="p">:</span>
+                <span class="n">where</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+                <span class="n">I1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i1</span><span class="p">)</span>
+                <span class="n">I2</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">I1</span><span class="p">,</span><span class="n">I2</span><span class="p">,</span> <span class="n">where</span></div>
+
+
+<div class="viewcode-block" id="make_density">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.make_density">[docs]</a>
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">fastmath</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_density</span><span class="p">(</span><span class="n">list_orbitals</span><span class="p">,</span> <span class="n">density_matrix</span><span class="p">,</span> <span class="n">orb_kind</span><span class="p">,</span> <span class="n">orb_pos</span><span class="p">,</span> <span class="n">dx</span><span class="p">,</span>
+                 <span class="n">density</span><span class="p">,</span> <span class="n">static_density</span><span class="p">,</span> <span class="n">tol</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span> <span class="n">add_static</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">return_Flist</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">Flist</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">Sij</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="n">pos</span>  <span class="o">=</span> <span class="p">(</span><span class="n">orb_pos</span> <span class="o">/</span> <span class="n">dx</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">rem</span>  <span class="o">=</span>  <span class="n">orb_pos</span><span class="o">/</span><span class="n">dx</span> <span class="o">-</span> <span class="n">pos</span>
+    <span class="k">if</span> <span class="n">add_static</span><span class="p">:</span>
+        <span class="n">density</span> <span class="o">+=</span> <span class="n">static_density</span>
+    
+    <span class="n">n_orb</span>    <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">orb_kind</span><span class="p">)</span>
+    <span class="n">NX</span><span class="p">,</span><span class="n">NY</span><span class="p">,</span><span class="n">NZ</span> <span class="o">=</span> <span class="n">density</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="n">Flist</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Calculating Flist&#39;</span><span class="p">)</span>
+        <span class="n">Fliist</span> <span class="o">=</span> <span class="n">List</span><span class="p">()</span>
+        <span class="c1">#for i in range(n_orb):</span>
+        <span class="c1">#    Flist.append(simple_interpolate(list_orbitals[orb_kind[i]], rem[i]))</span>
+        <span class="n">Flist</span> <span class="o">=</span> <span class="p">[</span><span class="n">simple_interpolate</span><span class="p">(</span><span class="n">list_orbitals</span><span class="p">[</span><span class="n">orb_kind</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="n">rem</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_orb</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="n">return_Flist</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Flist</span>
+    
+    <span class="k">if</span> <span class="n">Sij</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">Sij</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">n_orb</span><span class="p">,</span> <span class="n">n_orb</span><span class="p">))</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">n_orb</span><span class="p">):</span>
+        <span class="n">x1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">x3</span> <span class="o">=</span> <span class="n">pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">fi</span>       <span class="o">=</span> <span class="n">Flist</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">nx</span><span class="p">,</span><span class="n">ny</span><span class="p">,</span><span class="n">nz</span> <span class="o">=</span> <span class="n">fi</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">Ix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x1</span><span class="o">-</span><span class="n">nx</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x1</span> <span class="o">+</span> <span class="n">nx</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Ix</span> <span class="o">=</span> <span class="n">Ix</span><span class="p">[(</span><span class="n">Ix</span><span class="o">&lt;</span><span class="n">NX</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Ix</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="n">Jx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x2</span><span class="o">-</span><span class="n">ny</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x2</span> <span class="o">+</span> <span class="n">ny</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Jx</span> <span class="o">=</span> <span class="n">Jx</span><span class="p">[(</span><span class="n">Jx</span><span class="o">&lt;</span><span class="n">NY</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Jx</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="n">Kx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x3</span><span class="o">-</span><span class="n">nz</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x3</span> <span class="o">+</span> <span class="n">nz</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Kx</span> <span class="o">=</span> <span class="n">Kx</span><span class="p">[(</span><span class="n">Kx</span><span class="o">&lt;</span><span class="n">NZ</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Kx</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">n_orb</span><span class="p">):</span>
+            <span class="n">y1</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="n">y3</span> <span class="o">=</span> <span class="n">pos</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">ry1</span><span class="p">,</span><span class="n">ry2</span><span class="p">,</span><span class="n">ry3</span> <span class="o">=</span> <span class="n">rem</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">fj</span>       <span class="o">=</span> <span class="n">Flist</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">mx</span><span class="p">,</span><span class="n">my</span><span class="p">,</span><span class="n">mz</span> <span class="o">=</span> <span class="n">fj</span><span class="o">.</span><span class="n">shape</span>
+            
+            <span class="n">Iy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y1</span><span class="o">-</span><span class="n">mx</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y1</span> <span class="o">+</span> <span class="n">mx</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Iy</span> <span class="o">=</span> <span class="n">Iy</span><span class="p">[(</span><span class="n">Iy</span><span class="o">&lt;</span><span class="n">NX</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Iy</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            <span class="n">Jy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y2</span><span class="o">-</span><span class="n">my</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">+</span> <span class="n">my</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Jy</span> <span class="o">=</span> <span class="n">Jy</span><span class="p">[(</span><span class="n">Jy</span><span class="o">&lt;</span><span class="n">NY</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Jy</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            <span class="n">Ky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y3</span><span class="o">-</span><span class="n">mz</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y3</span> <span class="o">+</span> <span class="n">mz</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Ky</span> <span class="o">=</span> <span class="n">Ky</span><span class="p">[(</span><span class="n">Ky</span><span class="o">&lt;</span><span class="n">NZ</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Ky</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            
+            <span class="n">dij</span> <span class="o">=</span> <span class="n">density_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">real</span>
+            <span class="n">sij</span> <span class="o">=</span> <span class="n">Sij</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span>
+            <span class="c1">#print(dij.shape,sij.shape)</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">dij</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">tol</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">sij</span><span class="p">)</span><span class="o">&gt;</span><span class="n">tol</span><span class="p">:</span>
+                <span class="n">IIx</span><span class="p">,</span> <span class="n">IIy</span><span class="p">,</span> <span class="n">Wi</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Ix</span><span class="p">,</span> <span class="n">Iy</span><span class="p">)</span>
+                <span class="n">JJx</span><span class="p">,</span> <span class="n">JJy</span><span class="p">,</span> <span class="n">Wj</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Jx</span><span class="p">,</span> <span class="n">Jy</span><span class="p">)</span>
+                <span class="n">KKx</span><span class="p">,</span> <span class="n">KKy</span><span class="p">,</span> <span class="n">Wk</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Kx</span><span class="p">,</span> <span class="n">Ky</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wi</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wj</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wk</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+                    <span class="n">subfi</span> <span class="o">=</span> <span class="n">fi</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">IIx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">IIx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">JJx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">JJx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">KKx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">KKx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">subfj</span> <span class="o">=</span> <span class="n">fj</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">IIy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">IIy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">JJy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">JJy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">KKy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">KKy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">i</span><span class="o">==</span><span class="n">j</span><span class="p">:</span>
+                        <span class="n">fact</span> <span class="o">=</span> <span class="n">dij</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">fact</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">dij</span>
+                    <span class="n">prod</span> <span class="o">=</span> <span class="n">subfi</span> <span class="o">*</span> <span class="n">subfj</span> <span class="o">*</span> <span class="n">fact</span>
+                    <span class="c1">#print(density[min(Wi):max(Wi)+1, min(Wj):max(Wj)+1, min(Wk):max(Wk)+1].shape, prod.shape)</span>
+                    <span class="n">density</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">Wi</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wi</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">Wj</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wj</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">Wk</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wk</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">prod</span> </div>
+
+
+<div class="viewcode-block" id="matrixelementsoffield">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.matrixelementsoffield">[docs]</a>
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">fastmath</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">matrixelementsoffield</span><span class="p">(</span><span class="n">list_orbitals</span><span class="p">,</span>  <span class="n">orb_kind</span><span class="p">,</span> <span class="n">orb_pos</span><span class="p">,</span> <span class="n">dx</span><span class="p">,</span>
+                          <span class="n">Field</span><span class="p">,</span> <span class="n">Out</span><span class="p">,</span> <span class="n">Flist</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                          <span class="n">Sij</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tol</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">):</span>
+    <span class="n">pos</span>  <span class="o">=</span> <span class="p">(</span><span class="n">orb_pos</span> <span class="o">/</span> <span class="n">dx</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">rem</span>  <span class="o">=</span>  <span class="n">orb_pos</span><span class="o">/</span><span class="n">dx</span> <span class="o">-</span> <span class="n">pos</span>
+    
+    <span class="n">n_orb</span>    <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">orb_kind</span><span class="p">)</span>
+    <span class="n">NX</span><span class="p">,</span><span class="n">NY</span><span class="p">,</span><span class="n">NZ</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="n">Flist</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Calculating Flist&#39;</span><span class="p">)</span>
+        <span class="n">Flist</span> <span class="o">=</span> <span class="p">[</span><span class="n">simple_interpolate</span><span class="p">(</span><span class="n">list_orbitals</span><span class="p">[</span><span class="n">orb_kind</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="n">rem</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_orb</span><span class="p">)]</span>
+    
+    <span class="k">if</span> <span class="n">Sij</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">Sij</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">n_orb</span><span class="p">,</span> <span class="n">n_orb</span><span class="p">))</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">n_orb</span><span class="p">):</span>
+        <span class="n">x1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">x3</span> <span class="o">=</span> <span class="n">pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">fi</span>       <span class="o">=</span> <span class="n">Flist</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">nx</span><span class="p">,</span><span class="n">ny</span><span class="p">,</span><span class="n">nz</span> <span class="o">=</span> <span class="n">fi</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">Ix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x1</span><span class="o">-</span><span class="n">nx</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x1</span> <span class="o">+</span> <span class="n">nx</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Ix</span> <span class="o">=</span> <span class="n">Ix</span><span class="p">[(</span><span class="n">Ix</span><span class="o">&lt;</span><span class="n">NX</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Ix</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="n">Jx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x2</span><span class="o">-</span><span class="n">ny</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x2</span> <span class="o">+</span> <span class="n">ny</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Jx</span> <span class="o">=</span> <span class="n">Jx</span><span class="p">[(</span><span class="n">Jx</span><span class="o">&lt;</span><span class="n">NY</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Jx</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="n">Kx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x3</span><span class="o">-</span><span class="n">nz</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">x3</span> <span class="o">+</span> <span class="n">nz</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Kx</span> <span class="o">=</span> <span class="n">Kx</span><span class="p">[(</span><span class="n">Kx</span><span class="o">&lt;</span><span class="n">NZ</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Kx</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">n_orb</span><span class="p">):</span>
+            <span class="n">y1</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="n">y3</span> <span class="o">=</span> <span class="n">pos</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">ry1</span><span class="p">,</span><span class="n">ry2</span><span class="p">,</span><span class="n">ry3</span> <span class="o">=</span> <span class="n">rem</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">fj</span>       <span class="o">=</span> <span class="n">Flist</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">mx</span><span class="p">,</span><span class="n">my</span><span class="p">,</span><span class="n">mz</span> <span class="o">=</span> <span class="n">fj</span><span class="o">.</span><span class="n">shape</span>
+            
+            <span class="n">Iy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y1</span><span class="o">-</span><span class="n">mx</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y1</span> <span class="o">+</span> <span class="n">mx</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Iy</span> <span class="o">=</span> <span class="n">Iy</span><span class="p">[(</span><span class="n">Iy</span><span class="o">&lt;</span><span class="n">NX</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Iy</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            <span class="n">Jy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y2</span><span class="o">-</span><span class="n">my</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">+</span> <span class="n">my</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Jy</span> <span class="o">=</span> <span class="n">Jy</span><span class="p">[(</span><span class="n">Jy</span><span class="o">&lt;</span><span class="n">NY</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Jy</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            <span class="n">Ky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y3</span><span class="o">-</span><span class="n">mz</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> <span class="n">y3</span> <span class="o">+</span> <span class="n">mz</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">);</span> <span class="n">Ky</span> <span class="o">=</span> <span class="n">Ky</span><span class="p">[(</span><span class="n">Ky</span><span class="o">&lt;</span><span class="n">NZ</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Ky</span><span class="o">&gt;-</span><span class="mi">1</span><span class="p">)]</span>
+            
+            <span class="n">sij</span> <span class="o">=</span> <span class="n">Sij</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span>
+            <span class="k">if</span>  <span class="nb">abs</span><span class="p">(</span><span class="n">sij</span><span class="p">)</span><span class="o">&gt;</span><span class="n">tol</span><span class="p">:</span>
+                <span class="n">IIx</span><span class="p">,</span> <span class="n">IIy</span><span class="p">,</span> <span class="n">Wi</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Ix</span><span class="p">,</span> <span class="n">Iy</span><span class="p">)</span>
+                <span class="n">JJx</span><span class="p">,</span> <span class="n">JJy</span><span class="p">,</span> <span class="n">Wj</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Jx</span><span class="p">,</span> <span class="n">Jy</span><span class="p">)</span>
+                <span class="n">KKx</span><span class="p">,</span> <span class="n">KKy</span><span class="p">,</span> <span class="n">Wk</span> <span class="o">=</span> <span class="n">intersecting_inds</span><span class="p">(</span><span class="n">Kx</span><span class="p">,</span> <span class="n">Ky</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wi</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wj</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">Wk</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+                    <span class="n">subfi</span> <span class="o">=</span> <span class="n">fi</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">IIx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">IIx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">JJx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">JJx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">KKx</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">KKx</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">subfj</span> <span class="o">=</span> <span class="n">fj</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">IIy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">IIy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">JJy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">JJy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">KKy</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">KKy</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    
+                    <span class="n">prod</span> <span class="o">=</span> <span class="n">subfi</span> <span class="o">*</span> <span class="n">subfj</span> 
+                    <span class="n">Fieldij</span>  <span class="o">=</span> <span class="n">Field</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">Wi</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wi</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">Wj</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wj</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">Wk</span><span class="p">):</span><span class="nb">max</span><span class="p">(</span><span class="n">Wk</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">Out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">Fieldij</span> <span class="o">*</span> <span class="n">prod</span><span class="p">)</span> <span class="o">*</span> <span class="n">dx</span><span class="o">**</span><span class="mi">3</span>
+                    <span class="n">Out</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span></div>
+
+
+
+
+<span class="c1"># @jit#(parallel = False, fastmath = False)</span>
+<span class="c1"># def make_density_jit(list_orbitals, density_matrix, orb_kind, orb_pos, dx,</span>
+<span class="c1">#                  density, static_density,Flist, tol = 1e-10, add_static = False):</span>
+<span class="c1">#     pos  = (orb_pos / dx).astype(np.int32)</span>
+<span class="c1">#     rem  =  orb_pos/dx - pos</span>
+<span class="c1">#     if add_static:</span>
+<span class="c1">#         density += static_density</span>
+    
+<span class="c1">#     n_orb    = len(orb_kind)</span>
+<span class="c1">#     NX,NY,NZ = density.shape</span>
+    
+<span class="c1">#     for i in range(n_orb):</span>
+<span class="c1">#         x1,x2,x3 = pos[i]</span>
+<span class="c1">#         fi       = Flist[i]</span>
+<span class="c1">#         nx,ny,nz = fi.shape</span>
+<span class="c1">#         Ix = np.arange(x1-nx//2, x1 + nx//2 +1); Ix = Ix[(Ix&lt;NX)*(Ix&gt;-1)]</span>
+<span class="c1">#         Jx = np.arange(x2-ny//2, x2 + ny//2 +1); Jx = Jx[(Jx&lt;NY)*(Jx&gt;-1)]</span>
+<span class="c1">#         Kx = np.arange(x3-nz//2, x3 + nz//2 +1); Kx = Kx[(Kx&lt;NZ)*(Kx&gt;-1)]</span>
+<span class="c1">#         for j in range(i, n_orb):</span>
+<span class="c1">#             y1,y2,y3 = pos[j]</span>
+<span class="c1">#             ry1,ry2,ry3 = rem[j]</span>
+<span class="c1">#             fj       = Flist[j]</span>
+<span class="c1">#             mx,my,mz = fj.shape</span>
+            
+<span class="c1">#             Iy = np.arange(y1-mx//2, y1 + mx//2 +1); Iy = Iy[(Iy&lt;NX)*(Iy&gt;-1)]</span>
+<span class="c1">#             Jy = np.arange(y2-my//2, y2 + my//2 +1); Jy = Jy[(Jy&lt;NY)*(Jy&gt;-1)]</span>
+<span class="c1">#             Ky = np.arange(y3-mz//2, y3 + mz//2 +1); Ky = Ky[(Ky&lt;NZ)*(Ky&gt;-1)]</span>
+            
+<span class="c1">#             dij = density_matrix[i,j].real</span>
+            
+<span class="c1">#             if abs(dij) &gt; tol:</span>
+<span class="c1">#                 IIx, IIy, Wi = intersecting_inds(Ix, Iy)</span>
+<span class="c1">#                 JJx, JJy, Wj = intersecting_inds(Jx, Jy)</span>
+<span class="c1">#                 KKx, KKy, Wk = intersecting_inds(Kx, Ky)</span>
+<span class="c1">#                 if len(Wi)&gt;0 and len(Wj)&gt;0 and len(Wk)&gt;0:</span>
+<span class="c1">#                     subfi = fi[min(IIx):max(IIx)+1,min(JJx):max(JJx)+1,min(KKx):max(KKx)+1]</span>
+<span class="c1">#                     subfj = fj[min(IIy):max(IIy)+1,min(JJy):max(JJy)+1,min(KKy):max(KKy)+1]</span>
+<span class="c1">#                     prod = subfi * subfj</span>
+<span class="c1">#                     _t = 1</span>
+<span class="c1">#                     print(prod.shape, len(Wi), len(Wj), len(Wk))</span>
+<span class="c1">#                     if i==j:</span>
+<span class="c1">#                         density[min(Wi):max(Wi)+_t, min(Wj):max(Wj)+_t, min(Wk):max(Wk)+_t] += prod * dij</span>
+<span class="c1">#                     if i!=j:</span>
+<span class="c1">#                         density[min(Wi):max(Wi)+_t, min(Wj):max(Wj)+_t, min(Wk):max(Wk)+_t] += prod * 2 * dij</span>
+                    
+                    
+
+<div class="viewcode-block" id="test">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.test">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">l</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="simple_interpolate">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.simple_interpolate">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">simple_interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">fracs</span><span class="p">):</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">fracs</span>
+    <span class="k">return</span> <span class="n">intrp</span><span class="p">(</span><span class="n">intrp</span><span class="p">(</span><span class="n">intrp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">w1</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">),</span> <span class="n">w1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">),</span> <span class="n">w1</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="roll1">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.roll1">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">roll1</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="n">axis</span><span class="p">):</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">axis</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">res</span> <span class="p">[</span><span class="mi">1</span><span class="p">:,:,:]</span> <span class="o">=</span> <span class="n">f</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">,:,:]</span>
+    <span class="k">if</span> <span class="n">axis</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">res</span> <span class="p">[:,</span><span class="mi">1</span><span class="p">:,:]</span> <span class="o">=</span> <span class="n">f</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]</span>
+    <span class="k">if</span> <span class="n">axis</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">res</span> <span class="p">[:,:,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">=</span> <span class="n">f</span><span class="p">[:,:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">res</span></div>
+
+
+<div class="viewcode-block" id="intrp">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.intrp">[docs]</a>
+<span class="nd">@njit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">intrp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="n">frc</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">f</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">frc</span><span class="p">)</span> <span class="o">+</span> <span class="n">roll1</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">axis</span><span class="p">)</span> <span class="o">*</span> <span class="n">frc</span></div>
+
+
+<div class="viewcode-block" id="wavg1">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.wavg1">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span> <span class="o">=</span> <span class="n">k0nfig</span><span class="o">.</span><span class="n">CACHE</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">wavg1</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">A</span><span class="p">[</span><span class="n">idx</span><span class="p">,:,:]</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">w</span><span class="p">)</span> <span class="o">+</span><span class="n">A</span><span class="p">[</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,:,:]</span><span class="o">*</span><span class="n">w</span> </div>
+
+<div class="viewcode-block" id="wavg2">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.wavg2">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span> <span class="o">=</span> <span class="n">k0nfig</span><span class="o">.</span><span class="n">CACHE</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">wavg2</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">A</span><span class="p">[:,</span><span class="n">idx</span><span class="p">,:]</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">w</span><span class="p">)</span> <span class="o">+</span><span class="n">A</span><span class="p">[:,</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,:]</span><span class="o">*</span><span class="n">w</span> </div>
+
+<div class="viewcode-block" id="wavg3">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.wavg3">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span> <span class="o">=</span> <span class="n">k0nfig</span><span class="o">.</span><span class="n">CACHE</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">wavg3</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">A</span><span class="p">[:,:,</span><span class="n">idx</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">w</span><span class="p">)</span> <span class="o">+</span><span class="n">A</span><span class="p">[:,:,</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">w</span> </div>
+
+<div class="viewcode-block" id="cube_interp">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.cube_interp">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span> <span class="o">=</span> <span class="n">k0nfig</span><span class="o">.</span><span class="n">CACHE</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">cube_interp</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">w3</span><span class="p">,</span> <span class="n">idxs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">wavg3</span><span class="p">(</span><span class="n">wavg2</span><span class="p">(</span><span class="n">wavg1</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">w3</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">idxs</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">w3</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">idxs</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span><span class="n">w3</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">idxs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="Hartree">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.HartreeFromDensity.Hartree">[docs]</a>
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span> <span class="o">=</span> <span class="n">k0nfig</span><span class="o">.</span><span class="n">CACHE</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">Hartree</span><span class="p">(</span><span class="n">dsig</span><span class="p">,</span> <span class="n">LO</span><span class="p">,</span> <span class="n">OK</span><span class="p">,</span><span class="n">L</span><span class="p">,</span> <span class="n">iL</span><span class="p">,</span> <span class="n">S_ij</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">dx</span><span class="p">,</span><span class="n">dens</span><span class="p">,</span> <span class="n">static_density</span><span class="p">,</span> <span class="n">g_fft</span><span class="p">,</span> <span class="n">reset_density</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span><span class="n">add_static</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">NO</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dsig</span><span class="p">)</span>
+    <span class="n">r_xyz</span> <span class="o">=</span> <span class="p">(</span><span class="n">xyz</span><span class="o">/</span><span class="n">dx</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">frac_xyz</span> <span class="o">=</span> <span class="n">xyz</span><span class="o">/</span><span class="n">dx</span> <span class="o">-</span> <span class="n">r_xyz</span>
+    <span class="n">dsig_no</span> <span class="o">=</span> <span class="n">iL</span> <span class="o">@</span> <span class="n">dsig</span> <span class="o">@</span> <span class="n">iL</span>
+    <span class="c1">#dens = np.zeros(static_density.shape, dtype = np.complex128)</span>
+    <span class="k">if</span> <span class="n">reset_density</span><span class="p">:</span>
+        <span class="n">dens</span><span class="p">[:,:,:]</span><span class="o">=</span><span class="mf">0.0</span>
+    <span class="n">make_density</span><span class="p">(</span><span class="n">LO</span><span class="p">,</span> <span class="n">dsig_no</span><span class="p">,</span> <span class="n">OK</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">dx</span><span class="p">,</span><span class="n">dens</span><span class="p">,</span> <span class="n">static_density</span><span class="p">,</span> <span class="n">add_static</span><span class="o">=</span><span class="n">add_static</span><span class="p">)</span>
+    <span class="n">V</span>    <span class="o">=</span> <span class="n">Poisson</span><span class="p">(</span><span class="n">dens</span><span class="p">,</span> <span class="n">g_fft</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dsig</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">NO</span><span class="p">):</span>
+        <span class="n">rix</span><span class="p">,</span> <span class="n">riy</span><span class="p">,</span><span class="n">riz</span> <span class="o">=</span> <span class="n">r_xyz</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">cube_interp</span><span class="p">(</span><span class="n">V</span><span class="p">,</span><span class="n">frac_xyz</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="p">,</span> <span class="n">r_xyz</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="n">NO</span><span class="p">):</span>
+            <span class="n">rjx</span><span class="p">,</span><span class="n">rjy</span><span class="p">,</span><span class="n">rjz</span> <span class="o">=</span> <span class="n">r_xyz</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">rijx</span> <span class="o">=</span> <span class="p">(</span><span class="n">rix</span> <span class="o">+</span> <span class="n">rjx</span><span class="p">)</span><span class="o">//</span><span class="mi">2</span>
+            <span class="n">rijy</span> <span class="o">=</span> <span class="p">(</span><span class="n">riy</span> <span class="o">+</span> <span class="n">rjy</span><span class="p">)</span><span class="o">//</span><span class="mi">2</span>
+            <span class="n">rijz</span> <span class="o">=</span> <span class="p">(</span><span class="n">riz</span> <span class="o">+</span> <span class="n">rjz</span><span class="p">)</span><span class="o">//</span><span class="mi">2</span>
+            
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">V</span><span class="p">[</span><span class="n">rijx</span><span class="p">,</span> <span class="n">rijy</span><span class="p">,</span><span class="n">rijz</span><span class="p">]</span> <span class="o">*</span> <span class="n">S_ij</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">])</span>
+    
+    <span class="k">return</span> <span class="n">iL</span> <span class="o">@</span> <span class="n">out</span> <span class="o">@</span> <span class="n">iL</span></div>
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

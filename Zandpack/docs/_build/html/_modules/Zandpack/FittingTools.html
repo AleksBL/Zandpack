@@ -1,0 +1,313 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zandpack.FittingTools &mdash; Zandpack 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Zandpack
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/readme.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/nbtutorial.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart/videotutorial.html">Video tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cmdtoolsdoc/index.html">cmdtools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../mpidoc/index.html">mpitools documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">Zandpack</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Zandpack</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">Zandpack.FittingTools</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for Zandpack.FittingTools</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="vm">__file__</span><span class="p">[:</span><span class="o">-</span><span class="mi">15</span><span class="p">])</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">plt</span>
+
+
+<div class="viewcode-block" id="rattle_lorentzians">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.rattle_lorentzians">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rattle_lorentzians</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">mag_E</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">mag_G</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">ik</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">il</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">seed</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Random nudge of the Lorentzian L</span>
+<span class="sd">        L: Lorentzian Block-matrix</span>
+<span class="sd">        mag_E: positive number</span>
+<span class="sd">        mag_G: postive number</span>
+<span class="sd">        ik:   number or numpy-indices for the k-points to rattle</span>
+<span class="sd">        il:   indices of the particular lorentzian linewidth function to rattle</span>
+<span class="sd">        seed: int for numpy.random.seed</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">L</span><span class="o">.</span><span class="n">ei</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="n">seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ik</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx_k</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">idx_k</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ik</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">il</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx_l</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">idx_l</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">il</span><span class="p">)</span>
+    <span class="n">rnd_ei</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">idx_k</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx_l</span><span class="p">)))</span><span class="o">-</span><span class="mf">0.5</span><span class="p">)</span><span class="o">*</span><span class="n">mag_E</span>
+    <span class="n">rnd_gi</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">idx_k</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx_l</span><span class="p">)))</span><span class="o">-</span><span class="mf">0.5</span><span class="p">)</span><span class="o">*</span><span class="n">mag_G</span>
+    <span class="n">L</span><span class="o">.</span><span class="n">ei</span>   <span class="p">[</span><span class="n">idx_k</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">idx_l</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]]</span> <span class="o">+=</span> <span class="n">rnd_ei</span>
+    <span class="n">L</span><span class="o">.</span><span class="n">gamma</span><span class="p">[</span><span class="n">idx_k</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">idx_l</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]]</span> <span class="o">+=</span> <span class="n">rnd_gi</span></div>
+
+
+<div class="viewcode-block" id="f_space">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.f_space">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">f_space</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">dx</span><span class="p">):</span>
+    <span class="n">xl</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="o">+</span><span class="n">x0</span><span class="p">]</span>
+    <span class="k">while</span> <span class="n">xl</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">x1</span><span class="p">:</span>
+        <span class="n">xl</span><span class="o">+=</span><span class="p">[(</span><span class="n">xl</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">dx</span><span class="o">/</span><span class="n">f</span><span class="p">(</span><span class="n">xl</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">xl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FitLog">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.FitLog">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FitLog</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Pair_list</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="viewcode-block" id="FitLog.save">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.FitLog.save">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">TDT</span><span class="p">):</span>
+        <span class="n">Pairs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">Ls</span> <span class="ow">in</span> <span class="n">TDT</span><span class="o">.</span><span class="n">NO_fitted_lorentzians</span><span class="p">:</span>
+            <span class="n">Pairs</span> <span class="o">+=</span> <span class="p">[(</span><span class="n">Ls</span><span class="o">.</span><span class="n">ei</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">Ls</span><span class="o">.</span><span class="n">gamma</span><span class="o">.</span><span class="n">copy</span><span class="p">())]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Pair_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Pairs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FitLog.get_previous_fit">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.FitLog.get_previous_fit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_previous_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Pair_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span></div>
+</div>
+
+
+<div class="viewcode-block" id="file_from_lorentzian">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.file_from_lorentzian">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">file_from_lorentzian</span><span class="p">(</span><span class="n">Ei</span><span class="p">,</span> <span class="n">Gi</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;L_file&#39;</span><span class="p">,</span> <span class="n">decimals</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="n">min_tol</span> <span class="o">=</span>  <span class="kc">None</span><span class="p">):</span>
+    <span class="n">ei</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">Ei</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span><span class="n">decimals</span><span class="p">)</span>
+    <span class="n">gi</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">Gi</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">decimals</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">min_tol</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">min_tol</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">ei</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">nk</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ei</span><span class="p">)</span>
+    <span class="n">nl</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ei</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">4</span> <span class="o">*</span> <span class="n">nk</span><span class="p">,</span> <span class="n">nl</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nk</span><span class="p">):</span>
+        <span class="n">arr</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span>  <span class="p">,:]</span> <span class="o">=</span> <span class="n">ei</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span>
+        <span class="n">arr</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">gi</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span>
+        <span class="n">arr</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">2</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">min_tol</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span>
+        <span class="n">arr</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">3</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">name</span><span class="o">+</span><span class="s2">&quot;.csv&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">T</span><span class="p">,</span><span class="n">decimals</span><span class="p">),</span> <span class="n">delimiter</span><span class="o">=</span><span class="s2">&quot;,  &quot;</span><span class="p">,</span> <span class="n">fmt</span> <span class="o">=</span> <span class="s1">&#39;%.&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">decimals</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;f&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="lorentzian_from_file">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.lorentzian_from_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lorentzian_from_file</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span>
+    <span class="n">_fname</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">+</span><span class="n">fname</span>
+    <span class="k">if</span> <span class="s1">&#39;.csv&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fname</span><span class="p">:</span>
+        <span class="n">_fname</span> <span class="o">=</span> <span class="n">fname</span><span class="o">+</span><span class="s1">&#39;.csv&#39;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="n">_fname</span><span class="p">,</span> <span class="n">delimiter</span> <span class="o">=</span> <span class="s1">&#39;,  &#39;</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+    
+    <span class="n">nl</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">,:])</span>
+    <span class="n">nk</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">//</span><span class="mi">4</span>
+    <span class="n">ei</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nk</span><span class="p">,</span><span class="n">nl</span><span class="p">))</span>
+    <span class="n">gi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nk</span><span class="p">,</span><span class="n">nl</span><span class="p">))</span>
+    <span class="n">mt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nk</span><span class="p">,</span><span class="n">nl</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nk</span><span class="p">):</span>
+        <span class="n">ei</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span>  <span class="p">,</span> <span class="p">:]</span>
+        <span class="n">gi</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">mt</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">return</span> <span class="n">ei</span><span class="p">,</span> <span class="n">gi</span><span class="p">,</span> <span class="n">mt</span></div>
+
+    
+    
+<div class="viewcode-block" id="find_correction">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.find_correction">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">find_correction</span><span class="p">(</span><span class="n">R</span><span class="p">,</span><span class="n">Emin</span> <span class="o">=</span> <span class="o">-</span><span class="mf">10000.0</span><span class="p">,</span> <span class="n">Emax</span> <span class="o">=</span> <span class="mf">10000.0</span><span class="p">,</span> <span class="n">linear_part</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">Ei</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span><span class="n">Wi</span> <span class="o">=</span> <span class="mf">3.0</span><span class="p">):</span>
+    <span class="c1"># from Block_matrices.Croy import KK_L_sum</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">curve_fit</span>
+    
+    <span class="c1"># R:  Fitted TDT Object</span>
+    <span class="c1"># out A matrix with shape (nk,1, no,no)</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">R</span><span class="o">.</span><span class="n">sampling_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="s1">&#39;_old_sampling_idx&#39;</span><span class="p">):</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">R</span><span class="o">.</span><span class="n">_old_sampling_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">R</span><span class="o">.</span><span class="n">Contour</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">&gt;</span><span class="n">Emin</span><span class="p">)</span><span class="o">*</span><span class="n">R</span><span class="o">.</span><span class="n">Contour</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">&lt;</span><span class="n">Emax</span><span class="p">)]</span>
+    <span class="n">Eg</span>  <span class="o">=</span> <span class="n">R</span><span class="o">.</span><span class="n">Contour</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">real</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">R</span><span class="o">.</span><span class="n">bs2np</span><span class="p">(</span><span class="n">R</span><span class="o">.</span><span class="n">Lowdin</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">m1</span>  <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">R</span><span class="o">.</span><span class="n">bs2np</span><span class="p">(</span><span class="n">_se</span><span class="p">)[:,</span><span class="n">idx</span><span class="p">]</span>
+              <span class="k">for</span> <span class="n">_se</span> <span class="ow">in</span> <span class="n">R</span><span class="o">.</span><span class="n">self_energies</span><span class="p">])</span>
+    <span class="n">m1</span>  <span class="o">=</span> <span class="p">(</span><span class="n">m1</span> <span class="o">+</span> <span class="n">m1</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">())</span><span class="o">/</span><span class="mi">2</span>
+    
+    <span class="n">SEs</span>        <span class="o">=</span>  <span class="n">R</span><span class="o">.</span><span class="n">SE_from_lorentzian_fit</span><span class="p">(</span><span class="n">R</span><span class="o">.</span><span class="n">Contour</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">NO</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="c1">#m2  =  R.bs2np(SEs[0]) + R.bs2np(SEs[1])</span>
+    <span class="n">m2</span>         <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">R</span><span class="o">.</span><span class="n">bs2np</span><span class="p">(</span><span class="n">ses</span><span class="p">)</span> <span class="k">for</span> <span class="n">ses</span> <span class="ow">in</span> <span class="n">SEs</span><span class="p">])</span>
+    <span class="n">m2</span>         <span class="o">=</span> <span class="p">(</span><span class="n">m2</span> <span class="o">+</span> <span class="n">m2</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">conj</span><span class="p">())</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">mf</span>         <span class="o">=</span> <span class="n">m1</span><span class="o">-</span><span class="n">m2</span>
+    <span class="n">correction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">mf</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">linear_part</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">L</span><span class="nd">@correction</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span><span class="nd">@L</span>
+    
+    <span class="n">C</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">correction</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">)</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">correction</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">)</span>
+    <span class="n">Bol</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">mf</span><span class="p">)</span><span class="o">&gt;</span><span class="mf">1e-10</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">I</span><span class="p">,</span><span class="n">J</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Bol</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">ik</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">C</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">I</span><span class="p">)):</span>
+            <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="n">c</span><span class="p">],</span> <span class="n">J</span><span class="p">[</span><span class="n">c</span><span class="p">]</span>
+            <span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">A</span><span class="p">):</span><span class="c1">#,B):</span>
+                <span class="n">pars</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+                <span class="n">pars</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">Wi</span>
+                <span class="n">pars</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">Ei</span>
+                <span class="c1">#pars[2] = B</span>
+                <span class="k">return</span> <span class="p">(</span><span class="n">A</span> <span class="p">)</span><span class="c1">#+ KK_L_sum(x, pars)).real</span>
+            <span class="n">poptr</span><span class="p">,</span> <span class="n">pcov</span> <span class="o">=</span> <span class="n">curve_fit</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">Eg</span><span class="p">,</span> <span class="n">mf</span><span class="p">[</span><span class="n">ik</span><span class="p">,:,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">p0</span><span class="o">=</span><span class="p">[</span><span class="n">C</span><span class="p">[</span><span class="n">ik</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">real</span><span class="p">]</span><span class="c1">#,0]</span>
+                                    <span class="p">)</span>
+            
+            <span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">A</span><span class="p">):</span><span class="c1">#,B):</span>
+                <span class="n">pars</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+                <span class="n">pars</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">Wi</span>
+                <span class="n">pars</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">Ei</span>
+                <span class="c1">#pars[2] = B</span>
+                <span class="k">return</span> <span class="p">(</span><span class="n">A</span> <span class="p">)</span><span class="c1">#+ KK_L_sum(x, pars)).real</span>
+            <span class="n">popti</span><span class="p">,</span> <span class="n">pcov</span> <span class="o">=</span> <span class="n">curve_fit</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">Eg</span><span class="p">,</span> <span class="n">mf</span><span class="p">[</span><span class="n">ik</span><span class="p">,:,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">imag</span><span class="p">,</span> <span class="n">p0</span><span class="o">=</span><span class="p">[</span><span class="n">C</span><span class="p">[</span><span class="n">ik</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">imag</span><span class="p">]</span><span class="c1">#,0]</span>
+                                    <span class="p">)</span>
+            <span class="c1"># if (i,j) == (8,8):</span>
+            <span class="c1">#     x = np.linspace(-1,1,1000)</span>
+            <span class="c1">#     plt.plot(Eg.real, m1[ik,:,i,j].real, label = &#39;sampled&#39;)</span>
+            <span class="c1">#     plt.plot(Eg.real, 7*m2[ik,:,i,j].real, label = &#39;fit&#39;)</span>
+            <span class="c1">#     plt.plot(Eg.real, mf[ik,:,i,j].real, label = &#39;difference&#39;)</span>
+            <span class="c1">#     plt.plot(x, func(x,poptr[0], poptr[1]), label = &#39;fit diff&#39;)</span>
+            <span class="c1">#     plt.legend()</span>
+            <span class="c1">#     plt.xlim(-1,1)</span>
+            <span class="c1">#     plt.show()</span>
+                
+            <span class="n">C</span><span class="p">[</span><span class="n">ik</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">poptr</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span><span class="n">popti</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1">#X[ik,i,j] = poptr[1] + 1j *popti[1]</span>
+    
+    <span class="k">return</span> <span class="n">L</span><span class="nd">@C@L</span><span class="c1">#,L@X@L</span></div>
+
+
+
+    
+    
+
+
+
+
+
+<div class="viewcode-block" id="piecewise_linspace">
+<a class="viewcode-back" href="../../Zandpack.html#Zandpack.FittingTools.piecewise_linspace">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">piecewise_linspace</span><span class="p">(</span><span class="n">Ev</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">==</span><span class="nb">len</span><span class="p">(</span><span class="n">Ev</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">ints</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">dE</span> <span class="o">=</span> <span class="n">Ev</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">Ev</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">ints</span> <span class="o">+=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">Ev</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">Ev</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">dE</span><span class="o">/</span><span class="n">n</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">n</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">(</span><span class="n">ints</span><span class="p">)</span></div>
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Aleksander Bach Lorentzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
