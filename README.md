@@ -13,7 +13,7 @@ Zandpack is an open-source Python package for performing time-dependent quantum 
 
 $i\hbar\frac{\mathrm{d}\sigma}{\mathrm{d}t} = [H(t), \sigma(t)] + i\sum_\alpha\left[\Pi_\alpha(t) + \Pi_\alpha^\dagger(t) \right]$. 
 
-and allows for numerically exact open-system dynamics at the mean-field level. See the [publication](https://doi.org/10.1016/j.cpc.2026.110087) for the full details.
+and allows for numerically exact open-system dynamics at the mean-field level. You have access to the reduced density matrix throughout the calculation and you can build your own density dependence into the time-dependent Hamiltonian. See the [publication](https://doi.org/10.1016/j.cpc.2026.110087) for the full details.
 
 
 ## Features 
@@ -25,10 +25,10 @@ and allows for numerically exact open-system dynamics at the mean-field level. S
        - The zand code to propagate the full initial state under timedependent bias and fields. This part is implemented using mpi4py and can scale to many compute nodes. 
  - Extensible: Supports custom interfaces for other LCAO-based DFT codes.
 
-## Installation
-### Untested way
+## Installation (see dependencies also)
+### Untested way 
 You may be able to download the code directly like this
-pip install git+https://github.com/username/repo.git
+
 ```console
     pip install git+https://github.com/AleksBL/Zandpack.git
 ```
@@ -38,12 +38,14 @@ To install Zandpack, download the code as a zip file, unpack it and navigate to 
 ```console
     python3 -m pip install -e .
 ```
-and you will have an editable install of the code. 
+and you will have an editable install of the code.
+### Add to PATH
 Additionally, add the these two folders to your PATH environment variable: 
 ```console
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/cmdtools:$PATH"
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpi:$PATH"
 ```
+### Dependencies
 Zandpack depends on the following packages: 
 - numpy
 - numba
