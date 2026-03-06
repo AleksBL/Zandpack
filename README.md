@@ -26,12 +26,19 @@ and allows for numerically exact open-system dynamics at the mean-field level. S
  - Extensible: Supports custom interfaces for other LCAO-based DFT codes.
 
 ## Installation
+### Untested way
+You may be able to download the code directly like this
+pip install git+https://github.com/username/repo.git
+```console
+    pip install git+https://github.com/AleksBL/Zandpack.git
+```
+But this is untested for the moment. 
+### Tested way
 To install Zandpack, download the code as a zip file, unpack it and navigate to the Zandpack folder containing the setup.py file in a terminal. Now execute
 ```console
     python3 -m pip install -e .
 ```
 and you will have an editable install of the code. 
-
 Additionally, add the these two folders to your PATH environment variable: 
 ```console
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/cmdtools:$PATH"
