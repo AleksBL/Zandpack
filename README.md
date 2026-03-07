@@ -66,8 +66,8 @@ A html file can be found (after you build it) in the docs/_build/html directory.
 
 ## Demonstration of use
 You can find a demonstration of the use of Zandpack in video form
-- [C60](https://gnulinux.tube/w/dLTgJsfmDSCk2ggop9uUw9) 
-- [ZGNR TB + Hubbard](https://gnulinux.tube/w/oNpuZhXB7zahKHzEx6QNrT) 
+- [C60](https://makertube.net/w/g9S9iA2tnZHwM9iyfZTxwV) 
+- [ZGNR TB + Hubbard](https://makertube.net/w/sNQenJFFFAfFowNeYuVcYM) 
 
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
