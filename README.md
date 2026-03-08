@@ -74,7 +74,7 @@ You can find a demonstration of the use of Zandpack in video form
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
 
 ## Examples
-Python scripts of several example calculations can be found in the examples folder. These are less structured, but they are undestandable after doing the tutorials. 
+Python scripts of several example calculations can be found in the examples folder. These are less structured, but they are understandable after doing the tutorials. 
 
 ## Contact 
 Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me.
