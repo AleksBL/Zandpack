@@ -66,9 +66,9 @@ A html file can be found (after you build it) in the docs/_build/html directory.
 
 ## Demonstration of use
 You can find a demonstration of the use of Zandpack in video form
-- [C60](https://makertube.net/w/g9S9iA2tnZHwM9iyfZTxwV) 
-- [ZGNR TB + Hubbard](https://makertube.net/w/sNQenJFFFAfFowNeYuVcYM) 
-- [DFTB+ on ZGNR](https://makertube.net/w/cWnZofN5T7fdHSdWy8tbTx)
+- [C60 static calculation](https://makertube.net/w/g9S9iA2tnZHwM9iyfZTxwV) 
+- [ZGNR TB + Hubbard calculation](https://makertube.net/w/sNQenJFFFAfFowNeYuVcYM) 
+- [DFTB+ used to model ZGNR /w density dependence](https://makertube.net/w/cWnZofN5T7fdHSdWy8tbTx)
 
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
