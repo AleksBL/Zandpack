@@ -6,11 +6,14 @@ Created on Fri Sep 13 14:29:18 2024
 @author: investigator
 """
 
-from Structures.Structures import AuTip_EM, AuTip_EP, AuTip_Dev
 import numpy as np
 import matplotlib.pyplot as plt
 from siesta_python.siesta_python import SiP
 import sisl
+AuTip_Dev = sisl.get_sile("Dev.xyz").read_geometry()
+AuTip_EM = sisl.get_sile("EM.xyz").read_geometry()
+AuTip_EP = sisl.get_sile("EP.xyz").read_geometry()
+
 
 Ng = 0
 dz = 2.0
