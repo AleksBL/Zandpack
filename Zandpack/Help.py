@@ -58,7 +58,27 @@ class TDHelper:
         self.S         = self.invLowdin @ self.invLowdin
         self.piv       = flexload(self.dir+'/pivot.npy')
         self.positions = flexload(self.dir+'/Positions.npy')
-        
+        try:
+            o2a = flexload(self.dir+'/piv_o2a.npy')
+            self.orb_pos = self.positions[o2a]
+        except:
+            self.orb_pos = None
+    def approxfield2mat(self, field, custom_o2a = None, orthogonal=True):
+        if self.orb_pos is None and custom_o2a is None:
+            print("No orbital possitions have been given, cant calculate the approximate matrix of your field! :( ")
+            print("Try to specify the custom_o2a in the TDHelper class...")
+            return np.zeros(self.H0.shape, dtype=complex)
+        else:
+            no  = self.H0.shape[-1]
+            fiv = np.zeros(no)
+            for i in range(no):
+                fiv[i] = field(self.orb_pos[i]) * 0.5
+            out = (fiv[None,:,None]+fiv[None,None,:]) * self.S
+            if orthogonal:
+                return self.Lowdin @ out @ self.Lowdin
+            else:
+                return out
+            
     def lowdin_transform(self, A):
         """ returns S^(-1/2) @ A @ S^(-1/2)
         """

@@ -7,6 +7,7 @@ Created on Mon Mar 16 16:47:40 2026
 """
 from Zandpack.td_constants import hbar
 import numpy as np
+import inspect
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
 
@@ -35,7 +36,7 @@ class Initial:
         self.loadfromfull=LoadFromFull
         self.checkpoints = checkpoints
         if checkpoints is None:
-            self.checkpoints = np.linspace(t0,t1, 10)
+            self.checkpoints = np.linspace(t0,t1, 5)[1:]
         self.save_checkpoints = save_checkpoints
         self.print_timings = print_timings
         self.stepsize=stepsize
@@ -64,7 +65,7 @@ class Initial:
             f.write(text)
         if self.verbose:
             print("Wrote Initial.py file")
-    def write_bias(self, prefix, more_imports = None, mpi4py=False,os_envvar=[]):
+    def write_bias(self, prefix, more_imports = None, mpi4py=False,os_envvar=[], bias=None, dH=None, ):
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
@@ -80,16 +81,13 @@ class Initial:
             text += "_"+ev+"=os.environ[\"" +ev+"\"]\n"
         text+= "name=\""+str(self.name)+"\"\n"
         text+= "Hlp = TDHelper(name); nlead=Hlp.num_leads\n"
+        text+= "### Standard functions for various transformations \n### between orthogonal and nonorthogonal basis\n"
         text+= "def sigO2NO(DMlike): return Hlp.Lowdin @ DMlike @ Hlp.Lowdin\n"
         text+= "def sigNO2O(DMlike): return Hlp.invLowdin @ DMlike @ Hlp.invLowdin\n"
         text+= "def HamO2NO(Hlike):  return Hlp.invLowdin @ Hlike @ Hlp.invLowdin\n"
-        text+= "def HamNO2O(Hlike):  return Hlp.Lowdin@Hlike @ Hlp.Lowdin\n"
+        text+= "def HamNO2O(Hlike):  return Hlp.Lowdin @ Hlike @ Hlp.Lowdin\n"
         text+= "def LeadDevOrthCorr_O(t):\n"
-        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ]) \n" 
-        text+= "def LeadDevOrthCorr_NO(t):\n"
-        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ], orthogonal=False) \n"
-        text+= "def LeadDevOrthCorr_O(t):\n"
-        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ]) \n" 
+        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ], orthogonal=True)\n" 
         text+= "def LeadDevOrthCorr_NO(t):\n"
         text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ], orthogonal=False)\n"
         text+= "def sig2mul_O(dm):\n"
@@ -98,6 +96,15 @@ class Initial:
         text+= "def sig2mul_NO(dm):\n"
         text+= "    return Hlp.S @ dm + dm @ Hlp.S\n"
         text+= "def dissipator(t,sig): return 0.0\n"
+        
+        if dH is None:
+            if self.orthogonal:
+                text += "def dH(t,dm): \n"
+                text += "    return 0.0 \n"
+        
+        if bias is not None:
+            text+= inspect.getsource(bias)
+        
         with open(prefix + "/Bias.py", "w") as f:
             f.write(text)
         if self.verbose:

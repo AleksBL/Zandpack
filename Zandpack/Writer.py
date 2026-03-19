@@ -1,7 +1,6 @@
 import os
 import numpy as np
 
-
 # def write_to_file_compressed(A, dirname):
 #     try:
 #         os.mkdir(dirname)
@@ -100,13 +99,19 @@ def write_to_file_compressed(A, dirname):
     np.save('_GpB_Eigenvalues',A.GpB_eig)
     np.save('_GpC_Eigenvalues',A.GpC_eig)
     np.save('Positions',       A.Device.pos_real_space)
+    try:
+        import sisl
+        HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".TSHS").read_hamiltonian()
+        np.save("pivot_o2a", HS.o2a(A.pivot))
+    except:
+        pass
     np.save('Species',         A.Device.s)
     np.save('pivot',           np.array(A.pivot))
     np.save('Fermi Poles',     A.F_poles)
     np.save('mu_i',            A.mu_i)
     np.save('kT_i',            A.kT_i)
     np.save('coeffs_fermi',    A.coeffs_fermi)
-    np.save('zero_tol',A._zero_tol)
+    np.save('zero_tol',        A._zero_tol)
     
     for i,L in enumerate(A.fitted_lorentzians):
         np.save('Centres_Lorentzian_'+str(i), L.ei)
