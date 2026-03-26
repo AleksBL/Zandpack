@@ -95,7 +95,19 @@ class Initial:
         text+= "    return Hlp.S @ nodm + nodm @ Hlp.S\n"
         text+= "def sig2mul_NO(dm):\n"
         text+= "    return Hlp.S @ dm + dm @ Hlp.S\n"
-        text+= "def dissipator(t,sig): return 0.0\n"
+        text+= "def dissipator(t,sig): return 0.0\n\n"
+        text+= "P1  = np.average(Hlp.pos_elecorbs[0],axis=0); P2 = np.average(Hlp.pos_elecorbs[1],axis=0)\n"
+        text+= "drc = P2 - P1; drc *= 1/np.linalg.norm(drc)\n"
+        text+= "Po  = (Hlp.orb_pos - P1).dot(drc) \n"
+        text+= "X0 = Po.min(); X1 = Po.max()\n"
+        text+= "def scalar_field_ramp(r,t):\n"
+        text+= "    # Please modify this for better ramp potential. \n    # very crude 2E version \n"
+        text+= "    X = r.dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
+        text+= "    return F \n"
+        
+        
+        
+        
         
         if dH is None:
             if self.orthogonal:

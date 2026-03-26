@@ -203,12 +203,13 @@ if True:
     try:
         if options['real_line_exact_fermi']=='True':
             assert 1 == 0
+        print("Using Pade-expanded Fermi function")
         N_poles = flexload(options['file'] + '/Arrays/num_poles_fermi.npy')
         zi, R   = Hu_poles(N_poles)
         def fdf(E,mu,kT):
             return FD_expanded(E, zi, 1/kT , mu = mu, coeffs = R)
     except:
-        print('Using exact Fermi´')
+        print('Using exact Fermi function')
         def fdf(E,mu,kT):
             return 1/(1+np.exp((E-mu)/kT))
     # _RL has start in real part, endpoint in imag part.

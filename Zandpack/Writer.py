@@ -99,11 +99,14 @@ def write_to_file_compressed(A, dirname):
     np.save('_GpB_Eigenvalues',A.GpB_eig)
     np.save('_GpC_Eigenvalues',A.GpC_eig)
     np.save('Positions',       A.Device.pos_real_space)
+    for _ie, idx in enumerate(A.read_coupling_inds):
+        np.save("read_coupling_idx_"+str(_ie), np.array([np.where(K==A.pivot)[0][0] for K in idx]))
     try:
         import sisl
         HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".TSHS").read_hamiltonian()
         np.save("pivot_o2a", HS.o2a(A.pivot))
     except:
+        print("Failed to get o2a pivot indices....")
         pass
     np.save('Species',         A.Device.s)
     np.save('pivot',           np.array(A.pivot))

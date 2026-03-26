@@ -59,25 +59,33 @@ class TDHelper:
         self.piv       = flexload(self.dir+'/pivot.npy')
         self.positions = flexload(self.dir+'/Positions.npy')
         try:
-            o2a = flexload(self.dir+'/piv_o2a.npy')
-            self.orb_pos = self.positions[o2a]
+            o2a = flexload(self.dir+'/pivot_o2a.npy')
+            self.orb_pos   = self.positions[o2a]
+            self.orb_elecs = [np.where((np.abs((self.Sig0_NO[ia]) + np.abs(self.Sig1_NO[ia]))>1e-7).any(axis=(0,1)))[0]
+                              for ia in range(self.num_leads)]
+            self.pos_elecorbs = [self.orb_pos[idx] for idx in self.orb_elecs]
+            
         except:
             self.orb_pos = None
-    def approxfield2mat(self, field, custom_o2a = None, orthogonal=True):
+            self.orb_elecs = [np.load("read_coupling_inds_"+str(ia)+".npy")
+                              for ia in range(self.num_leads)]
+            
+    def approxfield2mat(self, t, field, custom_o2a = None, orthogonal=True):
         if self.orb_pos is None and custom_o2a is None:
-            print("No orbital possitions have been given, cant calculate the approximate matrix of your field! :( ")
+            print("No orbital positions have been given, cant calculate the approximate matrix of your field! :( ")
             print("Try to specify the custom_o2a in the TDHelper class...")
             return np.zeros(self.H0.shape, dtype=complex)
         else:
             no  = self.H0.shape[-1]
-            fiv = np.zeros(no)
+            fiv = np.zeros(no,dtype=complex)
             for i in range(no):
-                fiv[i] = field(self.orb_pos[i]) * 0.5
+                fiv[i] = field(self.orb_pos[i], t) * 0.5
             out = (fiv[None,:,None]+fiv[None,None,:]) * self.S
             if orthogonal:
                 return self.Lowdin @ out @ self.Lowdin
             else:
                 return out
+    
             
     def lowdin_transform(self, A):
         """ returns S^(-1/2) @ A @ S^(-1/2)
