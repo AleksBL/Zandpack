@@ -57,7 +57,8 @@ options = {'file': 'SaveFile',   # directory
            'Woodbury-inv':'True',
            'prec_to_disk':'False',
            'outer_einsum':'True',
-           #'use_preconditioner':'True'
+           'use_preconditioner':'True',
+           'start_psi':'None'
            }
 
 
@@ -238,7 +239,7 @@ for IK in range(nk):
             xi_ijk  = xi.reshape(na*nx*noT,no).copy()
             xid_ijk = xi.reshape(na*nx*noT,no).conj()
             outer=None
-            
+        
         print('Outer done!')
         vals    = []
         slices1 = []
@@ -373,17 +374,20 @@ for IK in range(nk):
     OPSI     =  np.zeros((na,nx,noT, no), dtype=np.complex128)
     alloc_psi=  np.zeros((na,nx,noT, no), dtype=np.complex128)
     psic     =  np.zeros((na,nx,noT, no), dtype=np.complex128)
-    preconditioner  = diagmat()
-    x        = preconditioner@bvec
+    if options["use_preconditioner"]=='True':
+        preconditioner  = diagmat()
+        x        = preconditioner@bvec
+    else:
+        preconditioner = None
+        x = np.random.random(len(bvec),dtype=complex)
     if options['add_random']=='True':
         x   += np.random.random(len(bvec))*float(options['random_weight'])
-    
-    #if options['start_psi']!='None':
-    #    x    = np.load(options['start_psi'])[IK].reshape(na*nx*noT*no)
-    #    print()
+    if options['start_psi']!='None':
+        x    = np.load(options['start_psi'])[IK].reshape(na*nx*noT*no)
+        x = np.hstack([x.real, x.imag])
+        print(pref + "Read initial Psi given in "+options["start_psi"])
     print(pref + options['Axb_solver'] + ' solver started')
     LO       = LinearOperator((N,N), matvec = matvec3,dtype=np.float64)
-    
     maxit     = int(options['maxiter'])
     fails     = 0
     fracdef   =  0.0

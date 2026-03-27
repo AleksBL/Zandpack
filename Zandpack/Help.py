@@ -41,6 +41,10 @@ class TDHelper:
     def __init__(self, Dir, orthogonal = True, valid_ranks = [0]):
         if rank not in valid_ranks:
             self.status = 'uninitialized'
+            self.num_leads=None
+            self.invLowdin=None
+            self.Lowdin=None
+            self.orb_pos=None
             return
         self.status = 'initialized'
         self.dir=Dir + '/Arrays'
@@ -51,6 +55,7 @@ class TDHelper:
         self.Sig1_NO = np.array(A4)
         self.Hcorr   = A5
         self.H0        = flexload(self.dir+'/H_Ortho.npy')
+        self.no        = self.H0.shape[-1]
         self.orthog    = orthogonal
         self.num_leads = len(self.Sig0_O)
         self.Lowdin    = flexload(self.dir+'/S^(-0.5).npy')
@@ -67,13 +72,19 @@ class TDHelper:
             
         except:
             self.orb_pos = None
-            self.orb_elecs = [np.load("read_coupling_inds_"+str(ia)+".npy")
-                              for ia in range(self.num_leads)]
-            
+            try:
+                self.orb_elecs = [np.load("read_coupling_inds_"+str(ia)+".npy")
+                                  for ia in range(self.num_leads)]
+            except:
+                print("Didnt suceeed in reading any electrode positions... Giving random positions")
+                self.orb_elecs = [np.array([0]), np.array([self.no-1])]
+    
     def approxfield2mat(self, t, field, custom_o2a = None, orthogonal=True):
         if self.orb_pos is None and custom_o2a is None:
-            print("No orbital positions have been given, cant calculate the approximate matrix of your field! :( ")
-            print("Try to specify the custom_o2a in the TDHelper class...")
+            if not hasattr(self, "orb_pos_warning"):
+                print("No orbital positions have been given, cant calculate the approximate matrix of your field! :( ")
+                print("Try to specify the custom_o2a in the TDHelper class...")
+                self.orb_pos_warning = "warning"    
             return np.zeros(self.H0.shape, dtype=complex)
         else:
             no  = self.H0.shape[-1]

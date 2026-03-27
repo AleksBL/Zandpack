@@ -8,10 +8,14 @@ Created on Mon Mar 16 16:47:40 2026
 from Zandpack.td_constants import hbar
 import numpy as np
 import inspect
+import os
+from time import time
+from  Zandpack.plot import J, DM
+glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
 
-class Initial:
+class Input:
     def __init__(self, 
                  name,
                  t0, 
@@ -23,6 +27,7 @@ class Initial:
                  save_checkpoints=False,
                  print_timings=False,
                  stepsize=0.1,
+                 saveevery=50,
                  n_dm_compress=10, 
                  save_PI = False,
                  verbose=True,
@@ -44,33 +49,36 @@ class Initial:
         self.save_PI = save_PI
         self.verbose = verbose
         self.orthogonal=True
+        self.saveevery = saveevery
     def write_initial(self, prefix):
         text = "from Zandpack.td_constants import hbar\n"
         text+= "from Zandpack.Loader import load_dictionary\n"
         text+= "import numpy as np\n"
-        
         text+="name=\""+str(self.name)+"\"\n"
         text+="t0="+str(self.t0)+"\n"
         text+="t1="+str(self.t1)+"\n"
+        text+="eps="+str(self.eps)+"\n"
         text+="usesave="+str(self.usesave)+"\n"
+        text+="LoadFromFull="+str(self.loadfromfull)+"\n"
         text+="checkpoints="+str([float(v) for v in self.checkpoints])+"\n"
         text+="save_checkpoints="+str(self.save_checkpoints)+"\n"
         text+="print_timings="+str(self.print_timings)+"\n"
         text+="stepsize="+str(self.stepsize)+"\n"
         text+="n_dm_compress="+str(self.n_dm_compress)+"\n"
         text+="save_PI="+str(self.save_PI)+"\n"
+        text+="saveevery="+str(self.saveevery)+"\n"
         text+="Adir = name + \'/Arrays/\'\n"
         text+="Arrs = load_dictionary(Adir)\n"
         with open(prefix + "/Initial.py", "w") as f:
             f.write(text)
         if self.verbose:
             print("Wrote Initial.py file")
-    def write_bias(self, prefix, more_imports = None, mpi4py=False,os_envvar=[], bias=None, dH=None, ):
+    def write_bias(self, prefix, more_imports = None, mpi4py=True,os_envvar=[], bias=None, dH=None, ):
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
         if mpi4py:
-            text += "from mpi4py import MPI; rank = MPI.COMM_WORLD.Get_rank(); size = rank = MPI.COMM_WORLD.Get_size()\n"
+            text += "from mpi4py import MPI; rank = MPI.COMM_WORLD.Get_rank(); size = MPI.COMM_WORLD.Get_size()\n"
         if more_imports is not None:
             if isinstance(more_imports, str):
                 text += more_imports
@@ -80,47 +88,280 @@ class Initial:
         for ev in os_envvar:
             text += "_"+ev+"=os.environ[\"" +ev+"\"]\n"
         text+= "name=\""+str(self.name)+"\"\n"
+        text+= "orth= "+str(self.orthogonal)+"\n"
         text+= "Hlp = TDHelper(name); nlead=Hlp.num_leads\n"
-        text+= "### Standard functions for various transformations \n### between orthogonal and nonorthogonal basis\n"
-        text+= "def sigO2NO(DMlike): return Hlp.Lowdin @ DMlike @ Hlp.Lowdin\n"
-        text+= "def sigNO2O(DMlike): return Hlp.invLowdin @ DMlike @ Hlp.invLowdin\n"
-        text+= "def HamO2NO(Hlike):  return Hlp.invLowdin @ Hlike @ Hlp.invLowdin\n"
-        text+= "def HamNO2O(Hlike):  return Hlp.Lowdin @ Hlike @ Hlp.Lowdin\n"
-        text+= "def LeadDevOrthCorr_O(t):\n"
-        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ], orthogonal=True)\n" 
-        text+= "def LeadDevOrthCorr_NO(t):\n"
-        text+= "    return  Hlp.lead_dev_dyncorr(DeltaList = [bias(t, a) for a in range(nlead) ], orthogonal=False)\n"
+        text+= "L   = Hlp.Lowdin; iL = Hlp.invLowdin\n"
+        text+= "# Standard functions for various transformations \n# between orthogonal and nonorthogonal basis\n"
+        text+= "def sigO2NO(DMlike): return L  @ DMlike @ L\n"
+        text+= "def sigNO2O(DMlike): return iL @ DMlike @ iL\n"
+        text+= "def HamO2NO(Hlike):  return iL @ Hlike  @ iL\n"
+        text+= "def HamNO2O(Hlike):  return L  @ Hlike  @ L\n"
         text+= "def sig2mul_O(dm):\n"
         text+= "    nodm = sigO2NO(dm)\n"
         text+= "    return Hlp.S @ nodm + nodm @ Hlp.S\n"
         text+= "def sig2mul_NO(dm):\n"
         text+= "    return Hlp.S @ dm + dm @ Hlp.S\n"
-        text+= "def dissipator(t,sig): return 0.0\n\n"
-        text+= "P1  = np.average(Hlp.pos_elecorbs[0],axis=0); P2 = np.average(Hlp.pos_elecorbs[1],axis=0)\n"
-        text+= "drc = P2 - P1; drc *= 1/np.linalg.norm(drc)\n"
-        text+= "Po  = (Hlp.orb_pos - P1).dot(drc) \n"
-        text+= "X0 = Po.min(); X1 = Po.max()\n"
-        text+= "def scalar_field_ramp(r,t):\n"
-        text+= "    # Please modify this for better ramp potential. \n    # very crude 2E version \n"
-        text+= "    X = r.dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
-        text+= "    return F \n"
-        
-        
-        
-        
-        
+        text+= "def dissipator(t,sig): return 0.0\n"
+        text+= "if Hlp.orb_pos is not None and rank == 0:\n    P1 = np.average(Hlp.pos_elecorbs[0],axis=0)\n"
+        text+= "    P2 = np.average(Hlp.pos_elecorbs[1],axis=0)\n"
+        text+= "    drc= P2 - P1; drc *= 1/np.linalg.norm(drc)\n"
+        text+= "    Po = (Hlp.orb_pos - P1).dot(drc) \n"
+        text+= "    X0 = Po.min(); X1 = Po.max()\n"
+        text+= "    def ramp_field(r,t):\n"
+        text+= "        # Modify this at will. \n        # this is a crude 2E version \n"
+        text+= "        X = r.dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
+        text+= "        return F \n"
+        text+= "else: \n    def ramp_field(r,t): return 0.0\n"
         if dH is None:
-            if self.orthogonal:
-                text += "def dH(t,dm): \n"
-                text += "    return 0.0 \n"
-        
-        if bias is not None:
-            text+= inspect.getsource(bias)
-        
+            text += "def Ramp(t): \n"
+            text += "    return Hlp.approxfield2mat(ramp_field, t, orthogonal=orth) \n"
+        else:
+            text+= inspect.getsource(dH)
+        text += '\n'
+        text+= inspect.getsource(bias)
+        text+="def dH(t, sig):\n"
+        text+="    out = np.zeros(sig.shape,dtype=complex)\n"
+        text+="    out+= Ramp(t)\n"
+        text+="    DL  = [bias(t, a) for a in range(nlead) ]\n"
+        text+="    out+=  Hlp.lead_dev_dyncorr(DeltaList = DL, orthogonal=orth)\n"
+        text+="    return out\n"
         with open(prefix + "/Bias.py", "w") as f:
             f.write(text)
         if self.verbose:
             print("Wrote Bias.py file")
+    def pickle(self, filename):
+        """Saves input class to file"""
+        import pickle as pkl
+        f = open(filename +'.input', 'wb')
+        pkl.dump(self, f)
+        f.close()
+
+def fmt_str_cmd(s):
+    if isinstance(s, np.ndarray):
+        s2 = str([float(i) for i in list(s)])
+    else:
+        s2 = str(s)
+    for v in ["[", "]", "(", ")", " "]:
+        s2 = s2.replace(v, "")
+    return s2
+
+class Control:
+    def __init__(self, input_class, source_files=None):
+        self.input = input_class
+        # source files is the folder written by TD_Transport 
+        # when using "tofile"
+        self.srcf  = source_files
+        self.working_dir = None
+        self.textlog=[]
+        self._rawlog=[]
+    def set_direc(self, folder):
+        self.working_dir = folder
+    def into_wd(self):
+        self.orig_dir = os.getcwd()
+        os.chdir(self.working_dir)
+        self.textlog += ['cd into '+str(self.working_dir)+'\n']
+        self._rawlog += ['cd '+self.working_dir]
+    def out_wd(self):
+        os.chdir(self.orig_dir)
+        self.textlog += ['cd into '+str(self.orig_dir)+'\n']
+        self._rawlog += ['cd '+self.orig_dir]
+    def create_wd(self):
+        if self.working_dir is None:
+            print("WARNING! You need to set working directory...")
+            return
+        if os.path.isdir(self.working_dir) == False:
+            self.systemcall('mkdir ' + self.working_dir)
+    def init(self):
+        self.create_wd()
+        cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
+        self.systemcall(cmd)
+    def init_from_other(self, file_or_dir, newname):
+        """
+        This function is useful if you have a working directory and you want to reuse
+        the input files for another calculation.
+        """
+        self.create_wd()
+        self.systemcall("cp -rs $PWD/"+file_or_dir
+                        + " $PWD/"+self.working_dir+"/"+newname)
+    def copy_state(self, other_controller):
+        B = other_controller
+        self.create_wd()
+        self.init_from_other(B.working_dir +'/'+B.input.name, self.input.name)
+        self.create_subfolder(self.input.name+"_save")
+        self.init_from_other(B.working_dir+'/'+B.input.name+"_save/last_psi.npy", 
+                             self.input.name+"_save/last_psi.npy")
+        self.init_from_other(B.working_dir+'/'+B.input.name+"_save/last_omg.npy", 
+                             self.input.name+"_save/last_omg.npy")
+        
+    def create_subfolder(self, name):
+        self.into_wd()
+        os.mkdir(name)
+        self.textlog+=['made subfolder '+name+'\n']
+        self._rawlog+=['mkdir '+name+'\n']
+        self.out_wd()
+    def systemcall(self, cmd):
+        if glob_test==False:
+            exst = os.system(cmd)
+            exst = str(exst)
+        else:
+            exst = '?'
+        self.rawlog(cmd + '\n')
+        self.rawlog("exit status: " +exst+ '\n')
+    def rawlog(self, s):
+        self._rawlog += [s]
+    def modify_occupation(self, N_F=None,     eigtol=None, 
+                                mu_i = None,  kT_i=None,
+                                newlead=None, scale_gamma=None):
+        """
+        
+        If None is given, the default value of the tool is used
+        These can be seen using taking modify_occupations --help
+        Parameters
+        ----------
+        N_F : TYPE, optional
+            Number of poles in the Fermi function. .
+        eigtol : TYPE, optional
+             eigenvalues with absval smaller than this is neglected.
+        mu_i : list / 1d array, len(mu_i) = #elecs
+            DESCRIPTION. 
+        kT_i : list / 1d array, len(mu_i) = #elecs
+            DESCRIPTION. 
+        newlead : a script contaning functions for adding another lead
+            DESCRIPTION. 
+        scale_gamma : list of scalars, that will scale the given lead with the factor.
+            DESCRIPTION. 
+        """
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        kwargs["file"]    = self.input.name+'_SRC'
+        kwargs["outfile"] = self.input.name
+        for k in arg_values.args:
+            if k=='self':
+                continue
+            kwargs[k] = arg_values.locals[k]
+        self.run_cmd_standard("modify_occupations", " > modocc.out", **kwargs)
+    def make_ts_contour(self, E1   = None, N_C= None,  N_F = None, 
+                               fact = None, kT = None,  name= None,
+                               pp_path = None):
+        """
+        
+        Runs the make_ts_contour tool
+        Parameters
+        ----------
+        E1 : TYPE, optional
+            lower point of contour
+        N_C : TYPE, optional
+            number of points for the wide arch 
+        N_F : TYPE, optional
+            number of points for the finer part close to z=0 (?? ).
+        fact : TYPE, optional
+             fact * kT  is the cutoff for the fermi part 
+        kT : TYPE, optional
+            thermal energy
+        name : TYPE, optional
+            output contour name
+        pp_path : TYPE, optional
+            Transiesta is called through a SiP class, it needs a .psf/.psml
+            file directory. 
+        -------
+        """
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        for k in arg_values.args:
+            if k=='self':
+                continue
+            kwargs[k] = arg_values.locals[k]
+        self.run_cmd_standard("make_ts_contour", " > tscont.out", **kwargs)
+    def run_scf(self, Contour = None,  kT     = None, kweights = None, 
+                      drho_tol= None,  history= None, weight   = None, 
+                      DM_start_file=None, nprocs= None, backend = None, 
+                      DM_out_file  =None, UfUd  = None, real_line_integral=None, 
+                      real_line_min=None, real_line_max=None, real_line_N=None,
+                      real_line_exact_fermi=None, Nonequilibrium = None, 
+                      DM_randomness  = None, random_on_diag_only = None, 
+                      memory_conserve= None, fact_kT= None, tolerance  = None,
+                      quadvec_workers= None, Bias   = None, save_last_H= None):
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        kwargs["file"]=self.input.name
+        for k in arg_values.args:
+            if k=='self':
+                continue
+            kwargs[k] = arg_values.locals[k]
+        self.run_cmd_standard('SCF'," > scf.out", **kwargs)
+    def run_psinought(self,maxiter=None, checkderivative=None,dl=None,
+                           steptol=None, add_random=None, random_weight=None,
+                           L_info =None, Axb_solver=None, start_psi = None,
+                           memory_save = None, Xpp_optim = None,  printfile=None,
+                           extreme_memory_save = None, Woodbury_inv =None,
+                           prec_to_disk=None, outer_einsum=None,
+                           use_preconditioner = None ):
+        """
+        Please note the argument "Woodbury_inv" is a slightly different name
+        compared to the actual psinought tool. This is because one cannot write the 
+        argument with the dash in the arg name.... Woodbury_inv is changed
+        to Woodbury-inv during the passing of arguments. 
+        """
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        kwargs["file"]=self.input.name
+        for k in arg_values.args:
+            if k=='self':
+                continue
+            if k=="Woodbury_inv":
+                k2 ="Woodbury-inv"
+                kwargs[k2] = arg_values.locals[k]
+            else:
+                kwargs[k] = arg_values.locals[k]
+        self.run_cmd_standard('psinought'," > psi0.out", **kwargs)
+    def run_cmd_standard(self, CMD, out, **kwargs):
+        cmd = CMD + " Dir=$PWD "
+        for kw in kwargs.keys():
+            val = kwargs[kw]
+            if val is not None:
+                v    = fmt_str_cmd(val)
+                cmd += " "+kw+"="+v
+        self.into_wd()
+        self.systemcall(cmd + out)
+        self.textlog += ['Ran '+cmd + "\n"]
+        self.out_wd()
+    def run_zand(self, mpi="mpirun "):
+        self.textlog += ['Executing zand....\n']
+        self.run_cmd_standard(mpi+"zand ", " > zand.out",)
+    def run_nozand(self, mpi="mpirun "):
+        self.textlog += ['Executing nozand....\n']
+        self.run_cmd_standard(mpi+"nozand ", " > nozand.out")
+    def write_log(self,ftxt):
+        with open(ftxt, "w") as f:
+            for l in self.textlog:
+                f.write(l)
+    def write_rawlog(self,ftxt):
+        with open(ftxt, "w") as f:
+            for l in self._rawlog:
+                f.write(l)
+    #####
+    def read_current(self):
+        return J([self.working_dir+"/"+self.input.name+'_save'])
+    def read_dm(self):
+        return DM([self.working_dir+"/"+self.input.name+'_save'])
+    def pickle(self, filename):
+        """Saves controller to file"""
+        import pickle as pkl
+        f = open(filename +'.control', 'wb')
+        pkl.dump(self, f)
+        f.close()
+    
+        
+    
+    
+        
+            
+            
+        
         
         
         
