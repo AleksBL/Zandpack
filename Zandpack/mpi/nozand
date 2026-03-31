@@ -566,17 +566,18 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                     c[-len(DM):],
                 )
             _N_last  = np.sum(_overlap*(DM[-1]),axis=(1,2))
-            pisfa = [ PI_holder[-1][:, Å, :, :] +PI_holder[-1][:, Å, :, :].conj().transpose(0,2,1)
-                     for Å in range(NL)]
-            _projs   = DM_other_mat_analysis( DM[-1], 
-                                             [DM[-1],] + 
-                                             [SIGS[0] - sum(pisfa)] + 
-                                             pisfa
-                                             )
-            _projs = [np.diagonal(_yoda, axis1=1,axis2=2) 
-                      for _yoda in _projs]
-            
-            del pisfa
+            if save_PI:
+                pisfa = [ PI_holder[-1][:, Å, :, :] +PI_holder[-1][:, Å, :, :].conj().transpose(0,2,1)
+                         for Å in range(NL)]
+                _projs   = DM_other_mat_analysis( DM[-1], 
+                                                 [DM[-1],] + 
+                                                 [SIGS[0] - sum(pisfa)] + 
+                                                 pisfa
+                                                 )
+                _projs = [np.diagonal(_yoda, axis1=1,axis2=2) 
+                          for _yoda in _projs]
+                
+                del pisfa
             DM = []
             PI_holder = []
             _uno = "t=" + str(np.round(t0, 3))
@@ -598,8 +599,8 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 #+ (" | OPU="+str(np.round(_projs[0].real*100/_N_last.real)).replace("[","").replace("]","") 
                 #   + " (%)" + " "*20 )[0:23]
                 ## + " | "+str(np.round(_projs[1].real, 3)).replace("[","").replace("]","")
-                + (" | OPU="+str(np.round(_projs[1].real,4)).replace("[","").replace("]","") 
-                    + " (%)" + " "*20 )[0:30]
+                #+ (" | OPU="+str(np.round(_projs[1].real,4)).replace("[","").replace("]","") 
+                #    + " (%)" + " "*20 )[0:30]
                 + " |\n"
                 )
             
@@ -624,9 +625,9 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 _tcur_str = repl_flstr(str(format(sum(c[-1]), ".2e")))
                 if _tcur_str[0]!='-':
                     _tcur_str = '+'+_tcur_str
-                _tmpopuvals = _projs[k+2].real
-                if (abs(_cur)<1e-3).any():
-                    _tmpopuvals = _tmpopuvals * np.nan
+                #_tmpopuvals = _projs[k+2].real
+                #if (abs(_cur)<1e-3).any():
+                #    _tmpopuvals = _tmpopuvals * np.nan
                 _the_print_string = "         |\u237A=" \
                 + str(k)                           \
                 + " | \u0394="                   \
@@ -635,8 +636,8 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 + "=" \
                 + _cur_str  +" "\
                 +"|              " \
-                + ((" | OPU="+str(np.round(_tmpopuvals,4))).replace("[","").replace("]","")
-                    + " " + " "*20 )[0:30]
+                #+ ((" | OPU="+str(np.round(_tmpopuvals,4))).replace("[","").replace("]","")
+                #    + " " + " "*20 )[0:30]
                 if k < _nlpr - 2:
                     _the_print_string = _the_print_string + " "*(37 - len(_the_print_string))+" |\n"
                 else:

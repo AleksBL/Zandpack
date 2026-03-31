@@ -8,9 +8,11 @@ Created on Mon Mar 16 16:47:40 2026
 from Zandpack.td_constants import hbar
 import numpy as np
 import inspect
-import os
-from time import time
+import os, sisl
+from time import time, sleep
 from  Zandpack.plot import J, DM
+from copy import deepcopy
+
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -135,6 +137,14 @@ class Input:
         f = open(filename +'.input', 'wb')
         pkl.dump(self, f)
         f.close()
+    def copy(self):
+        #self._rawlog("made copy")
+        out = deepcopy(self)
+        #o#ut._rawlog+=["spawned from copy"]
+        return out
+
+    
+
 
 def fmt_str_cmd(s):
     if isinstance(s, np.ndarray):
@@ -154,8 +164,11 @@ class Control:
         self.working_dir = None
         self.textlog=[]
         self._rawlog=[]
+        self.basedir = os.getcwd()
     def set_direc(self, folder):
         self.working_dir = folder
+        self.wdir_abspath = os.getcwd() + folder
+        
     def into_wd(self):
         self.orig_dir = os.getcwd()
         os.chdir(self.working_dir)
@@ -209,6 +222,22 @@ class Control:
         self.rawlog("exit status: " +exst+ '\n')
     def rawlog(self, s):
         self._rawlog += [s]
+    @property
+    def sigma(self):
+        dmpath = self.working_dir+'/'+self.input.name+'/DM_Ortho.npy'
+        try:
+            return np.load(dmpath)
+        except:
+            print("failed to load from "+dmpath)
+    
+    @property
+    def sigma(self):
+        psipath = self.working_dir+'/'+self.input.name+'_save/last_psi.npy'
+        try:
+            return np.load(psipath)
+        except:
+            print("failed to load from "+psipath)
+    
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
                                 newlead=None, scale_gamma=None):
@@ -354,35 +383,100 @@ class Control:
         f = open(filename +'.control', 'wb')
         pkl.dump(self, f)
         f.close()
+        
+class transiesta_hook:
+    def __init__(self, dev, scheme, nsc=(1,1,1)):
+        self.fermi_level = dev.read_fermi_level_from_out()
+        self.devg  = sisl.get_sile(dev.dir+'/siesta.XV').read_geometry()
+        self.devg.set_nsc(nsc)
+        dev2 = dev.clone(dev.dir+'_dm2h')
+        self.devg.write(dev2.dir+'/geom.xyz')
+        self.dev = dev2
+        self.orig_dev = dev
+        self.set_onlyhsetup()
+        self.scheme    = scheme
+        self.use_full  = True
+        assert scheme in ['lin_dm', 'lin_mul','full'], "The given scheme is not implemented."
+    def set_onlyhsetup(self):
+        self.dev.write_more_fdf(["HSetupOnly true \n", "SaveHS true\n"], 
+                                name="DEFAULT")
     
-        
+    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.025):
+        scriptname = 'transiesta'
+        if len(suffix)>0:
+            scriptname += '_'+suffix
+        scriptname+= '.py'
+        if self.dev.solution_method=='transiesta':
+            dmtype='TSDE'
+        else:
+            dmtype='DM'
+        gnsc = list(self.devg.nsc)
+        gnsc = [int(v) for v in gnsc]
+        code = (f"""\
+import sisl, os
+import numpy as np
+init_dm_from = \"{self.orig_dev.dir+"/"+self.orig_dev.sl}\"; sgs = sisl.get_sile
+DevDir = \"{self.dev.dir}\"; Devsl = \"{self.dev.sl}\"
+dmfile = DevDir+"/"+Devsl+'.'+"{dmtype}"
+wdir, bdir = \"{wdir}\", \"{bdir}\"
+gdev = sgs(bdir+'/'+DevDir+'/geom.xyz').read_geometry()
+gdev.set_nsc({gnsc}); E_F = {self.fermi_level}
+piv  = np.load(\"{ArrayDir}\"+\"/Arrays/pivot.npy\")
+I, J = [], []
+for i in piv:
+    for j in piv: I+=[i]; J+=[j]
+ts,I,J= False, np.array(I), np.array(J)
+dmf = sgs(bdir+'/'+init_dm_from+'.'+"{dmtype}").read_density_matrix()
+if "{dmtype}"=="TSDE":
+    edmf = sgs(bdir+'/'+init_dm_from+'.'+"{dmtype}").read_energy_density_matrix()
+    ts   = True
+W = sisl.io.siesta.tsdeSileSiesta(bdir+"/"+dmfile)
+def DFT():
+    os.chdir(bdir+'/'+DevDir)
+    W.write_density_matrices(dmf, edmf, E_F)
+    os.system("siesta RUN.fdf > RUN.out")
+    Hload = sgs('siesta.HSX').read_hamiltonian(geometry = gdev)
+    os.system("rm siesta.HSX"); os.chdir(bdir+'/'+wdir)
+    Hload.shift(-E_F)
+    return Hload
+def dm2DM(nosig):
+    ravelled = nosig[0].ravel()
+    for i in range(len(I)):
+        dmf[I[i],J[i],0] = 2*ravelled[i].real
+        if ts: edmf[I[i],J[i],0] = 0.0
+def H_from_DFT(nosig):
+    dm2DM(nosig)
+    return DFT().Hk()[:,piv][piv,:].toarray()
+from scipy.linalg import solve_sylvester, fractional_matrix_power
+S_S = solve_sylvester; FMP = fractional_matrix_power
+dq  = {dq}
+def linearize_mulliken():
+    dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
+    S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
+    dm0  = S @ dm0 @ S
+    S    = fractional_matrix_power(S, -2.0)
+    def sig2mul(dm): return S @ dm + dm @ S
+    def mul2sig(Q):
+        if len(Q.shape) == 2: out =  S_S(S,S, Q)
+        else:                 out =  np.array([S_S(S[i],S[i],Q[i] ) for i in range(len(Q))])
+        return out
+    Q0, H0 = sig2mul(dm0), H_from_DFT(dm0)
+    no   = dm0.shape[-1]
+    dHdQ = np.zeros((no, no, no),dtype=np.complex64)
+    for i in range(no):
+        Qv         = Q0.copy()
+        if Qv[0,i,i]+dq > 1.0:
+            sgn = -1.0
+        else:
+            sgn = 1.0
+        Qv[0,i,i] += dq * sgn
+        dHdQ[i,:,:] = (H_from_DFT(mul2sig(Qv)) - H0)/(dq * sgn)
+    np.savez_compressed("MullikenLin_NO.npz", 
+                        dHdQ=dHdQ, DM0=dm0, H0=H0, Q0=Q0)
     
-    
-        
-            
-            
-        
-        
-        
-        
-        
-        
-        
-        
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+""")
+        with open(wdir+'/'+scriptname, "w") as f:
+            f.write(code)
         
         
         

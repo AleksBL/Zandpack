@@ -948,7 +948,8 @@ class TD_Transport:
         Xpp   = np.zeros((nk, nlead, Ntot, no),dtype = comp)
         Xpm   = np.zeros((nk, nlead, Ntot, no),dtype = comp)
         
-        
+        def toscalar(x):
+            return x[0]
         for k in range(nk):
             for a in range(nlead):
                 mu = self.mu_i[a]
@@ -961,17 +962,20 @@ class TD_Transport:
                             Wi = self.broadenings[a][k,x]
                             eps = np.array([self.Lorentzian_centers[a][k,x] 
                                             + 1j * Wi])
-                            
-                            GG_P[k,a,x,c] = -1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
-                                            (1 - FD_expanded(eps      , self.zi, beta, mu = mu,  coeffs = self.coeffs_fermi))
-                            GG_M[k,a,x,c] = -1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
-                                            (1 - FD_expanded(eps.conj(), self.zi, beta, mu = mu, coeffs = self.coeffs_fermi))
-                            GL_P[k,a,x,c] = +1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
-                                             FD_expanded(eps       , self.zi, beta, mu = mu,     coeffs = self.coeffs_fermi)
-                            GL_M[k,a,x,c] = +1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
-                                             FD_expanded(eps.conj(), self.zi, beta, mu = mu,     coeffs = self.coeffs_fermi)
-                            Xpp[k,a,x,c]  = eps
-                            Xpm[k,a,x,c]  = eps.conj()
+                            GG_P[k,a,x,c] = toscalar(-1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
+                                                     (1 - FD_expanded(eps      , self.zi, beta,
+                                                                      mu = mu,  coeffs = self.coeffs_fermi)))
+                            GG_M[k,a,x,c] = toscalar(-1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
+                                                     (1 - FD_expanded(eps.conj(), self.zi, beta, 
+                                                                      mu = mu, coeffs = self.coeffs_fermi)))
+                            GL_P[k,a,x,c] = toscalar(+1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
+                                                     FD_expanded(eps       , self.zi, beta, 
+                                                                 mu = mu, coeffs = self.coeffs_fermi))
+                            GL_M[k,a,x,c] = toscalar(+1j / 2 * self.Gl_eig[a,k,x,c] * Wi *\
+                                                     FD_expanded(eps.conj(), self.zi, beta, 
+                                                                 mu = mu, coeffs = self.coeffs_fermi))
+                            Xpp[k,a,x,c]  = toscalar(eps)
+                            Xpm[k,a,x,c]  = toscalar(eps.conj())
                 
                 sp = slice(0  ,   N_F)
                 sm = slice(N_F, 2*N_F)
