@@ -61,6 +61,7 @@ options = {'Contour':'None',
            'quadvec_workers':'1',
            'Bias':'None',
            'save_last_H':'True',
+           'max_iter':'500'
            }
 
 SCF_place = __file__[:-3]
@@ -266,8 +267,12 @@ lims = [ mu_min - fact_kT*_kT.max(), _mu.max() +fact_kT*_kT.max()]
 
 counter = 0
 _t1 = time()
-
+maxit = int(options['max_iter'])
+success = True
 while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
+    if counter > maxit:
+        success = False
+        break
     H = Ham + dH(t0, rhoi)
     # dont trust the warnings down below, the redifinitions matter
     if options['real_line_integral']!='True':
@@ -309,7 +314,11 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
           '| Qtot_k',    np.round(np.trace(rhoi,axis1=1,axis2=2), 5))
 _t2 = time()
 print('Converged DM in ' + str(np.round(_t2-_t1,1))+' secs. Bye Bye')
-
+with open("SCF_MESSAGE.txt","w") as f:
+    if success:
+        f.write("Success")
+    else:
+        f.write("Failure")        
 
 if options['DM_out_file'] == 'None':
     os.system('mv '+options['file']+'/Arrays/DM_Ortho.npy '

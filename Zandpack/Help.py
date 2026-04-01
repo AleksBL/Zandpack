@@ -55,6 +55,7 @@ class TDHelper:
         self.Sig1_NO = np.array(A4)
         self.Hcorr   = A5
         self.H0        = flexload(self.dir+'/H_Ortho.npy')
+        self.DM0       = flexload(self.dir+'/DM_Ortho.npy')
         self.no        = self.H0.shape[-1]
         self.orthog    = orthogonal
         self.num_leads = len(self.Sig0_O)

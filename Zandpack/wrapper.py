@@ -12,6 +12,7 @@ import os, sisl
 from time import time, sleep
 from  Zandpack.plot import J, DM
 from copy import deepcopy
+from pickle import load
 
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
@@ -20,9 +21,9 @@ glob_test = False
 class Input:
     def __init__(self, 
                  name,
-                 t0, 
-                 t1, 
-                 eps, 
+                 t0=0.0, 
+                 t1=50.0, 
+                 eps=1e-7, 
                  usesave=True,
                  LoadFromFull=True,
                  checkpoints = None,
@@ -75,12 +76,14 @@ class Input:
             f.write(text)
         if self.verbose:
             print("Wrote Initial.py file")
-    def write_bias(self, prefix, more_imports = None, mpi4py=True,os_envvar=[], bias=None, dH=None, ):
+    def write_bias(self, prefix, more_imports = None, mpi4py=True,os_envvar=[], bias=None, dH=None, hook = None, use_lin=False):
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
         if mpi4py:
-            text += "from mpi4py import MPI; rank = MPI.COMM_WORLD.Get_rank(); size = MPI.COMM_WORLD.Get_size()\n"
+            text+="from mpi4py import MPI; rank = MPI.COMM_WORLD.Get_rank(); size = MPI.COMM_WORLD.Get_size()\n"
+        else:
+            text+="rank=0 \n"
         if more_imports is not None:
             if isinstance(more_imports, str):
                 text += more_imports
@@ -116,17 +119,45 @@ class Input:
         text+= "else: \n    def ramp_field(r,t): return 0.0\n"
         if dH is None:
             text += "def Ramp(t): \n"
-            text += "    return Hlp.approxfield2mat(ramp_field, t, orthogonal=orth) \n"
+            text += "    return Hlp.approxfield2mat(t, ramp_field, orthogonal=orth) \n"
         else:
             text+= inspect.getsource(dH)
         text += '\n'
-        text+= inspect.getsource(bias)
+        text+= inspect.getsource(bias) 
+        text+='\n'
         text+="def dH(t, sig):\n"
         text+="    out = np.zeros(sig.shape,dtype=complex)\n"
         text+="    out+= Ramp(t)\n"
         text+="    DL  = [bias(t, a) for a in range(nlead) ]\n"
         text+="    out+=  Hlp.lead_dev_dyncorr(DeltaList = DL, orthogonal=orth)\n"
+        text+="    out+= kohn_sham(sig, orthogonal=orth)\n"
         text+="    return out\n"
+        if hook is None:
+            text+="def kohn_sham(sig):\n"
+            text+="    return 0.0"
+        else:
+            text+="from "+hook.scriptname.replace(".py","") +" import H_from_DFT\n"
+            if hook.scheme == 'lin_mul':
+                text+="from Zandpack.wrapper import Mull_Lin_NO as Linear\n"
+                text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < 1e-4\n"
+                text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+            if hook.scheme == 'full':
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O(H_from_DFT(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="    else:\n"
+                text+="        return H_from_DFT(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+                
         with open(prefix + "/Bias.py", "w") as f:
             f.write(text)
         if self.verbose:
@@ -143,8 +174,31 @@ class Input:
         #o#ut._rawlog+=["spawned from copy"]
         return out
 
+class Mull_Lin_NO:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0  = f["DM0"]
+            self.H0   = f["H0"]
+            self.Q0   = f["Q0"]
+            self.q0   = np.diag(self.Q0[0])
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.FileNotFound = False
+        except:
+            self.FileNotFound = True
+        
+    def linearized_H(self, sigNO):
+        Q = self.S @ sigNO + sigNO @ self.S
+        q = np.diag(Q[0])
+        dq = q - self.q0
+        dH = self.dHdQ @ dq
+        return dH
     
-
 
 def fmt_str_cmd(s):
     if isinstance(s, np.ndarray):
@@ -165,29 +219,94 @@ class Control:
         self.textlog=[]
         self._rawlog=[]
         self.basedir = os.getcwd()
+    @property
+    def scf_status(self):
+        self.into_wd()
+        try:
+            msg = open("SCF_MESSAGE.txt",'r').read()
+            if "success" in msg.lower():
+                out =  True
+            else:
+                out =  False
+        except:
+            print('SCF hasnt run yet it seems')
+            out =  False
+        self.out_wd()
+        return out
+    
+    @property
+    def psinought_status(self):
+        self.into_wd()
+        try:
+            msg = open("psinought_dpsi_MESSAGE.txt",'r').read()
+            if "success" in msg.lower():
+                dpsi  =  True
+            else:
+                dpsi  =  False
+        except:
+            print('It seems psinought has not run / finished')
+            dpsi=False
+        try:
+            msg = open("psinought_dsig_MESSAGE.txt",'r').read()
+            if "success" in msg.lower():
+                dsig  =  True
+            else:
+                dsig  =  False
+        except:
+            dsig=False
+        self.out_wd()
+        return {'dpsi_conv': dpsi, 'dsig_conv':dsig}
+    
     def set_direc(self, folder):
         self.working_dir = folder
         self.wdir_abspath = os.getcwd() + folder
-        
     def into_wd(self):
-        self.orig_dir = os.getcwd()
+        #self.orig_dir = os.getcwd()
         os.chdir(self.working_dir)
         self.textlog += ['cd into '+str(self.working_dir)+'\n']
         self._rawlog += ['cd '+self.working_dir]
     def out_wd(self):
-        os.chdir(self.orig_dir)
-        self.textlog += ['cd into '+str(self.orig_dir)+'\n']
-        self._rawlog += ['cd '+self.orig_dir]
+        os.chdir(self.basedir)
+        self.textlog += ['cd into '+str(self.basedir)+'\n']
+        self._rawlog += ['cd '+self.basedir]
     def create_wd(self):
         if self.working_dir is None:
             print("WARNING! You need to set working directory...")
             return
         if os.path.isdir(self.working_dir) == False:
             self.systemcall('mkdir ' + self.working_dir)
-    def init(self):
+    def init(self, overwrite=True):
         self.create_wd()
-        cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
-        self.systemcall(cmd)
+        if os.path.isdir(self.working_dir+"/"+self.input.name+'_SRC'):
+            if overwrite:
+                cmd = "rm -rf "+self.working_dir+"/"+self.input.name+'_SRC'
+                self.systemcall(cmd)
+                cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
+                self.systemcall(cmd)
+            else:
+                pass
+        else:
+            cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
+            self.systemcall(cmd)
+    def write_bias(self, prefix=None, **kwargs):
+        if prefix is None:
+            _prefix = self.working_dir
+        else:
+            _prefix = prefix
+        self.input.write_bias(_prefix, **kwargs)
+    def write_initial(self, prefix=None, **kwargs):
+        if prefix is None:
+            _prefix = self.working_dir
+        else:
+            _prefix = prefix
+        self.input.write_initial(_prefix, **kwargs)
+    def set_hook(self, hook, write = True, **kwargs):
+        self.hook = hook
+        if write:
+            self.write_hook(**kwargs)
+    def write_hook(self, **kwargs):
+        self.hook.write_hook(self.input.name, self.working_dir, self.basedir,  
+                             **kwargs)
     def init_from_other(self, file_or_dir, newname):
         """
         This function is useful if you have a working directory and you want to reuse
@@ -224,15 +343,15 @@ class Control:
         self._rawlog += [s]
     @property
     def sigma(self):
-        dmpath = self.working_dir+'/'+self.input.name+'/DM_Ortho.npy'
+        dmpath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/DM_Ortho.npy'
         try:
             return np.load(dmpath)
         except:
             print("failed to load from "+dmpath)
     
     @property
-    def sigma(self):
-        psipath = self.working_dir+'/'+self.input.name+'_save/last_psi.npy'
+    def psi0(self):
+        psipath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'_save/last_psi.npy'
         try:
             return np.load(psipath)
         except:
@@ -320,6 +439,7 @@ class Control:
             if k=='self':
                 continue
             kwargs[k] = arg_values.locals[k]
+        print('Running SCF')
         self.run_cmd_standard('SCF'," > scf.out", **kwargs)
     def run_psinought(self,maxiter=None, checkderivative=None,dl=None,
                            steptol=None, add_random=None, random_weight=None,
@@ -372,7 +492,6 @@ class Control:
         with open(ftxt, "w") as f:
             for l in self._rawlog:
                 f.write(l)
-    #####
     def read_current(self):
         return J([self.working_dir+"/"+self.input.name+'_save'])
     def read_dm(self):
@@ -383,9 +502,30 @@ class Control:
         f = open(filename +'.control', 'wb')
         pkl.dump(self, f)
         f.close()
+    def hook_linearize(self):
+        print('Running hook linearization')
+        self.into_wd()
+        scr = self.hook.scriptname.replace(".py","")
+        if self.hook.scheme == 'full':
+            return
+        if self.hook.scheme == 'lin_dm':
+            fnc = 'linearize_dm'
+        elif self.hook.scheme == 'lin_mul':
+            fnc = 'linearize_mulliken'
+        elif self.hook.scheme == 'full':
+            print('Dont use hook_linearize when the hook scheme is \"full\"!')
+            fnc = "empty"
+        cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
+        self.systemcall(cmd)
+        self.out_wd()
+        
         
 class transiesta_hook:
-    def __init__(self, dev, scheme, nsc=(1,1,1)):
+    def __init__(self, indev, scheme, nsc=(1,1,1)):
+        if type(indev) is str:
+            dev = load(open(indev, 'rb'))
+        else:
+            dev = indev
         self.fermi_level = dev.read_fermi_level_from_out()
         self.devg  = sisl.get_sile(dev.dir+'/siesta.XV').read_geometry()
         self.devg.set_nsc(nsc)
@@ -396,12 +536,14 @@ class transiesta_hook:
         self.set_onlyhsetup()
         self.scheme    = scheme
         self.use_full  = True
+        self.scriptname = None
         assert scheme in ['lin_dm', 'lin_mul','full'], "The given scheme is not implemented."
     def set_onlyhsetup(self):
-        self.dev.write_more_fdf(["HSetupOnly true \n", "SaveHS true\n"], 
+        self.dev.write_more_fdf(["HSetupOnly true \n", 
+                                 "SaveHS true\n",
+                                 "User.Basis.NetCDF true\n"], 
                                 name="DEFAULT")
-    
-    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.025):
+    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.005):
         scriptname = 'transiesta'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -412,6 +554,8 @@ class transiesta_hook:
             dmtype='DM'
         gnsc = list(self.devg.nsc)
         gnsc = [int(v) for v in gnsc]
+        self.scriptname = scriptname
+
         code = (f"""\
 import sisl, os
 import numpy as np
@@ -450,11 +594,22 @@ def H_from_DFT(nosig):
 from scipy.linalg import solve_sylvester, fractional_matrix_power
 S_S = solve_sylvester; FMP = fractional_matrix_power
 dq  = {dq}
+
 def linearize_mulliken():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
     S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
     dm0  = S @ dm0 @ S
-    S    = fractional_matrix_power(S, -2.0)
+    try:
+        other_dm = np.load('MullikenLin_NO.npz')["DM0"]
+        other_dq = np.load('MullikenLin_NO.npz')["dq"]
+        if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
+            print("Found MullikenLin_NO.npz with matching DM!")
+            return 
+        else:
+            pass
+    except:
+        pass
+    S    = FMP(S, -2.0)
     def sig2mul(dm): return S @ dm + dm @ S
     def mul2sig(Q):
         if len(Q.shape) == 2: out =  S_S(S,S, Q)
@@ -466,14 +621,33 @@ def linearize_mulliken():
     for i in range(no):
         Qv         = Q0.copy()
         if Qv[0,i,i]+dq > 1.0:
-            sgn = -1.0
+            sgn=-1.
         else:
-            sgn = 1.0
+            sgn= 1.
         Qv[0,i,i] += dq * sgn
         dHdQ[i,:,:] = (H_from_DFT(mul2sig(Qv)) - H0)/(dq * sgn)
     np.savez_compressed("MullikenLin_NO.npz", 
-                        dHdQ=dHdQ, DM0=dm0, H0=H0, Q0=Q0)
-    
+                        dHdQ=dHdQ, DM0=dm0, H0=H0, Q0=Q0, dq=dq, S=S)
+def linearize_dm():
+    dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
+    S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
+    dm0  = S @ dm0 @ S
+    S    = fractional_matrix_power(S, -2.0)
+    H0   = H_from_DFT(dm0)
+    no   = dm0.shape[-1]
+    dHdQ = np.zeros((no, no, no),dtype=np.complex64)
+    for i in range(no):
+        dm = dm0.copy()
+        if dm[0,i,i]+dq > 0.5:
+            sgn = -1.0
+        else:
+            sgn = 1.0
+        dm[0,i,i] += dq * sgn
+        dHdQ[i,:,:] = (H_from_DFT(dm) - H0)/(dq * sgn)
+    np.savez_compressed("DM_Lin_NO.npz", 
+                        dHdQ=dHdQ, DM0=dm0, H0=H0)
+def empty():
+    return None
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)

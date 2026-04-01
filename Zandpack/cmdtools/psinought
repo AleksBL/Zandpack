@@ -161,6 +161,8 @@ print(pref + 'size:            ', (nk,na,nx,noT,no))
 print(pref + 'Operator Dims:   ', np.prod((nk,na,nx,noT,no)), ' X ',np.prod((nk,na,nx,noT,no)),)
 mdot = np.linalg.multi_dot
 inv  = np.linalg.inv
+sum_psi_vec   = []
+sig_absmax_vec= []
 
 for IK in range(nk):
     xi      = XI[IK].copy()
@@ -422,7 +424,9 @@ for IK in range(nk):
                     dPsi[0,a,x,c]  = (h0 - I*xpp[a,x,c])@PSI[IK,a,x,c] + hbar * glp[a,x,c]*xi[a,x,c]+ hbar*deltaP[a,x,c]*(dm0@xi[a,x,c])
                     dPsi[0,a,x,c] += (xi.reshape(na*nx*noT,no).T@(OMG[IK,a,x,c].reshape(na*nx*noT)))/hbar
         print('sum over |Derivative| of psi_axc')
-        print(np.abs(dPsi).sum())
+        sum_abs_psi  = np.abs(dPsi).sum()
+        sum_psi_vec += [sum_abs_psi]
+        print(sum_abs_psi)
         PI = np.zeros((na,no,no),dtype=complex)
         for ia in range(na):
             PI[ia] = Q_nb(PSI[[IK], ia], IXI[[IK], ia])
@@ -431,7 +435,9 @@ for IK in range(nk):
         print(pref +'----------------')
         print('         Current running with this DM at ik='+str(IK)+':  ', J)
         dSig = (-1j/hbar)*(h0@dm0 - dm0@h0) + Q
-        print('         max(|DM derivative|) ', np.abs(dSig).max())
+        dsig_abs_max = np.abs(dSig).max()
+        sig_absmax_vec += [dsig_abs_max]
+        print('         max(|DM derivative|) ', dsig_abs_max)
         print('')
         if options['L_info']=='True':
             print('         Current term Q projection onto |psi_i><psi_i| of the Hamiltonian: ')
@@ -441,15 +447,31 @@ for IK in range(nk):
         
         print(pref +'----------------------')
         
-    
-
-
 files = os.listdir()
 savedir=options['file']+'_save'
 if savedir not in files:
     os.mkdir(savedir)
 np.save(savedir+'/last_psi.npy',PSI)
 np.save(savedir+'/last_omg.npy',OMG)
+if (np.array(sum_psi_vec) < 1e-5).all():
+    success_psi = True
+else:
+    success_psi = False
+if (np.array(sig_absmax_vec) < 1e-2).all():
+    success_sig = True
+else:
+    success_sig = False
+with open("psinought_dpsi_MESSAGE.txt","w") as f:
+    if success_psi:
+        f.write("Success")
+    else:
+        f.write("Failure")    
+with open("psinought_dsig_MESSAGE.txt","w") as f:
+    if success_sig:
+        f.write("Success")
+    else:
+        f.write("Failure")    
+
 
 
 # @njit(fastmath=True)
