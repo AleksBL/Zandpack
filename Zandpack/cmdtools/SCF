@@ -61,7 +61,8 @@ options = {'Contour':'None',
            'quadvec_workers':'1',
            'Bias':'None',
            'save_last_H':'True',
-           'max_iter':'500'
+           'max_iter':'500',
+           'write_dm_every':'-1',
            }
 
 SCF_place = __file__[:-3]
@@ -308,10 +309,13 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
     delta          = rhof - rhoi
     outmix         = mixer(ravel(rhoi), ravel(delta))
     rhoi[:,:,:]    = unravel(outmix)
+    if np.mod(counter, int(options["write_dm_every"]))==0 and int(options["write_dm_every"])>0:
+        np.save("SCFintermediateDM.npy",rhoi)
     counter       += 1
     print('Iteration ', counter, 
           '| dN_max:  ', np.round(np.abs(delta).max(),5),
           '| Qtot_k',    np.round(np.trace(rhoi,axis1=1,axis2=2), 5))
+    
 _t2 = time()
 print('Converged DM in ' + str(np.round(_t2-_t1,1))+' secs. Bye Bye')
 with open("SCF_MESSAGE.txt","w") as f:
@@ -328,11 +332,6 @@ else:
     np.save(options['DM_out_file'], rhof)
 if options['save_last_H'] == 'True':
     np.save(options['file']+'/Arrays/SCF_Hlast_Ortho.npy', H)
-
-
-
-
-
 
 
 # npieces= int(options['nprocs'])*4 +1

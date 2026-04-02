@@ -9,7 +9,7 @@ Created on Mon Mar 16 16:47:40 2026
 import numpy as np
 import inspect
 import os, sisl
-from time import time
+import time
 from  Zandpack.plot import J, DM
 from copy import deepcopy
 from pickle import load
@@ -210,8 +210,8 @@ def fmt_str_cmd(s):
     return s2
 
 class Control:
-    def __init__(self, input_class, source_files=None, logfile = 'calledcommands.txt', 
-                 livelog=None, prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"]):
+    def __init__(self, input_class, source_files=None, logfile = 'cmds_1.txt', 
+                 livelog="cmds.txt", prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"]):
         self.input = input_class
         # source files is the folder written by TD_Transport 
         # when using "tofile"
@@ -223,6 +223,7 @@ class Control:
         self.txtlogfile = logfile
         self.livelog = livelog
         self.prepend_env_vars = prepend_env_vars
+        self._first_logwrite = True
     @property
     def scf_status(self):
         self.into_wd()
@@ -337,13 +338,15 @@ class Control:
         self._rawlog+=['mkdir '+name+'\n']
         self.out_wd()
     def systemcall(self, cmd):
-        t1 = time()
+        now = time.ctime()
+        t1 = time.time()
         if glob_test==False:
             exst = os.system(cmd)
             exst = str(exst)
         else:
             exst = '?'
-        t2 = time()
+        t2 = time.time()
+        self.rawlog(now+"\n")
         self.rawlog(cmd + '\n')
         self.rawlog("exit status: " +exst+ '\n')
         self.rawlog(str(datetime.timedelta(seconds=t2-t1))+'\n\n')
@@ -355,6 +358,9 @@ class Control:
                 mode = "a"
             with open(self.livelog,mode) as f:
                 f.write(s)
+        if self._first_logwrite:
+            self.livelog = os.getcwd() + "/"+self.livelog
+            self._first_logwrite = False
         self._rawlog += [s]
     @property
     def sigma(self):
@@ -445,7 +451,8 @@ class Control:
                       real_line_exact_fermi=None, Nonequilibrium = None, 
                       DM_randomness  = None, random_on_diag_only = None, 
                       memory_conserve= None, fact_kT= None, tolerance  = None,
-                      quadvec_workers= None, Bias   = None, save_last_H= None):
+                      quadvec_workers= None, Bias   = None, save_last_H= None, 
+                      write_dm_every=None):
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
@@ -483,6 +490,7 @@ class Control:
             else:
                 kwargs[k] = arg_values.locals[k]
         exc = " ".join(self.prepend_env_vars + ["psinought"])
+        print('Running psinought')
         self.run_cmd_standard(exc," > psi0.out", **kwargs)
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "
@@ -498,10 +506,12 @@ class Control:
     def run_zand(self, mpi="mpirun "):
         self.textlog += ['Executing zand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "zand"])
+        print('Running zand')
         self.run_cmd_standard(exc, " > zand.out",)
     def run_nozand(self, mpi="mpirun "):
         self.textlog += ['Executing nozand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
+        print('Running nozand')
         self.run_cmd_standard(mpi+"nozand ", " > nozand.out")
     def write_log(self,ftxt):
         with open(ftxt, "w") as f:
