@@ -215,10 +215,10 @@ class Control:
         self.input = input_class
         # source files is the folder written by TD_Transport 
         # when using "tofile"
-        self.srcf  = source_files
+        self.srcf    = source_files
         self.working_dir = None
-        self.textlog=[]
-        self._rawlog=[]
+        self.textlog = []
+        self._rawlog = []
         self.basedir = os.getcwd()
         self.txtlogfile = logfile
         self.livelog = livelog
@@ -670,6 +670,5 @@ def empty():
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)
-        
-        
+
         
