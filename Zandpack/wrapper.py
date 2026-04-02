@@ -5,15 +5,15 @@ Created on Mon Mar 16 16:47:40 2026
 
 @author: aleks
 """
-from Zandpack.td_constants import hbar
+# from Zandpack.td_constants import hbar
 import numpy as np
 import inspect
 import os, sisl
-from time import time, sleep
+from time import time
 from  Zandpack.plot import J, DM
 from copy import deepcopy
 from pickle import load
-
+import datetime
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -210,7 +210,8 @@ def fmt_str_cmd(s):
     return s2
 
 class Control:
-    def __init__(self, input_class, source_files=None):
+    def __init__(self, input_class, source_files=None, logfile = 'calledcommands.txt', 
+                 livelog=None, prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"]):
         self.input = input_class
         # source files is the folder written by TD_Transport 
         # when using "tofile"
@@ -219,6 +220,9 @@ class Control:
         self.textlog=[]
         self._rawlog=[]
         self.basedir = os.getcwd()
+        self.txtlogfile = logfile
+        self.livelog = livelog
+        self.prepend_env_vars = prepend_env_vars
     @property
     def scf_status(self):
         self.into_wd()
@@ -264,7 +268,8 @@ class Control:
         #self.orig_dir = os.getcwd()
         os.chdir(self.working_dir)
         self.textlog += ['cd into '+str(self.working_dir)+'\n']
-        self._rawlog += ['cd '+self.working_dir]
+        self._rawlog += ['cd '+self.working_dir+"\n"]
+        
     def out_wd(self):
         os.chdir(self.basedir)
         self.textlog += ['cd into '+str(self.basedir)+'\n']
@@ -315,6 +320,7 @@ class Control:
         self.create_wd()
         self.systemcall("cp -rs $PWD/"+file_or_dir
                         + " $PWD/"+self.working_dir+"/"+newname)
+        
     def copy_state(self, other_controller):
         B = other_controller
         self.create_wd()
@@ -324,7 +330,6 @@ class Control:
                              self.input.name+"_save/last_psi.npy")
         self.init_from_other(B.working_dir+'/'+B.input.name+"_save/last_omg.npy", 
                              self.input.name+"_save/last_omg.npy")
-        
     def create_subfolder(self, name):
         self.into_wd()
         os.mkdir(name)
@@ -332,14 +337,24 @@ class Control:
         self._rawlog+=['mkdir '+name+'\n']
         self.out_wd()
     def systemcall(self, cmd):
+        t1 = time()
         if glob_test==False:
             exst = os.system(cmd)
             exst = str(exst)
         else:
             exst = '?'
+        t2 = time()
         self.rawlog(cmd + '\n')
         self.rawlog("exit status: " +exst+ '\n')
+        self.rawlog(str(datetime.timedelta(seconds=t2-t1))+'\n\n')
     def rawlog(self, s):
+        if type(self.livelog) is str:
+            if os.path.isfile(self.livelog) == False:
+                mode = "w"
+            else:
+                mode = "a"
+            with open(self.livelog,mode) as f:
+                f.write(s)
         self._rawlog += [s]
     @property
     def sigma(self):
@@ -440,7 +455,8 @@ class Control:
                 continue
             kwargs[k] = arg_values.locals[k]
         print('Running SCF')
-        self.run_cmd_standard('SCF'," > scf.out", **kwargs)
+        exc = " ".join(self.prepend_env_vars + ["SCF"])
+        self.run_cmd_standard(exc," > scf.out", **kwargs)
     def run_psinought(self,maxiter=None, checkderivative=None,dl=None,
                            steptol=None, add_random=None, random_weight=None,
                            L_info =None, Axb_solver=None, start_psi = None,
@@ -466,7 +482,8 @@ class Control:
                 kwargs[k2] = arg_values.locals[k]
             else:
                 kwargs[k] = arg_values.locals[k]
-        self.run_cmd_standard('psinought'," > psi0.out", **kwargs)
+        exc = " ".join(self.prepend_env_vars + ["psinought"])
+        self.run_cmd_standard(exc," > psi0.out", **kwargs)
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "
         for kw in kwargs.keys():
@@ -480,15 +497,18 @@ class Control:
         self.out_wd()
     def run_zand(self, mpi="mpirun "):
         self.textlog += ['Executing zand....\n']
-        self.run_cmd_standard(mpi+"zand ", " > zand.out",)
+        exc = " ".join(self.prepend_env_vars + [mpi, "zand"])
+        self.run_cmd_standard(exc, " > zand.out",)
     def run_nozand(self, mpi="mpirun "):
         self.textlog += ['Executing nozand....\n']
+        exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
         self.run_cmd_standard(mpi+"nozand ", " > nozand.out")
     def write_log(self,ftxt):
         with open(ftxt, "w") as f:
             for l in self.textlog:
                 f.write(l)
-    def write_rawlog(self,ftxt):
+    def write_rawlog(self):
+        ftxt = self.txtlogfile
         with open(ftxt, "w") as f:
             for l in self._rawlog:
                 f.write(l)
@@ -504,10 +524,11 @@ class Control:
         f.close()
     def hook_linearize(self):
         print('Running hook linearization')
+        if self.scf_status == False:
+            print("There is no postive message from the SCF tool that the DM has been converged. \
+                  Are you sure you are linearizing around equilibrium?")
         self.into_wd()
         scr = self.hook.scriptname.replace(".py","")
-        if self.hook.scheme == 'full':
-            return
         if self.hook.scheme == 'lin_dm':
             fnc = 'linearize_dm'
         elif self.hook.scheme == 'lin_mul':
@@ -518,7 +539,6 @@ class Control:
         cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
         self.systemcall(cmd)
         self.out_wd()
-        
         
 class transiesta_hook:
     def __init__(self, indev, scheme, nsc=(1,1,1)):
@@ -555,7 +575,6 @@ class transiesta_hook:
         gnsc = list(self.devg.nsc)
         gnsc = [int(v) for v in gnsc]
         self.scriptname = scriptname
-
         code = (f"""\
 import sisl, os
 import numpy as np
