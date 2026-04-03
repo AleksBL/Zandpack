@@ -67,7 +67,11 @@ class TDHelper:
         try:
             o2a = flexload(self.dir+'/pivot_o2a.npy')
             self.orb_pos   = self.positions[o2a]
-            self.orb_elecs = [np.where((np.abs((self.Sig0_NO[ia]) + np.abs(self.Sig1_NO[ia]))>1e-7).any(axis=(0,1)))[0]
+            self.orb_elecs = [np.where(((np.abs(self.Sig0_NO[ia])
+                                       + np.abs(self.Sig1_NO[ia])
+                                        )>1e-4
+                                       ).any(axis=(0,1))
+                                      )[0]
                               for ia in range(self.num_leads)]
             self.pos_elecorbs = [self.orb_pos[idx] for idx in self.orb_elecs]
             

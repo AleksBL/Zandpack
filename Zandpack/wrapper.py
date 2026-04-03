@@ -452,7 +452,7 @@ class Control:
                       DM_randomness  = None, random_on_diag_only = None, 
                       memory_conserve= None, fact_kT= None, tolerance  = None,
                       quadvec_workers= None, Bias   = None, save_last_H= None, 
-                      write_dm_every=None):
+                      write_dm_every=None, write_progress=None):
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
@@ -573,7 +573,7 @@ class transiesta_hook:
                                  "SaveHS true\n",
                                  "User.Basis.NetCDF true\n"], 
                                 name="DEFAULT")
-    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.005):
+    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.005, Rmax = 5.0):
         scriptname = 'transiesta'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -594,7 +594,11 @@ dmfile = DevDir+"/"+Devsl+'.'+"{dmtype}"
 wdir, bdir = \"{wdir}\", \"{bdir}\"
 gdev = sgs(bdir+'/'+DevDir+'/geom.xyz').read_geometry()
 gdev.set_nsc({gnsc}); E_F = {self.fermi_level}
+gorb = sisl.get_sile(bdir+'/'+DevDir+"/RUN.fdf").read_geometry()
+Rorb = gorb.xyz[gorb.o2a(np.arange(gorb.no))]
+Dij  = np.linalg.norm(Rorb[:,None,:] - Rorb[None,:,:],axis=2)
 piv  = np.load(\"{ArrayDir}\"+\"/Arrays/pivot.npy\")
+Rorb = Rorb[piv].copy()
 I, J = [], []
 for i in piv:
     for j in piv: I+=[i]; J+=[j]
@@ -608,8 +612,15 @@ def DFT():
     os.chdir(bdir+'/'+DevDir)
     W.write_density_matrices(dmf, edmf, E_F)
     os.system("siesta RUN.fdf > RUN.out")
-    Hload = sgs('siesta.HSX').read_hamiltonian(geometry = gdev)
-    os.system("rm siesta.HSX"); os.chdir(bdir+'/'+wdir)
+    if os.path.isfile("siesta.HSX"):
+        Hload = sgs('siesta.HSX').read_hamiltonian(geometry = gdev)
+        os.system("rm siesta.HSX")
+    elif os.path.isfile("siesta.0.HSX"):
+        Hload = sgs('siesta.0.HSX').read_hamiltonian(geometry = gdev)
+        os.system("rm siesta.0.HSX")
+    else:
+        assert 1 == 0, "Couldnt find any Hamiltonian. Check the siesta directory??"
+    os.chdir(bdir+'/'+wdir)
     Hload.shift(-E_F)
     return Hload
 def dm2DM(nosig):
@@ -623,6 +634,7 @@ def H_from_DFT(nosig):
 from scipy.linalg import solve_sylvester, fractional_matrix_power
 S_S = solve_sylvester; FMP = fractional_matrix_power
 dq  = {dq}
+Rmax = {Rmax}
 
 def linearize_mulliken():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
@@ -648,15 +660,21 @@ def linearize_mulliken():
     no   = dm0.shape[-1]
     dHdQ = np.zeros((no, no, no),dtype=np.complex64)
     for i in range(no):
-        Qv         = Q0.copy()
+        Qv = Q0.copy()
         if Qv[0,i,i]+dq > 1.0:
             sgn=-1.
         else:
             sgn= 1.
         Qv[0,i,i] += dq * sgn
-        dHdQ[i,:,:] = (H_from_DFT(mul2sig(Qv)) - H0)/(dq * sgn)
+        res = (H_from_DFT(mul2sig(Qv)) - H0)/(dq * sgn)
+        idx = np.where(Dij[i]<Rmax)[0]
+        for I in idx:
+            for J in idx:
+                dHdQ[i,I,J] = res[I,J]
     np.savez_compressed("MullikenLin_NO.npz", 
-                        dHdQ=dHdQ, DM0=dm0, H0=H0, Q0=Q0, dq=dq, S=S)
+                        dHdQ=dHdQ, DM0=dm0, 
+                        H0=H0,     Q0=Q0, 
+                        dq=dq, S=S, Rmax = Rmax)
 def linearize_dm():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
     S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")

@@ -63,6 +63,7 @@ options = {'Contour':'None',
            'save_last_H':'True',
            'max_iter':'500',
            'write_dm_every':'-1',
+           'write_progress':'False',
            }
 
 SCF_place = __file__[:-3]
@@ -315,6 +316,20 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
     print('Iteration ', counter, 
           '| dN_max:  ', np.round(np.abs(delta).max(),5),
           '| Qtot_k',    np.round(np.trace(rhoi,axis1=1,axis2=2), 5))
+    if options["write_progress"]=='True':
+        write_str  = 'Iteration '+ str(counter)+"\n"
+        write_str += '| dN_max:  '+str( np.round(np.abs(delta).max(),5))+"\n"
+        write_str += '| Qtot_k:  '+str( np.round(np.trace(rhoi,axis1=1,axis2=2), 5))+"\n"
+        if counter == 1:
+            with open(".scf_progress.txt","w") as f:
+                f.write(write_str)
+        else:
+            with open(".scf_progress.txt","a") as f:
+                f.write(write_str)
+        
+            
+                
+            
     
 _t2 = time()
 print('Converged DM in ' + str(np.round(_t2-_t1,1))+' secs. Bye Bye')
