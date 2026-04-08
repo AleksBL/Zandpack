@@ -1399,7 +1399,9 @@ class TD_Transport:
             W2 += [w2]
             Maxes1 += [np.ones(len(w1))*maxes[_i]]
             Maxes2 += [np.ones(len(w2))*maxes[_i]]
-            
+        #print(P1)
+        #print(P2)
+        
         P1     = np.hstack(P1); P2     = np.hstack(P2)
         P1     = np.hstack((P1,P2))
         

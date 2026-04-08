@@ -151,6 +151,20 @@ class Input:
                 text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
                 text+="    else:\n"
                 text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+            if hook.scheme == 'lin_odm':
+                text+="from Zandpack.wrapper import DM_Lin_O as Linear\n"
+                text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-Hlp.DM0).max() < 1e-4\n"
+                text+="    if np.abs(lin_dh.dm0-Hlp.DM0).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sig)) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sigNO2O(sig)) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
             if hook.scheme == 'full':
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
@@ -174,31 +188,6 @@ class Input:
         #o#ut._rawlog+=["spawned from copy"]
         return out
 
-class Mull_Lin_NO:
-    def __init__(self, file, rank):
-        if rank != 0:
-            return
-        try:
-            f = np.load(file)
-            self._f = f
-            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
-            self.dm0  = f["DM0"]
-            self.H0   = f["H0"]
-            self.Q0   = f["Q0"]
-            self.q0   = np.diag(self.Q0[0])
-            self.dq   = f["dq"]
-            self.S    = f["S"]
-            self.FileNotFound = False
-        except:
-            self.FileNotFound = True
-        
-    def linearized_H(self, sigNO):
-        Q = self.S @ sigNO + sigNO @ self.S
-        q = np.diag(Q[0])
-        dq = q - self.q0
-        dH = self.dHdQ @ dq
-        return dH
-    
 
 def fmt_str_cmd(s):
     if isinstance(s, np.ndarray):
@@ -539,8 +528,8 @@ class Control:
                   Are you sure you are linearizing around equilibrium?")
         self.into_wd()
         scr = self.hook.scriptname.replace(".py","")
-        if self.hook.scheme == 'lin_dm':
-            fnc = 'linearize_dm'
+        if self.hook.scheme == 'lin_odm':
+            fnc = 'linearize_odm'
         elif self.hook.scheme == 'lin_mul':
             fnc = 'linearize_mulliken'
         elif self.hook.scheme == 'full':
@@ -567,13 +556,16 @@ class transiesta_hook:
         self.scheme    = scheme
         self.use_full  = True
         self.scriptname = None
-        assert scheme in ['lin_dm', 'lin_mul','full'], "The given scheme is not implemented."
+        assert scheme in ['lin_odm', 'lin_nodm', 'lin_mul','full'], "The given scheme is not implemented."
     def set_onlyhsetup(self):
         self.dev.write_more_fdf(["HSetupOnly true \n", 
                                  "SaveHS true\n",
-                                 "User.Basis.NetCDF true\n"], 
+                                 "User.Basis.NetCDF true\n",
+                                 "DirectPhi true\n",
+                                 ], 
                                 name="DEFAULT")
-    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', dq=0.005, Rmax = 5.0):
+    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
+                   dq=0.005, Rmax = 12.5, use_orig_S=False):
         scriptname = 'transiesta'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -588,6 +580,7 @@ class transiesta_hook:
         code = (f"""\
 import sisl, os
 import numpy as np
+from tqdm import tqdm
 init_dm_from = \"{self.orig_dev.dir+"/"+self.orig_dev.sl}\"; sgs = sisl.get_sile
 DevDir = \"{self.dev.dir}\"; Devsl = \"{self.dev.sl}\"
 dmfile = DevDir+"/"+Devsl+'.'+"{dmtype}"
@@ -596,9 +589,22 @@ gdev = sgs(bdir+'/'+DevDir+'/geom.xyz').read_geometry()
 gdev.set_nsc({gnsc}); E_F = {self.fermi_level}
 gorb = sisl.get_sile(bdir+'/'+DevDir+"/RUN.fdf").read_geometry()
 Rorb = gorb.xyz[gorb.o2a(np.arange(gorb.no))]
-Dij  = np.linalg.norm(Rorb[:,None,:] - Rorb[None,:,:],axis=2)
 piv  = np.load(\"{ArrayDir}\"+\"/Arrays/pivot.npy\")
+_L   = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
+_L   = np.linalg.inv(_L); S = _L @ _L
+L    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
+iL   = np.linalg.inv(L)
+# Standard functions for various transformations \n# between orthogonal and nonorthogonal basis
+def sigO2NO(DMlike): return L  @ DMlike @ L
+def sigNO2O(DMlike): return iL @ DMlike @ iL
+def HamO2NO(Hlike):  return iL @ Hlike  @ iL
+def HamNO2O(Hlike):  return L  @ Hlike  @ L
+nlead= int(np.load(\"{ArrayDir}\"+\"/Arrays/num_leads.npy\"))
+for ilead in range(nlead):
+    if {use_orig_S}:
+        S += np.load(\"{ArrayDir}\"+\"/Arrays/Sig1_NO_\"+str(ilead)+\".npy\")
 Rorb = Rorb[piv].copy()
+Dij  = np.linalg.norm(Rorb[:,None,:] - Rorb[None,:,:],axis=2)
 I, J = [], []
 for i in piv:
     for j in piv: I+=[i]; J+=[j]
@@ -614,9 +620,12 @@ def DFT():
     os.system("siesta RUN.fdf > RUN.out")
     if os.path.isfile("siesta.HSX"):
         Hload = sgs('siesta.HSX').read_hamiltonian(geometry = gdev)
+        #Hload.set_nsc((1,1,1))
+        print(Hload.nsc)
         os.system("rm siesta.HSX")
     elif os.path.isfile("siesta.0.HSX"):
         Hload = sgs('siesta.0.HSX').read_hamiltonian(geometry = gdev)
+        #Hload.set_nsc((1,1,1))
         os.system("rm siesta.0.HSX")
     else:
         assert 1 == 0, "Couldnt find any Hamiltonian. Check the siesta directory??"
@@ -638,8 +647,7 @@ Rmax = {Rmax}
 
 def linearize_mulliken():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
-    S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
-    dm0  = S @ dm0 @ S
+    dm0  = sigO2NO(dm0)
     try:
         other_dm = np.load('MullikenLin_NO.npz')["DM0"]
         other_dq = np.load('MullikenLin_NO.npz')["dq"]
@@ -650,7 +658,6 @@ def linearize_mulliken():
             pass
     except:
         pass
-    S    = FMP(S, -2.0)
     def sig2mul(dm): return S @ dm + dm @ S
     def mul2sig(Q):
         if len(Q.shape) == 2: out =  S_S(S,S, Q)
@@ -675,28 +682,101 @@ def linearize_mulliken():
                         dHdQ=dHdQ, DM0=dm0, 
                         H0=H0,     Q0=Q0, 
                         dq=dq, S=S, Rmax = Rmax)
-def linearize_dm():
+def linearize_odm():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
-    S    = np.load(\"{ArrayDir}\"+\"/Arrays/S^(-0.5).npy\")
-    dm0  = S @ dm0 @ S
-    S    = fractional_matrix_power(S, -2.0)
+    H0   = H_from_DFT(sigO2NO(dm0))
+    no   = dm0.shape[-1]
+    dHdQ = np.zeros((no, no, no),dtype=np.complex64)
+    for i in tqdm(range(no)):
+        dm = dm0.copy()
+        if dm[0,i,i] + dq > 0.5:
+            sgn = -1.0
+        else:
+            sgn =  1.0
+        dm[0,i,i] += dq * sgn
+        res = (H_from_DFT(sigO2NO(dm)) - H0)/(dq * sgn)
+        idx = np.where(Dij[i]<Rmax)[0]
+        for I in idx:
+            for J in idx:
+                dHdQ[i,I,J] = res[I,J]
+    np.savez_compressed("DM_Lin_O.npz", 
+                        dHdQ=dHdQ, DM0=dm0, 
+                        H0=H0, Rmax=Rmax, 
+                        dq=dq, S=S)
+def linearize_nodm():
+    dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
+    dm0  = sigO2NO(dm0)
     H0   = H_from_DFT(dm0)
     no   = dm0.shape[-1]
     dHdQ = np.zeros((no, no, no),dtype=np.complex64)
     for i in range(no):
         dm = dm0.copy()
-        if dm[0,i,i]+dq > 0.5:
+        if dm[0,i,i] + dq > 0.5:
             sgn = -1.0
         else:
-            sgn = 1.0
+            sgn =  1.0
         dm[0,i,i] += dq * sgn
-        dHdQ[i,:,:] = (H_from_DFT(dm) - H0)/(dq * sgn)
+        res = (H_from_DFT(dm) - H0)/(dq * sgn)
+        idx = np.where(Dij[i]<Rmax)[0]
+        for I in idx:
+            for J in idx:
+                dHdQ[i,I,J] = res[I,J]
     np.savez_compressed("DM_Lin_NO.npz", 
-                        dHdQ=dHdQ, DM0=dm0, H0=H0)
+                        dHdQ=dHdQ, DM0=dm0, 
+                        H0=H0, Rmax=Rmax, 
+                        dq=dq, S=S)
+
+    
+    
 def empty():
     return None
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)
 
+class Mull_Lin_NO:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0  = f["DM0"]
+            self.H0   = f["H0"]
+            self.Q0   = f["Q0"]
+            self.q0   = np.diag(self.Q0[0])
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.FileNotFound = False
+        except:
+            self.FileNotFound = True
+        
+    def linearized_H(self, sigNO):
+        Q = self.S @ sigNO + sigNO @ self.S
+        q = np.diag(Q[0])
+        dq = q - self.q0
+        dH = self.dHdQ @ dq
+        return dH
+
+class DM_Lin_O:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0  = f["DM0"]
+            self.q    = np.diag(self.dm0[0])
+            self.H0   = f["H0"]
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.FileNotFound = False
+        except:
+            self.FileNotFound = True
+    def linearized_H(self, sigO):
+        dq = np.diag(sigO[0]) - self.q
+        dH = self.dHdQ @ dq
+        return dH
         

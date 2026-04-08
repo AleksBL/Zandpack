@@ -313,9 +313,9 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
     if np.mod(counter, int(options["write_dm_every"]))==0 and int(options["write_dm_every"])>0:
         np.save("SCFintermediateDM.npy",rhoi)
     counter       += 1
-    print('Iteration ', counter, 
+    print('Iteration ' , counter, 
           '| dN_max:  ', np.round(np.abs(delta).max(),5),
-          '| Qtot_k',    np.round(np.trace(rhoi,axis1=1,axis2=2), 5))
+          '| Qtot_k'   , np.round(np.trace(rhoi,axis1=1,axis2=2), 5))
     if options["write_progress"]=='True':
         write_str  = 'Iteration '+ str(counter)+"\n"
         write_str += '| dN_max:  '+str( np.round(np.abs(delta).max(),5))+"\n"
@@ -326,11 +326,6 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
         else:
             with open(".scf_progress.txt","a") as f:
                 f.write(write_str)
-        
-            
-                
-            
-    
 _t2 = time()
 print('Converged DM in ' + str(np.round(_t2-_t1,1))+' secs. Bye Bye')
 with open("SCF_MESSAGE.txt","w") as f:
