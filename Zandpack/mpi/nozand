@@ -18,15 +18,17 @@ from mpi4py import MPI
 import os, sys, inspect
 import Zandpack.k0nfig as config
 from Zandpack.mpi_RK4pars_dev import A, B, CT, CH, RK_N, idxholder, hnew_func
+from Zandpack.mpi_RK4pars_dev import RK_Method as _rkmethod
 from Zandpack.mpi_splitter import (
     partition_scheme3,
     get_sources_scheme2,
     find_max_orbital_idx_per_lead)
-from Zandpack.mpi_funcs import MM ##, TERR2_sig, TERR2_psi, TERR2_omg
+# from Zandpack.mpi_funcs import MM ##, TERR2_sig, TERR2_psi, TERR2_omg
 from Zandpack.mpi_funcs import (
    step_fourth_sig,
    step_fourth_psi,
-   step_fourth_omg)
+   step_fourth_omg,
+   MM, make_tril_zero)
 from Zandpack.func_step_forward import (
     step_sig_forward_nb,
     step_psi_forward_nb,
@@ -74,20 +76,30 @@ if True in Check:
 
 from Initial import Arrs as D
 from Initial import (
-    t0,
-    t1,
+    t0, t1,
     stepsize,
     print_timings,
-    usesave,
-    saveevery,
-    name,
-    eps,
-    hbar,
+    usesave, saveevery,
+    name, eps, hbar,
     n_dm_compress,
     save_PI,
 )
 from Initial import checkpoints, save_checkpoints, LoadFromFull
+# New flags, put inside try for backwards compatibility
+import Initial as _initp
+compress_mat= False
+dm_triu_only= False
+dm_occ_only = False
+if hasattr(_initp, "compress_mat"):
+    compress_mat = _initp.compress_mat
+if hasattr(_initp, "dm_triu_only"):
+    dm_triu_only = _initp.dm_triu_only
+if hasattr(_initp, "dm_occ_only"):
+    dm_occ_only = _initp.dm_occ_only
 
+    
+    
+                
 checkpoints = np.array(checkpoints)
 checkpoints = checkpoints[checkpoints > t0]
 checkpoints = checkpoints[checkpoints < t1]
@@ -104,7 +116,7 @@ nax = np.newaxis
 DT = np.complex128
 mpi_dtype_size = MPI.DOUBLE_COMPLEX.Get_size() # complex128 datatype
 
-multidot = np.linalg.multi_dot
+# multidot = np.linalg.multi_dot
 
 def CZ(s):
     return np.zeros(s, dtype=DT)
@@ -181,9 +193,19 @@ def start_print():
     except:
         print("NUMBA_NUM_THREADS: UNKNOWN")
     print("Folder Path: " + os.getcwd())
-    print("Propagation algorithm: Adaptive Runge-Kutta " + config.RK_Method)
-    print("NumPy Config:")
-    np.show_config()
+    print("Propagation algorithm: Adaptive Runge-Kutta " + _rkmethod)
+    print("-----------------")
+    print("Initial.py keys:")
+    for kw in _initp.__dict__.keys():
+        if "__"  in kw:
+            pass
+        elif kw=="np":
+            pass
+        else:
+            print(kw+" : " +str( _initp.__dict__[kw]))
+    
+    # print("NumPy Config:")
+    # np.show_config()
     print("\n")
     print("Args: " + str(args))
     print("Source-scheme:\n")
@@ -204,24 +226,25 @@ def start_print():
 
     print("\n")
     print("Zand program sourcecode location: \n", __file__)
-    print("\n")
+    #print("\n")
     print("Timedependent Bias:")
     print(SourceCode(bias))
-    print("\n")
+    #print("\n")
     print("Timedependent part of Hamiltonian dH:")
     print(SourceCode(dH))
-    print("\n")
+    #print("\n")
     print("Dissipator ")
     print(SourceCode(dissipator))
-    print("\n\n")
-    print("hbar = " + str(hbar))
-    print("\n\n")
-    print("Will save checkpoints: ", save_checkpoints)
-    print("Checkpoints: ")
-    print(checkpoints, " \n")
-    print("Using previous save: ", usesave)
-    print("\n\nStart of Run!")
-
+    #print("\n\n")
+    # print("hbar = " + str(hbar))
+    # print("\n\n")
+    # print("Will save checkpoints: ", save_checkpoints)
+    # print("Checkpoints: ")
+    # print(checkpoints, " \n")
+    # print("Using previous save: ", usesave)
+    print("\n\n-----------------")
+    print("# Start of Run! # ")
+    print("-----------------")
 
 def transform_vec_Tv(vec, T):
     for i1 in range(vec.shape[0]):
@@ -262,6 +285,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     Sm05 = D["S^(-0.5)"]  # NEW
     S05  = np.linalg.inv(Sm05)  # NEW
     _overlap = S05 @ S05
+    _overlap_nonzero = np.abs(_overlap)>1e-6
     Sm1  = Sm05 @ Sm05  # NEW
     if np.abs((S05 @ S05) - np.eye(Sm1.shape[-1])).max() < 1e-10:
         _orthogonal = True
@@ -538,10 +562,19 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
         _Timer.time(["Full Save"])
         if np.mod(step_count, saveevery) == 0 and step_count >= saveevery:
             _Timer.time(["Print out"])
-            np.save(
-                name + "_save/DM" + str(step_count),
-                np.array(DM[::n_dm_compress]).astype(np.complex64),
-            )
+            _savedm_arr = np.array(DM[::n_dm_compress]).astype(np.complex64)
+            if dm_occ_only:
+                _savedm_arr = _savedm_arr *_overlap_nonzero
+            if compress_mat==False:
+                np.save(
+                    name + "_save/DM" + str(step_count),
+                    _savedm_arr,
+                )
+            else:
+                if dm_triu_only:
+                    make_tril_zero(_savedm_arr)
+                np.savez_compressed(name + "_save/DM" + str(step_count), _savedm_arr)
+            del _savedm_arr
             dm_times = np.array(times[-len(DM):])
             if len(dm_times) > len(DM):
                 dm_times = dm_times[1:]
@@ -549,10 +582,16 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 name + "_save/DMt" + str(step_count), dm_times[::n_dm_compress]
             )
             if save_PI:
-                np.save(
-                    name + "_save/PIa" + str(step_count),
-                    np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
-                )
+                if compress_mat==False:
+                    np.save(
+                        name + "_save/PIa" + str(step_count),
+                        np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
+                    )
+                else:
+                    np.savez_compressed(
+                        name + "_save/PIa" + str(step_count),
+                        np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
+                    )
 
             np.save(name + "_save/times" + str(step_count), times[-len(DM):])
             for k, c in enumerate(currents):

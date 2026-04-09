@@ -3,6 +3,7 @@ import os
 import re
 import numba as nb
 from tqdm import tqdm
+from Zandpack.Loader import flexload
 
 ld = os.listdir
 

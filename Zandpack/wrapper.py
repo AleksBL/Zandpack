@@ -14,6 +14,7 @@ from  Zandpack.plot import J, DM
 from copy import deepcopy
 from pickle import load
 import datetime
+from Zandpack.PadeDecomp import Hu_poles, FD_expanded
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -35,6 +36,9 @@ class Input:
                  save_PI = False,
                  verbose=True,
                  orthogonal=True,
+                 compress_mat=True,
+                 dm_triu_only=True,
+                 dm_occ_only=False,
                  ):
         self.name = name
         self.t0   = t0 
@@ -53,6 +57,9 @@ class Input:
         self.verbose = verbose
         self.orthogonal=True
         self.saveevery = saveevery
+        self.compress_mat=compress_mat,
+        self.dm_triu_only=dm_triu_only,
+        self.dm_occ_only=dm_occ_only,
     def write_initial(self, prefix):
         text = "from Zandpack.td_constants import hbar\n"
         text+= "from Zandpack.Loader import load_dictionary\n"
@@ -72,6 +79,9 @@ class Input:
         text+="saveevery="+str(self.saveevery)+"\n"
         text+="Adir = name + \'/Arrays/\'\n"
         text+="Arrs = load_dictionary(Adir)\n"
+        text+="compress_mat="+str(self.compress_mat)+"\n"
+        text+="dm_triu_only="+str(self.dm_triu_only)+"\n"
+        text+="dm_occ_only="+str(self.dm_occ_only)+"\n"
         with open(prefix + "/Initial.py", "w") as f:
             f.write(text)
         if self.verbose:
@@ -183,11 +193,8 @@ class Input:
         pkl.dump(self, f)
         f.close()
     def copy(self):
-        #self._rawlog("made copy")
         out = deepcopy(self)
-        #o#ut._rawlog+=["spawned from copy"]
         return out
-
 
 def fmt_str_cmd(s):
     if isinstance(s, np.ndarray):
@@ -302,6 +309,7 @@ class Control:
     def write_hook(self, **kwargs):
         self.hook.write_hook(self.input.name, self.working_dir, self.basedir,  
                              **kwargs)
+    
     def init_from_other(self, file_or_dir, newname):
         """
         This function is useful if you have a working directory and you want to reuse
@@ -366,7 +374,46 @@ class Control:
             return np.load(psipath)
         except:
             print("failed to load from "+psipath)
-    
+    @property
+    def scf_H(self):
+        Hpath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/SCF_Hlast_Ortho.npy'
+        try:
+            return np.load(Hpath)
+        except:
+            print("Failed to load H from "+Hpath+". Did you run SCF first?")
+    def check(self):
+        HO = self.scf_H
+        if HO is None:
+            print("No scf H in the directory.")
+        else:
+            assert np.allclose(HO, np.conj(HO.transpose(0,2,1)))
+            e = np.linalg.eigvalsh(HO)
+            N_F = np.load(self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/num_poles_fermi.npy') // 2 
+            kT = np.load(self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/kT_i.npy').min()
+            x,c = Hu_poles(N_F)
+            F1 = FD_expanded(e.ravel(), x, 1 / kT, coeffs = c)
+            def fd(E):
+                return 1 / (1 + np.exp(E / kT))
+            F2 = fd(e.ravel())
+            maxdiff = np.abs(F1 - F2).max()
+            if np.abs(F1 - F2).max()<1e-10:
+                print("Fermi expansion very good")
+                print("maxdiff: " + str(maxdiff))
+            if np.abs(F1 - F2).max()<1e-8:
+                print("Fermi expansion good")
+                print("maxdiff: " + str(maxdiff))
+            if np.abs(F1 - F2).max()<1e-5:
+                print("Fermi expansion mediocre")
+                print("maxdiff: " + str(maxdiff))
+            if np.abs(F1 - F2).max()>=1e-5:
+                print("Fermi expansion bad")
+                print("maxdiff: " + str(maxdiff))
+            
+            
+            
+            
+            
+            
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
                                 newlead=None, scale_gamma=None):
@@ -464,7 +511,7 @@ class Control:
         Please note the argument "Woodbury_inv" is a slightly different name
         compared to the actual psinought tool. This is because one cannot write the 
         argument with the dash in the arg name.... Woodbury_inv is changed
-        to Woodbury-inv during the passing of arguments. 
+        to Woodbury-inv during the passing of arguments in the actual terminal call. 
         """
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
@@ -538,7 +585,7 @@ class Control:
         cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
         self.systemcall(cmd)
         self.out_wd()
-        
+
 class transiesta_hook:
     def __init__(self, indev, scheme, nsc=(1,1,1)):
         if type(indev) is str:
@@ -565,7 +612,7 @@ class transiesta_hook:
                                  ], 
                                 name="DEFAULT")
     def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
-                   dq=0.005, Rmax = 12.5, use_orig_S=False):
+                   dq=0.005, Rmax = 12.5, use_orig_S=False, siesta_mpi = ""):
         scriptname = 'transiesta'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -617,15 +664,14 @@ W = sisl.io.siesta.tsdeSileSiesta(bdir+"/"+dmfile)
 def DFT():
     os.chdir(bdir+'/'+DevDir)
     W.write_density_matrices(dmf, edmf, E_F)
-    os.system("siesta RUN.fdf > RUN.out")
+    os.system("{siesta_mpi} siesta RUN.fdf > RUN.out")
     if os.path.isfile("siesta.HSX"):
         Hload = sgs('siesta.HSX').read_hamiltonian(geometry = gdev)
-        #Hload.set_nsc((1,1,1))
-        print(Hload.nsc)
+        Hload.set_nsc((1,1,1))
         os.system("rm siesta.HSX")
     elif os.path.isfile("siesta.0.HSX"):
         Hload = sgs('siesta.0.HSX').read_hamiltonian(geometry = gdev)
-        #Hload.set_nsc((1,1,1))
+        Hload.set_nsc((1,1,1))
         os.system("rm siesta.0.HSX")
     else:
         assert 1 == 0, "Couldnt find any Hamiltonian. Check the siesta directory??"
@@ -684,6 +730,16 @@ def linearize_mulliken():
                         dq=dq, S=S, Rmax = Rmax)
 def linearize_odm():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
+    try:
+        other_dm = np.load('DM_Lin_O.npz')["DM0"]
+        other_dq = np.load('DM_Lin_O.npz')["dq"]
+        if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
+            print("Found MullikenLin_NO.npz with matching DM!")
+            return 
+        else:
+            pass
+    except:
+        pass
     H0   = H_from_DFT(sigO2NO(dm0))
     no   = dm0.shape[-1]
     dHdQ = np.zeros((no, no, no),dtype=np.complex64)

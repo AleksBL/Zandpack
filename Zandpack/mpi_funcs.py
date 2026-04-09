@@ -39,6 +39,13 @@ def TERR(y1, y2, y3, CT):
     res = (abs2(M1).sum() + abs2(M2).sum()+abs2(M3).sum())**0.5
     return res
 
+@njit
+def make_tril_zero(A):
+    n1,n2 = A.shape[-2],A.shape[-1]
+    for i in range(n1):
+        for j in range(0,i):
+            A[... , i,j] = 0.0
+
 @njit(parallel = config.NUMBA_OUTER_SUBTRACTION_PARALLEL)
 def OuterSubtraction(A,B,C ,out):
     nk,na,nx,noT = A.shape

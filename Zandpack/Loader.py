@@ -39,4 +39,5 @@ class load_dictionary:
     def __getitem__(self, x):
         self.times += [self.timer()]
         return flexload(self.dir+x+'.npy')
-
+    def __str__(self):
+        return "load_dictionary class instance, using "+str(self.dir)
