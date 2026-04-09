@@ -55,11 +55,11 @@ class Input:
         self.n_dm_compress=n_dm_compress
         self.save_PI = save_PI
         self.verbose = verbose
-        self.orthogonal=True
+        self.orthogonal = True
         self.saveevery = saveevery
-        self.compress_mat=compress_mat,
-        self.dm_triu_only=dm_triu_only,
-        self.dm_occ_only=dm_occ_only,
+        self.compress_mat=compress_mat
+        self.dm_triu_only=dm_triu_only
+        self.dm_occ_only=dm_occ_only
     def write_initial(self, prefix):
         text = "from Zandpack.td_constants import hbar\n"
         text+= "from Zandpack.Loader import load_dictionary\n"
@@ -399,13 +399,13 @@ class Control:
             if np.abs(F1 - F2).max()<1e-10:
                 print("Fermi expansion very good")
                 print("maxdiff: " + str(maxdiff))
-            if np.abs(F1 - F2).max()<1e-8:
+            elif np.abs(F1 - F2).max()<1e-8:
                 print("Fermi expansion good")
                 print("maxdiff: " + str(maxdiff))
-            if np.abs(F1 - F2).max()<1e-5:
+            elif np.abs(F1 - F2).max()<1e-5:
                 print("Fermi expansion mediocre")
                 print("maxdiff: " + str(maxdiff))
-            if np.abs(F1 - F2).max()>=1e-5:
+            elif np.abs(F1 - F2).max()>=1e-5:
                 print("Fermi expansion bad")
                 print("maxdiff: " + str(maxdiff))
             
@@ -733,7 +733,7 @@ def linearize_odm():
     try:
         other_dm = np.load('DM_Lin_O.npz')["DM0"]
         other_dq = np.load('DM_Lin_O.npz')["dq"]
-        if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
+        if np.abs(dm0 - other_dm).max()<(dq/10) and np.allclose(dq, other_dq):
             print("Found MullikenLin_NO.npz with matching DM!")
             return 
         else:

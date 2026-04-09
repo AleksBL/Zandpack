@@ -34,7 +34,8 @@ def combine_currents(dirs, n=2):
                 pass
             else:
                 L     = int(vals[1])
-                _Jt = np.load(d+'/'+ff)
+                #_Jt = np.load(d+'/'+ff)
+                _Jt = flexload(d+'/'+ff)
                 C[L] += [_Jt]
         
         for ff in tf:
@@ -44,7 +45,7 @@ def combine_currents(dirs, n=2):
     T   =   np.hstack(T)[:-count]
     return T, CC
 
-def combine_dm(dirs, times_label = 'DMt'):
+def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, split_rank = None):
     """
     like combine_currents, but for the density matrix instead.
     """
@@ -59,8 +60,17 @@ def combine_dm(dirs, times_label = 'DMt'):
         f.sort(key=natural_keys)
         tf = [v for v in ld(d) if times_label in v]
         tf.sort(key=natural_keys)
+        if split is not None and split_rank is not None:
+            assert split < len(f)
+            idx = np.arange(len(f))
+            idx = np.array_split(idx, split)[split_rank]
+            f = [f[i] for i in idx]
+            tf= [tf[i] for i in idx]
         for ff in f:
-            _dm = np.load(d+'/'+ff)
+            #_dm = np.load(d+'/'+ff)
+            _dm = flexload(d+'/'+ff)
+            if insert_tril:
+                herm_insert_tril(_dm)
             DM += [_dm]
         
         for ff in tf:
@@ -69,6 +79,12 @@ def combine_dm(dirs, times_label = 'DMt'):
     DM  =  np.vstack(DM)
     T   =   np.hstack(T)#[:-count]
     return T, DM
+@nb.njit
+def herm_insert_tril(A):
+    n1,n2 = A.shape[-2:]
+    for i in range(n1):
+        for j in range(0,i):
+            A[..., i,j] = np.conj(A[..., j,i])
 
 def combine_pi(dirs, times_label = 'DMt'):
     """
@@ -136,24 +152,53 @@ def closest_dm(times, Dir, dt_avg, times_label = 'DMt'):
     DM = np.array(DM)
     return DM
 
-def occupation_number(dirs, times_label = 'DMt'):
-    from tqdm import tqdm
-    N = []
-    T = []
-    for d in dirs:
-        f = ld(d)
-        f = [v for v in f if 'DM' in v and 'DMt' not in v]
-        f.sort(key=natural_keys)
-        tf = [v for v in ld(d) if times_label in v]
-        tf.sort(key=natural_keys)
-        for ff in tqdm(f):
-            _dm = np.load(d+'/'+ff)
-            N  += [np.trace(_dm,axis1 = 2,axis2=3)]
-        for ff in tf:
-            T+=[np.load(d+'/'+ff)]
-    N   =  np.vstack(N)
-    T   =   np.hstack(T)
-    return T, N
+# def occupation_number(dirs, times_label = 'DMt'):
+#     from tqdm import tqdm
+#     N = []
+#     T = []
+#     for d in dirs:
+#         f = ld(d)
+#         f = [v for v in f if 'DM' in v and 'DMt' not in v]
+#         f.sort(key=natural_keys)
+#         tf = [v for v in ld(d) if times_label in v]
+#         tf.sort(key=natural_keys)
+#         for ff in tqdm(f):
+#             _dm = np.load(d+'/'+ff)
+#             N  += [np.trace(_dm,axis1 = 2,axis2=3)]
+#         for ff in tf:
+#             T+=[np.load(d+'/'+ff)]
+#     N   =  np.vstack(N)
+#     T   =   np.hstack(T)
+#     return T, N
+def occupation_number(dirs, times_label = "DMt", insert_tril = False, S = None, splitN = None):
+    """
+    splitN is here to make it possible to split the DM loading into #splitN chunks
+    thereby saving memory.
+    S if given should be the overlap matrix to properly account for 
+    a device overlap.
+    if you have put dm_triu_only in the TDcalculation, set insert_tril=True
+    """
+    if splitN is None:
+        t,dm = combine_dm(dirs, times_label = times_label, insert_tril = insert_tril)
+        if S is None:
+            return t, np.trace(dm, axis1=2, axis2=3)
+        else:
+            return t, np.sum(dm * S[None, :,:,:],axis=(2,3))
+    else:
+        ct = []
+        cN = []
+        for i in range(splitN):
+            t,dm = combine_dm(dirs, times_label = times_label, 
+                                    insert_tril = insert_tril, 
+                                    split       = splitN, 
+                                    split_rank  = i )
+            ct += [t]
+            if S is None:
+                cN += [np.trace(dm,axis1=2,axis2=3)]
+            else:
+                cN += [np.sum(dm * S[None,:,:,:], axis=(2,3))]
+        return np.hstack(ct), np.vstack(cN)
+
 def partial_charges(dirs, times_label = 'DMt', Transform=None):
     from tqdm import tqdm
     Ni= []
