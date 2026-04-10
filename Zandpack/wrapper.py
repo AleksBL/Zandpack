@@ -147,6 +147,8 @@ class Input:
             text+="    return 0.0"
         else:
             text+="from "+hook.scriptname.replace(".py","") +" import H_from_DFT\n"
+            text+="# below, if linearization is active, we check if the DM used for linearization and the \n"
+            text+="# and orthogonal DM from the Arrays directory are the same (in the orth.basis or nonorth. depending on the case)\n"
             if hook.scheme == 'lin_mul':
                 text+="from Zandpack.wrapper import Mull_Lin_NO as Linear\n"
                 text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank)\n"
@@ -161,7 +163,7 @@ class Input:
                 text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
                 text+="    else:\n"
                 text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
-            if hook.scheme == 'lin_odm':
+            elif hook.scheme == 'lin_odm':
                 text+="from Zandpack.wrapper import DM_Lin_O as Linear\n"
                 text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank)\n"
                 text+="if rank == 0:\n"
@@ -175,7 +177,21 @@ class Input:
                 text+="        return HamNO2O( lin_dh.H0 + ldH(sig)) - (Hlp.H0 - Hlp.Hcorr)\n"
                 text+="    else:\n"
                 text+="        return lin_dh.H0 + ldH(sigNO2O(sig)) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
-            if hook.scheme == 'full':
+            elif hook.scheme == 'lin_nodm':
+                text+="from Zandpack.wrapper import DM_Lin_NO as Linear\n"
+                text+="lin_dh = Linear(\"DM_Lin_NO.npz\", rank)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < 1e-4\n"
+                text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+            elif hook.scheme == 'full':
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
                 text+="        return HamNO2O(H_from_DFT(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
@@ -579,6 +595,8 @@ class Control:
             fnc = 'linearize_odm'
         elif self.hook.scheme == 'lin_mul':
             fnc = 'linearize_mulliken'
+        elif self.hook.scheme == 'lin_nodm':
+            fnc = 'linearize_nodm'
         elif self.hook.scheme == 'full':
             print('Dont use hook_linearize when the hook scheme is \"full\"!')
             fnc = "empty"
@@ -727,14 +745,14 @@ def linearize_mulliken():
     np.savez_compressed("MullikenLin_NO.npz", 
                         dHdQ=dHdQ, DM0=dm0, 
                         H0=H0,     Q0=Q0, 
-                        dq=dq, S=S, Rmax = Rmax)
+                        dq=dq, S=S, Rmax = Rmax, dm_in_ortho_basis=False)
 def linearize_odm():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
     try:
         other_dm = np.load('DM_Lin_O.npz')["DM0"]
         other_dq = np.load('DM_Lin_O.npz')["dq"]
         if np.abs(dm0 - other_dm).max()<(dq/10) and np.allclose(dq, other_dq):
-            print("Found MullikenLin_NO.npz with matching DM!")
+            print("Found DM_Lin_O.npz with matching DM!")
             return 
         else:
             pass
@@ -758,14 +776,25 @@ def linearize_odm():
     np.savez_compressed("DM_Lin_O.npz", 
                         dHdQ=dHdQ, DM0=dm0, 
                         H0=H0, Rmax=Rmax, 
-                        dq=dq, S=S)
+                        dq=dq, S=S, dm_in_ortho_basis=True)
+
 def linearize_nodm():
     dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
     dm0  = sigO2NO(dm0)
+    try:
+        other_dm = np.load('DM_Lin_NO.npz')["DM0"]
+        other_dq = np.load('DM_Lin_NO.npz')["dq"]
+        if np.abs(dm0 - other_dm).max()<(dq/10) and np.allclose(dq, other_dq):
+            print("Found DM_Lin_NO.npz with matching DM!")
+            return 
+        else:
+            pass
+    except:
+        pass
     H0   = H_from_DFT(dm0)
     no   = dm0.shape[-1]
     dHdQ = np.zeros((no, no, no),dtype=np.complex64)
-    for i in range(no):
+    for i in tqdm(range(no)):
         dm = dm0.copy()
         if dm[0,i,i] + dq > 0.5:
             sgn = -1.0
@@ -780,7 +809,7 @@ def linearize_nodm():
     np.savez_compressed("DM_Lin_NO.npz", 
                         dHdQ=dHdQ, DM0=dm0, 
                         H0=H0, Rmax=Rmax, 
-                        dq=dq, S=S)
+                        dq=dq, S=S, dm_in_ortho_basis=False)
 
     
     
@@ -805,6 +834,7 @@ class Mull_Lin_NO:
             self.dq   = f["dq"]
             self.S    = f["S"]
             self.FileNotFound = False
+            assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True
         
@@ -824,15 +854,37 @@ class DM_Lin_O:
             self._f = f
             self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
             self.dm0  = f["DM0"]
-            self.q    = np.diag(self.dm0[0])
             self.H0   = f["H0"]
             self.dq   = f["dq"]
             self.S    = f["S"]
+            self.q    = np.diag(self.dm0[0])
             self.FileNotFound = False
+            assert f["dm_in_ortho_basis"] == True
         except:
             self.FileNotFound = True
     def linearized_H(self, sigO):
         dq = np.diag(sigO[0]) - self.q
         dH = self.dHdQ @ dq
         return dH
-        
+class DM_Lin_NO:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0  = f["DM0"]
+            self.H0   = f["H0"]
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.q    = np.diag(self.dm0[0])
+            self.FileNotFound = False
+            assert f["dm_in_ortho_basis"] == False
+        except:
+            self.FileNotFound = True
+    def linearized_H(self, sigNO):
+        dq = np.diag(sigNO[0]) - self.q
+        dH = self.dHdQ @ dq
+        return dH
+
