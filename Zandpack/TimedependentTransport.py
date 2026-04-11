@@ -209,6 +209,7 @@ class TD_Transport:
             pm = False
         
         """
+        DEPRECATED
         siesta/transiesta object for device
         Again a stripped down version
         This routine is circumventable by assigning 
@@ -244,9 +245,10 @@ class TD_Transport:
             self.Device.find_elec_inds()
     
     def run_electrodes(self,manual_H = None, parallel_k = False):
-        """runs the electrode calculations
-           You can also do these steps manually and assign the electrode attribute yourself.
-           (See the docstring of make device)
+        """DEPRECATED
+        Runs the electrode calculations
+        You can also do these steps manually and assign the electrode attribute yourself.
+        (See the docstring of make device)
         """
         fois_gras_H = manual_H
         for i,e in enumerate(self.elecs):
@@ -260,8 +262,10 @@ class TD_Transport:
                 e.run_siesta_electrode_in_dir()
     
     def run_device(self, morestuff = [], where = 'DEFAULT', tbtrans = True, manual_H = None, manual_k = None):
-        """runs the device calculation
-           You can also do this manually and assign the Device attribute yourself.
+        """
+        DEPRECATED
+        Runs the device calculation
+        You can also do this manually and assign the Device attribute yourself.
         """
         
         Dev = self.Device
@@ -282,6 +286,7 @@ class TD_Transport:
     
     def run_device_non_eq(self,Vi, morestuff = [], where = 'DEFAULT', tbtrans = True, mpi = ''):
         """
+        DEPRECATED
         Runs the nonequilibrium calculation with voltages Vi
         Vi should be given in absolute ascending order with
         a zero at the starting position
@@ -355,10 +360,12 @@ class TD_Transport:
         self.calculated_bias        = Vi
     
     def get_H_interpolation_function(self):
-        """ Helper function for a obtaining a smooth interpolation of 
-            a series of nonequilibrium calculations. Cannot go outside the bias
-            window obviously when you call the resulting function. 
-            Inspect the arguments of the function by using help or by trial. """
+        """ 
+        DEPRECATED
+        Helper function for a obtaining a smooth interpolation of 
+        a series of nonequilibrium calculations. Cannot go outside the bias
+        window obviously when you call the resulting function. 
+        Inspect the arguments of the function by using help or by trial. """
         from Interpolation import make_spline
         return make_spline(self.calculated_bias, self.calculated_neq_H_ortho)
     
@@ -508,7 +515,7 @@ class TD_Transport:
             self.less_memory()
     
     def eliminate_small_numbers(self, small = 1e-7):
-        """Use Less memory, its good for your PC. 
+        """Use Less memory, by setting all numbers less than small to zero. 
            
         """
         for g in self.Ortho_Gammas:
@@ -813,8 +820,8 @@ class TD_Transport:
         
         
     def pickle(self, filename, compression = 'lzma'):
-        """Saves calculator to file. 
-           compression=None or string (default is lzma)
+        """Saves TD_Transport to disk for layer use.
+           compression=None or string (lzma, gzip, bz2) (default is lzma)
            """
         import pickle as pkl
         if compression == None:
@@ -844,7 +851,7 @@ class TD_Transport:
         #        pkl.dump(self,f)
     
     def reset_all_fits(self):
-        """Resets all fits"""
+        """Resets all fits that are produced when calling the Fit method."""
         delattr(self, 'fitted_lorentzians')
         delattr(self, 'fitted_self_energies')
         delattr(self, 'sampled_gl_matrices')
@@ -1034,12 +1041,13 @@ class TD_Transport:
     
     def get_dense_matrices(self, zero_tol = 1e-12):
         """ 
-           Prepare the propagation quantities in arrays and get a (bad) initial
-           density matrix. 
+        DEPRECATED
+        Prepare the propagation quantities in arrays and get a (bad) initial
+        density matrix. 
            
-           zero_tol defines the lower cutoff on the cutoff of the eigenvalues
-           in the self-energy decompositions. 1e-12 is a very strict value and
-           even 1e-5 can be entirely reasonable.
+        zero_tol defines the lower cutoff on the cutoff of the eigenvalues
+        in the self-energy decompositions. 1e-12 is a very strict value and
+        even 1e-5 can be entirely reasonable.
         """
         
         self.Hdense  = Blocksparse2Numpy(self.Ortho_Hamiltonian, self._Slices)
@@ -1114,8 +1122,8 @@ class TD_Transport:
            in an easy to use function. 
            specifies the lowest absolute value for the eigenvalues.
            fixphase has been used for testing purposes and
-           are inconsenquencial.
-           The eigenvalues should we sorted according to obs, as this gives
+           does not affect anything, apart from the phase of the eigenvectors of the levelwidth functions.
+           The eigenvalues should we sorted according to abs, as this gives
            the most dense blocks of matrices. 
            
         """
@@ -1128,7 +1136,10 @@ class TD_Transport:
         """
             custom_mat: np.ndarray of shape (nk, 1, no, no)
             Here you can give a value to renormalize the Orthogonal Hamiltonian
-            Acts as a rigid shift of the Hermitian part of $\Sigma_alpha$
+            The custom_mat input makes a rigid shift in the Hamiltonian, in order 
+            correct for the Hermitian part of $\Sigma_alpha$ being not completely
+            described due to missing spectral weight of the $\Gamma_alpha$ outside
+            the window chosen in the fit.
         """
         
         assert len(custom_mat.shape) == 4
@@ -1136,17 +1147,20 @@ class TD_Transport:
                            custom_mat.transpose(0,1,3,2).conj())
         self.Hamiltonian_renormalisation_correction = custom_mat.copy()
     
-    def get_dense_matrices_purenp(self, zero_tol = 1e-15, create_arrays = True):
+    def get_dense_matrices_purenp(self, zero_tol = 1e-7, create_arrays = True):
         """ 
            Prepare the propagation quantities in arrays and get a (bad) initial
-           density matrix. 
+           density matrix. The DM is bad in the sense it is simply the DM of the isolated
+           device Hamiltonian, not the full NEGF Hamiltonian that will be produced by 
+           the SCF code later. 
            
            Furthermore, the Hamiltonian gets the renormalisation given to the 
            class through self.Renormalise_H added to it. 
            
-           zero_tol defines the lower cutoff on the cutoff of the eigenvalues
+           zero_tol defines the lower cutoff of the eigenvalues
            in the self-energy decompositions. 1e-12 is a very strict value and
-           even 1e-5 can be entirely reasonable.
+           even 1e-5 can be entirely reasonable. This cutoff can be changed later
+           when using the modify_occupations tool.
            
            
         """
@@ -1215,7 +1229,7 @@ class TD_Transport:
             If the ODECheck.txt contains large numbers (say >1e-4),
             increase the number of fermi poles included either in the beginning
             or using the modify_occupations commandline tool.
-            """
+        """
         
         
         from PadeDecomp import FD
@@ -1325,11 +1339,12 @@ class TD_Transport:
         print('Eigendecompositon good', file = PrintFile)
         PrintFile.close()
     
-    def Gamma_info(self,lead=0, tol = 1e-3,ik=0, f = None, return_vals=False, only_upper = True):
+    def Gamma_info(self, lead=0, tol = 1e-3,ik=0, f = None, return_vals=False, only_upper = True):
         """ 
             Useful function for fitting. 
             Give the descendingly largest components of the gamma matrix of 
-            electrode lead. 
+            electrode. The lead passed in the argument is the number of the particular
+            electrode one wishes to find the larger components of.
         """
         Gam = self.Nonortho_Gammas[lead]
         maxes = []
@@ -1374,7 +1389,7 @@ class TD_Transport:
             the peaks in the gamma-matrix elements which are larger than tol
             using the scipy find_peaks function.
             
-            opts is a dictionary which is parsed to the find_peaks function.
+            opts is a dictionary which is parsed to the find_peaks function from SciPy.
             
             Any poles found by this function should have a widths maller 
             than Wmax.
@@ -2260,6 +2275,10 @@ class TD_Transport:
         print('Code can be obtained from ' + WebPage)
     
     def make_f_general(self, parallel = False, fastmath = False, nogil = False):
+        """
+        DEPRECATED 
+        function that was used for testing the zand executable.
+        """
         # The second index on H was for being able to multiply with energy-resolved quantities,
         # which is not needed anymore
         H      = self.Hdense[:,0,:,:].copy()
@@ -2417,6 +2436,10 @@ class TD_Transport:
         return f
     
     def make_f_experimental(self, parallel = False, fastmath = False, nogil = False):
+        """
+        DEPRECATED 
+        function that was used for testing the zand executable.
+        """
         # The second index on H was for being able to multiply with energy-resolved quantities,
         # which is not needed anymore
         H      = self.Hdense[:,0,:,:].copy()
@@ -2534,6 +2557,10 @@ class TD_Transport:
         return f
     
     def make_f_purenp(self):
+        """
+        DEPRECATED 
+        function that was used for testing the zand executable.
+        """
         # The second index on H was for being able to multiply with energy-resolved quantities,
         # which is not needed anymore
         H      = self.Hdense[:,0,:,:]
@@ -2627,6 +2654,10 @@ class TD_Transport:
         return f
     
     def make_f_gpu(self,dtype = int):
+        """
+        DEPRECATED 
+        function that was used for testing the zand executable.
+        """
         if k0nfig.GPU == False:
             print('/n GPU is not enabled in config file! /n')
             assert 1 == 0
@@ -2713,26 +2744,28 @@ class TD_Transport:
             
             return D_sig, -1j * D_psi, D_omega
     def make_f(self, parallel = False, fastmath = False, nogil = False):
-        """ !!!Reference Implementation!!!
-            Relatively short and concise numba implementation of the 
-            EOMs. Read the code and the paper 
-            
-            """ +CiteString+""" 
-            
-            In order to convince yourself it is right.
-            
-            This function returns a numba JIT-compiled function.
-            this function takes the arguments as
-                def f(t, 
-                      old_sig, old_psi, old_omega,
-                      dH, delta_variant, dH_given = True):
-            where t is float, old_sig is a (nk,no,no) numpy array,
-            old_psi is a (nk, na, nl, noT, no) array, 
-            old_omega is a (nk, na, nl, noT,nk, na, nl, noT) array,
-            dH is a numba JIT-compiled function taking a float and a (nk,no,no)
-                array as its arguments
-            delta_variant is a function that takes a float and an int (t,a)
-            
+        """ 
+        DEPRECATED 
+        function that was used for testing the zand executable.
+        !!!Reference Implementation!!!
+        Relatively short and concise numba implementation of the 
+        EOMs. Read the code and the paper 
+        
+        """ +CiteString+""" 
+        
+        In order to convince yourself it is right.
+        
+        This function returns a numba JIT-compiled function.
+        this function takes the arguments as
+        def f(t, 
+              old_sig, old_psi, old_omega,
+              dH, delta_variant, dH_given = True):
+        where t is float, old_sig is a (nk,no,no) numpy array,
+        old_psi is a (nk, na, nl, noT, no) array, 
+        old_omega is a (nk, na, nl, noT,nk, na, nl, noT) array,
+        dH is a numba JIT-compiled function taking a float and a (nk,no,no)
+        array as its arguments
+        delta_variant is a function that takes a float and an int (t,a)
         """
         
         
