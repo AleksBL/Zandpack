@@ -4,8 +4,8 @@ import numpy as np
 # This function is never called, but is written to the Bias.py
 # file using the inspect module
 def bias(t,a):
-    if a == 0: return 0.0# np.sin(t)
-    else:      return 0.0# -np.sin(t)
+    if a == 0: return 0.0 # np.sin(t)
+    else:      return 0.0 # -np.sin(t)
 # The output from the tofile function called at the end of the fitting procedure
 init_file  = 'YourOutputFromFit'
 work_name, work_dir  = 'ABC', 'TDcalc'
@@ -22,8 +22,6 @@ B.write_initial()
 # have to increase the number of poles for the Fermi function
 # expansion.
 B.modify_occupation(eigtol=1e-3, N_F=30, kT_i=[0.05, 0.05])
-# In[]
-# assert 1 ==0
 B.run_scf(DM_randomness=0.0, write_dm_every=10, weight=0.25,
           DM_start_file="../SCFintermediateDM.npy",
           # Contour="../mycontour_2.npy",
@@ -32,10 +30,8 @@ B.run_scf(DM_randomness=0.0, write_dm_every=10, weight=0.25,
 # SCF cycle has eigenvalues within the bandwidth of
 # the pole expanded fermi function.
 B.check()
-# In[]
-# set linearization flag to linearization in orthogonal DM diagonal elements.
+# Set linearization flag to linearization in orthogonal DM diagonal elements.
 # This makes hamiltonian evaluation much faster.
-# In[]
 B.hook.scheme='lin_odm'
 B.hook_linearize()
 B.write_bias(bias=bias, hook=B.hook)
@@ -45,8 +41,6 @@ B.run_scf(DM_randomness=0.0, write_dm_every=10, weight=0.25,
           #Contour="../mycontour_2.npy",
           write_progress=True)
 B.run_psinought()
-# B.run_zand('mpirun -np 3 ')
-# In[]
 # update files and use nonorthogonal version (faster)
 B.input.orthogonal=False
 B.write_bias(bias=bias, hook=B.hook)

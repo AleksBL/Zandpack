@@ -44,30 +44,28 @@ sb2     = {}
 tol_ele = 1e-3
 def run_mini(its,method, which_e = None):
     R.Fit(fact = 1.0,                          # Redundant when we give init_E and init_G
-          Fallback_W = 10.0,                    # Redundant\n",
-          NumL = NL,                           # Not redundant\n",
-          fit_mode      = 'all',               # Important to choose mode\n",
-          force_PSD     = True,                # the self-energies are not positive semidefinite
-          force_PSD_tol = [min_tol1,
-                           min_tol2], # 
-          use_analytical_jac = True,           # Important for speed
-          min_method = method,                 # Choose from any scipy.optimize.minimize method
-          ebounds    = (-10.,10.),                # bounds on centres
-          wbounds    = (0.001, 2),                # bounds on widths
-          gbounds = (None, None),              # bounds on sizes, redundant right now
-          tol     = tol_ele,                      # any negative value with mean we fit all matrix elements of \\Gamma
-          options = {'disp':3,              # Minimizer options
-                     'maxiter':its, 
-                     'gtol':1e-5,
-                     #'ftol':1e-3,
-                     'verbose':3,
-                     },
-          fit_real_part = False,               # 
-          alpha_PO = alpha_PO,                 # Repulsion
-          init_E   = init_E,                   # Give initial ei's and gi's
-          init_G   = init_G,
-          which_e  = which_e,
-          )
+     Fallback_W = 10.0,                   # Redundant",
+     NumL = NL,                           # Not redundant",
+     fit_mode      = 'all',               # Important to choose mode",
+     force_PSD     = True,                # the self-energies are not positive semidefinite
+     force_PSD_tol = [min_tol1,min_tol2], #
+     use_analytical_jac = True,           # Important for speed
+     min_method = method,                 # Choose from any scipy.optimize.minimize method
+     ebounds    = (-10.,10.),                # bounds on centres
+     wbounds    = (0.001, 2),                # bounds on widths
+     gbounds = (None, None),              # bounds on sizes, redundant right now
+     tol     = tol_ele,                      # any negative value with mean we fit all matrix elements of \\Gamma
+     options = {'disp':3,              # Minimizer options
+        'maxiter':its,
+        'gtol':1e-5,
+       #'ftol':1e-3,
+        'verbose':3,
+         },
+     fit_real_part = False,               #
+     alpha_PO = alpha_PO,                 # Repulsion
+     init_E   = init_E,                   # Give initial ei's and gi's
+     init_G   = init_G,
+     which_e  = which_e)
 
 run_mini(0,'trust-constr')
 R.curvefit_all(.0005)
