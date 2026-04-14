@@ -13,6 +13,7 @@ from Zandpack.TimedependentTransport import TD_Transport
 from Zandpack.wrapper import transiesta_hook, Control, Input
 from Block_matrices.Block_matrices import block_sparse
 from functools import partial
+from Zandpack.equations import Eqs
 
 # import Zandpack
 SiP_method_table= dir(SiP)
@@ -133,10 +134,16 @@ def getclass(n):
     if n == "Input": return Input
 def class_method_description(classname: str, method_name: str)-> str:
     Class = getclass(classname)
-    return str(render_doc(Class.__dict__[method_name]))
+    try:
+        return str(render_doc(Class.__dict__[method_name]))
+    except:
+        return "ERROR: Didnt find the method name"
 def class_method_source_code(classname: str, method_name: str)-> str:
     Class = getclass(classname)
-    return str(getsource(Class.__dict__[method_name]))
+    try:
+        return str(getsource(Class.__dict__[method_name]))
+    except:
+        return "ERROR: Didnt find the method name"
 
 TD_Transport_method_description         = partial(class_method_description, "TD_Transport")
 TD_Transport_method_description.__doc__ = md_ds("TD_Transport")
@@ -189,8 +196,8 @@ def table2str(table):
         out += s +'\n'
     return out
 
-structure_description =f"""
-Any calculation uses several classes of which the TD_Transport, transiesta_hook, Control
+structure_description =f"""CODE INFORMATION
+A Zandpack calculation uses several classes. The TD_Transport, transiesta_hook, Control
 Input, SiP and block_matrices is described here. Any of the class methods listed below can be called with the function name
 to obtain source code or function documentation.
 
@@ -202,54 +209,69 @@ Use TD_Transport_method_description for method description.
 Use TD_Transport_method_source_code for method source code.
 TD_Transport class has methods:
 """ +table2str(TD_Transport_method_table)+"""
+
+transiesta_hook:
+```python
+from Zandpack.wrapper import transiesta_hook
+```
+Use transiesta_hook_method_description for method description.
+Use transiesta_hook_method_source_code for method source code.
+transiesta_hook class has methods:
+""" +table2str(transiesta_hook_method_table)+"""
+
+Control:
+```python
+from Zandpack.wrapper import Control
+```
+Use Control_method_description for method description.
+Use Control_method_source_code for method source code.
+Control class has methods:
+""" +table2str(Control_method_table)+"""
+
+Input:
+```python
+from Zandpack.wrapper import Input
+```
+Use Input_method_description for method description.
+Use Input_method_source_code for method source code.
+Input class has methods:
+""" +table2str(Input_method_table)+"""
+Comments on Control, Input and transiesta_hook:
+Control wraps the calling of the commandline tools from the
+Zandpack/cmdtools and Zandpack/mpi folders. Most importantly it the calls (Step 4.1, 4.2 and 4.3)
+```bash
+# The directory in which these commands are run contains the Bias.py and Initial.py files.
+# SCF and psinought steps are done using the orthogonal basis, while the
+# zand/nozand step can be done in either the orthogonal basis (using zand) or the nonorthognal basis (nozand)
+modify_occupations Dir=$PWD file=SourceFile outfile=YourFileName ....
+SCF Dir=$PWD file=YourFileName ....
+psinought Dir=$PWD YourFileName ....
+# or nozand -> zand
+mpirun nozand Dir=$PWD
+```
+The Input class writes the Initial.py and Bias.py files automatically (see examples/genetic_wrapper/wrapper_script.py).
+The transiesta_hook provides the callable function H_from_DFT(nosig) to get the Hamiltonian given the nonorthogonal density matrix (nosig).
+
+The siesta_python code contains the SiP class, described here.
+```python
+from siesta_python.siesta_python import SiP
+```
+Use SiP_method_description for method description.
+Use SiP_method_source_code for method source code.
+SiP class has methods:
+""" +table2str(SiP_method_table)+"""
+
+The Block_matrices code contains the block_sparse class, described here.
+```python
+from Block_matrices.Block_matrices import block_sparse
+```
+Use block_sparse_method_description for method description.
+Use block_sparse_method_source_code for method source code.
+block_sparse class has methods:
+""" +table2str(block_sparse_method_table)+"""
+
 """
 
-# transiesta_hook:
-# ```python
-# from Zandpack.wrapper import transiesta_hook
-# ```
-# Use transiesta_hook_method_description for method description.
-# Use transiesta_hook_method_source_code for method source code.
-# transiesta_hook class has methods:
-# """ +table2str(transiesta_hook_method_table)+"""
-
-# Control:
-# ```python
-# from Zandpack.wrapper import Control
-# ```
-# Use Control_method_description for method description.
-# Use Control_method_source_code for method source code.
-# Control class has methods:
-# """ +table2str(Control_method_table)+"""
-
-# Input:
-# ```python
-# from Zandpack.wrapper import Input
-# ```
-# Use Input_method_description for method description.
-# Use Input_method_source_code for method source code.
-# Input class has methods:
-# """ +table2str(Input_method_table)+"""
-
-# The siesta_python code contains the SiP class, described here.
-# ```python
-# from siesta_python.siesta_python import SiP
-# ```
-# Use SiP_method_description for method description.
-# Use SiP_method_source_code for method source code.
-# SiP class has methods:
-# """ +table2str(SiP_method_table)+"""
-
-# The Block_matrices code contains the block_sparse class, described here.
-# ```python
-# from Block_matrices.Block_matrices import block_sparse
-# ```
-# Use block_sparse_method_description for method description.
-# Use block_sparse_method_source_code for method source code.
-# block_sparse class has methods:
-# """ +table2str(block_sparse_method_table)+"""
-
-# """
 _basedir = __file__[:-len("documentation.py")]
 examples = [('examples/generic_wrapper/wrapper_script.py', 
              "generic implementation of Zandpack Step 4 using the wrapper module."
@@ -338,17 +360,32 @@ examples = [('examples/generic_wrapper/wrapper_script.py',
             ]
 
 def get_example(examplename: str) -> str:
-    return open(_basedir+examplename,"r").read()
+    try:
+        txt = open(_basedir+examplename,"r").read()
+    except:
+        txt = 'FileNotFound'
+    return txt
 
-
-# structure_description += f"""
-# There are furthermore examples available through calling the get_example tool.
-# A list of examples are listed below with small comments:
-# # """
-
-# for e in examples:
-#     txt, cmt = e
-#     structure_description += txt + " (" +cmt +")\n"
+structure_description += f"""
+EXAMPLES
+There are  examples available through calling the get_example tool. 
+These are important to get the context of how the classes from the CODE INFORMATION section works together.
+The get_example_tool should be called as \"get_example(\"examples/Dir/file\")\", possibly with additional directory depth. 
+A list of examples are listed below with small comments:
+"""
+for e in examples:
+    txt, cmt = e
+    structure_description += txt + " (" +cmt +")\n"
+def get_equation(name):
+    try:
+        return Eqs[name]
+    except:
+        return "EquationNotFound"
+structure_description+=f"""
+Equations for what is being solved is also available using the get_equations tool. It will return equations for the following names:
+"""
+for k in Eqs.keys():
+    structure_description += k +'\n'
 
 available_functions = {"TD_Transport_method_description": TD_Transport_method_description,
                        "TD_Transport_method_source_code": TD_Transport_method_source_code,
@@ -362,5 +399,6 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "Input_method_source_code":Input_method_source_code,
                        "block_sparse_method_description":block_sparse_method_description,
                        "block_sparse_method_source_code":block_sparse_method_source_code,
-                       #"get_example": get_example
+                       "get_example": get_example,
+                       "get_equation":get_equation,
                        }
