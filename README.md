@@ -6,7 +6,9 @@
 <img src="./Zandpack/svg/logo3.svg" width="200">
 
 Join the signal group chat: 
-<img src="./Zandpack/svg/GroupChat.png" width="100">
+
+<img src="./Zandpack/svg/GroupChat.png" width="150">
+
 Ask questions, suggest improvements, or chat with an LLM about the code!
 
 
