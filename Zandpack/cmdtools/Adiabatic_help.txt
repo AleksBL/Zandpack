@@ -1,0 +1,38 @@
+Adiabatic Program Start
+
+sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//Adiabatic', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)
+dt : 0.5
+dE : 0.01
+file : SaveFile
+num_procs : 1
+ik : 0
+kT_0 : 0.025
+kT_1 : 0.025
+mu_0 : 0.0
+mu_1 : 0.0
+Nlead : 2
+xkT : 10
+eta : 1e-3
+backend : loky
+verbose : 5
+outfile : SteadyStateFile
+DOS_Emin : -3
+DOS_Emax : +3
+DOS_dE : 0.05
+parallel : 1
+Mode : Transport
+QP_its : 20
+QP_Eg : 0.0
+QP_t : 0.0
+QP_convergence_tol : 1e-5
+QP_outfile : QuasiParticleFile
+spin_factor : 2
+DM_file : unspecified
+QP_dot_tol : 0.99
+QP_wiggle : 0.01
+QP_n_wiggles : 10
+RefinedQP_outfile : RefinedQP
+phase_convention_eigvecsumisreal : 1
+Skip_section : None

@@ -1,0 +1,18 @@
+modify_occupations  Program Start
+
+modify_occupations  sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//modify_occupations', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after modify_occupations command (no spaces!)
+file : TDT_file
+outfile : NewTDT_file
+mu_i : 0.0,0.0
+kT_i : 0.025,0.025
+pole_mode : JieHu2011
+N_F : 20
+eigtol : 1e-8
+use_exact_fermi : False
+print_eigf : False
+print_eigl : False
+factorisation : eigen
+new_lead : False
+scale_gamma : None

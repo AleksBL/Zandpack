@@ -1,0 +1,24 @@
+psinought program start
+
+sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//psinought', '--help']
+OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)
+
+Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)
+file : SaveFile
+maxiter : 10000
+checkderivative : True
+dl : 1.0
+steptol : 1e-8
+add_random : False
+random_weight : 0.0001
+L_info : False
+Axb_solver : cgs
+start_psi : None
+memory_save : True
+Xpp_optim : True
+printfile : psinought.print
+extreme_memory_save : False
+Woodbury-inv : True
+prec_to_disk : False
+outer_einsum : True
+use_preconditioner : True

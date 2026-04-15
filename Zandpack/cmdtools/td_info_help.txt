@@ -1,0 +1,34 @@
+td_info Program Start
+
+sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//td_info', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)
+dt : 0.1
+file : SaveFile
+savefile : None
+plot : 0
+plotcurrent : 0
+plotdevicecharge : 0
+plotdm : 0
+plotgeom : 0
+plotrealspacecharge : 0
+tmin : None
+tmax : None
+ik : None
+dm_inds : None
+label : None
+pltshow : 1
+TSHSfile : None
+FFT : False
+format : svg
+orbN : 9
+orbvac1 : 0.5
+orbvac2 : 3.0,3.0,3.0
+orbdir : Device
+gridfolder : gridfolder
+regularmpl : 0
+toqr : 0
+qr_n : 10
+sourcefiles : None
+qr_nocompression : 0
+onlysource : 0

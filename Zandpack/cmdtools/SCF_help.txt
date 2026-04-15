@@ -1,0 +1,34 @@
+SCF Program Start
+
+sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//SCF', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after SCF command (no spaces!)
+Contour : None
+kT : 0.025
+file : TDT_file
+kweights : kweights.npy
+drho_tol : 1e-5
+history : 6
+weight : 0.2
+DM_start_file : None
+nprocs : 1
+backend : loky
+DM_out_file : None
+UfUd : False
+real_line_integral : False
+real_line_min : -60.
+real_line_max : 20.0
+real_line_N : 20
+real_line_exact_fermi : False
+Nonequilibrium : False
+DM_randomness : 0.001
+random_on_diag_only : True
+memory_conserve : False
+fact_kT : 10.0
+tolerance : 1e-8
+quadvec_workers : 1
+Bias : None
+save_last_H : True
+max_iter : 500
+write_dm_every : -1
+write_progress : False
