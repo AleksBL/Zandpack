@@ -1,0 +1,1 @@
+Step 1 - 4 in a series of scripts on a simple carbon nanoribbon. Steady state is initially obtained using TranSIESTA, but for the timedependent calculation (step 4.), A much simpler U * sigma_ii is introduced on one site in the middle of the ribbon.

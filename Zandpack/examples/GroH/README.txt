@@ -1,2 +1,3 @@
+A calculation of a hydrogen atom adsorbed on a graphene sheet. A surrounding self energy is calculated (Real_space_SE from the siesta_python class.) to model the infinite graphene sheet accurately. The hydrogen atom is modelled with one orbital, and this orbital should turn out to have two different spin states depending on the tip bias. If no bias is applied (delta_0=delta_1=0) the system should be unpolarised, while if delta_1 = 0.5 and delta_H is commented in in the Hamiltonian, the system should polarize.
 In this example, you need to use the add_spin_component tool to dublicate the system
 and then add the Hubbard U.

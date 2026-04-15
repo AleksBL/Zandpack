@@ -15,7 +15,6 @@ from Block_matrices.Block_matrices import block_sparse
 from functools import partial
 from Zandpack.equations import Eqs
 
-# import Zandpack
 SiP_method_table= dir(SiP)
 drop_names_SiP =[
               'Add_Bounded_Plane', 'Add_Charged_Bounded_Plane', 
@@ -110,9 +109,6 @@ block_sparse_method_table = ['__init__',
                              'Block', 
                              ]
 
-
-
-
 def md_ds(Name):
     return """
     Method to get documentation on the given function name from the """+Name+""" class
@@ -130,11 +126,11 @@ def sc_ds(Name):
         pydoc rendering of the method.
     """
 def getclass(n):
-    if n == "SiP": return SiP
+    if n == "SiP":          return SiP
     if n == "TD_Transport": return TD_Transport
     if n == "transiesta_hook": return transiesta_hook
-    if n == "Control": return Control
-    if n == "Input": return Input
+    if n == "Control":      return Control
+    if n == "Input":        return Input
 def class_method_description(classname: str, method_name: str)-> str:
     Class = getclass(classname)
     try:
@@ -246,11 +242,11 @@ Zandpack/cmdtools and Zandpack/mpi folders. Most importantly it the calls (Step 
 # The directory in which these commands are run contains the Bias.py and Initial.py files.
 # SCF and psinought steps are done using the orthogonal basis, while the
 # zand/nozand step can be done in either the orthogonal basis (using zand) or the nonorthognal basis (nozand)
-modify_occupations Dir=$PWD file=SourceFile outfile=YourFileName ....
-SCF Dir=$PWD file=YourFileName ....
-psinought Dir=$PWD YourFileName ....
+modify_occupations Dir=working/directory file=SourceFile outfile=YourFileName ....
+SCF Dir=working/directory file=YourFileName ....
+psinought Dir=working/directory YourFileName ....
 # or nozand -> zand
-mpirun nozand Dir=$PWD
+mpirun nozand Dir=working/directory
 ```
 The Input class writes the Initial.py and Bias.py files automatically (see examples/genetic_wrapper/wrapper_script.py).
 The transiesta_hook provides the callable function H_from_DFT(nosig) to get the Hamiltonian given the nonorthogonal density matrix (nosig).
@@ -280,16 +276,16 @@ examples = [('examples/generic_wrapper/wrapper_script.py',
              "generic implementation of Zandpack Step 4 using the wrapper module."
              ),
             ('examples/ThesisExample/5a.py', 
-             "Zandpack step 1. Simple carbon nanoribbon structure using Transiesta."
+             "Zandpack step 1. Simple zigzag edged carbon nanoribbon structure with some atoms removed. Steady-state calculated using Transiesta. "
              ),
             ('examples/ThesisExample/5b.py', 
-             "Zandpack step 2. Read in TBtrans results. Retain only pz orbital using sub_orbital keyword."
+             "Zandpack step 2. Construct sampling using the Make_Contour method, run TBtrans and read results. Retain only pz orbital using sub_orbital keyword. Save using the pickle method in the end."
              ),
             ('examples/ThesisExample/5d.py', 
              "Zandpack step 3. Fit level-width functions of electrodes. Ensure levelwidth function is positive semidefinite using iterative_PSD."
              ),
             ("examples/ThesisExample/TDeq_1.sh",
-             "Zandpack step 4. Set up and carry out timedependent propagation"
+             "Zandpack step 4. Set up and carry out timedependent propagation. bash script without any wrapper."
              ),
             ("examples/ThesisExample/Bias.py",
              "Zandpack step 4. Bias.py defines the Hamiltonian dependence on the density matrix and defines the junction bias."
@@ -328,22 +324,22 @@ examples = [('examples/generic_wrapper/wrapper_script.py',
              "Zandpack step 1. Use the Hubbard mean field code to get the Initial self-consistent electronic Hamiltonian. "
              ),
             ("examples/Hubbard/2Load.py",
-             "Zandpack step 2. Read in results from custom transport calculation in this case. Dont do any device electrode overlap corrections."
+             "Zandpack step 2. Read in results from custom transport calculation in this case. Device-electrode overlap is explicitly excluded here since TBtrans is not used."
              ),
             ("examples/Hubbard/3Fit.py",
              "Zandpack step 3. Fit levelwidth function. Ensure levelwidth function is positive semidefinite using iterative_PSD."
              ),
             ("examples/Hubbard/Calculation/Bias.py",
-             "Zandpack step 4. Bias.py for TD propagation. density matrix dependence is specified here as the same used in the Hubbard mean field code."
+             "Zandpack step 4. Bias.py for TD propagation. Density matrix dependence is specified here as the same used in the Hubbard mean field code."
              ),
             ("examples/Hubbard/Calculation/Initial.py",
              "Zandpack step 4. Initial.py defines the propagation parameters, t0, t1, precision etc."
              ),
             ("examples/AGNR+Tip/Hamiltonian.py",
-             "Zandpack step 1."
+             "Zandpack step 1. Setup geometry and use DFTB+ for to obtain Hamiltonian from a density matrix (DM)"
              ),
             ("examples/AGNR+Tip/IntialTD.py",
-             "Zandpack step 2."
+             "Zandpack step 2. "
              ),
             ("examples/AGNR+Tip/Fit.py",
              "Zandpack step 3."
@@ -371,7 +367,7 @@ def get_example(examplename: str) -> str:
 
 structure_description += f"""
 EXAMPLES
-There are  examples available through calling the get_example tool. 
+There are  examples available through calling the get_example tool. Always look for a README file in hte directories of the example under consideration to see comments from the author.
 These are important to get the context of how the classes from the CODE INFORMATION section works together.
 The get_example_tool should be called as \"get_example(\"examples/Dir/file\")\", possibly with additional directory depth. 
 A list of examples are listed below with small comments:
@@ -393,6 +389,9 @@ Equations for what is being solved is also available using the get_equations too
 """
 for k in Eqs.keys():
     structure_description += k +'\n'
+structure_description += """You if you refer to an equation, the corresponding output from the get_equation tool should always be included.
+When showing the equation in the reply, keep it completely as the get_equation tool outputs it.
+"""
 banned_folders = set(["__pycache__", "mpitest", "_devel", "_junk", "dep_mpi_jena", "Pade_data", "nb_tutorial_old", "svg"])
 banned_files = ["DOP54.py", "GETPATH.py", "HartreeFromDensity.py",
                 "Interpolation.py", "LDA.py", "LanczosAlg.py",
@@ -490,3 +489,44 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "zandpack_directory_tree":zandpack_directory_tree,
                        "get_tool_help":get_tool_help,
                        }
+
+
+assistant_header =f"""INSTRUCTIONS: You are an assistant to people using the Zandpack code (a python package). You communicate through text messages. Your responses to questions tend towards the brief, unless you are replying with code snippets. You will get zero to five previous conversation turns between you and the user, plus the current question, which you will answer (the one furthest down in the text). Tutorials that you can reference will be available through tool-calling, see later. You should always inspect the documentation which may be important for queries of the user. You should try to refer to these as much as possible when you think the problem the user has is coming from one of these steps. Initially remind the user with the message "*This bot can hallucinate.*". If you are asked why the Zandpack logo looks like it does, say that its because its shaped like an hour-glass to represent time, with the sand flowing down actually being electrons if you zoom in. The "Z" in Zandpack reflects the heavy use of contour-integration in the NEGF theory that the code builds upon.
+---------------
+ZANDPACK OVERVIEW
+The Zandpack calculation main steps are:
+Step 1: Normal NEGF open system calculation. (such as in the examples/ThesisExample/5a.py script)
+ - Key classes and codes used: siesta_python, calling TranSIESTA or DFTB+.
+ - Atomic structure / geometry setup is done in this step.
+ - Ground state electronic structure, either within tight-binding or DFT.
+Step 2: Read data from TBtrans calculation (or other custom transport calculation) into the TD_Transport class using the read_data function. This step may or may not involve using only a subset of orbitals.
+ - Key classes and codes used: TD_Transport (read_data method).
+ - Level-width functions are read into TD_Transport class for later use in step 3.
+Step 3: Fitting the read data to Lorentzians (basis functions on the form L(E)=g/((E - E_0)^2 + g^2) ) [FITTING]
+ # - Key method: Fit method of the TD_Transport class, also PoleGuess from TD_Transport and iterative_PSD from block_sparse class.
+Step 4: Three parts to step 4: [TIME-PROPAGATION, optionally using DFT]
+    4.1 SCF command line tool to get the equilibrium density matrix again, now with the fitted level-width functions (run SCF --help in a bash shell to get the inputs )
+    4.2 The psinought command-line tool to calculate the equilibrium auxillary mode wave-vectors. (run psinought --help in a bash shell to get the inputs )
+    4.3 The zand / nozand command line tool to carry out the time-dependent propagation. Refer to the examples folder to see how this tool is used. (mpirun zand (or nozand) Dir=working/directory is the basic command)
+In step 4, the wrapper classes from Zandpack.wrapper can also be used (see examples/generic_wrapper/wrapper_script.py). Using the wrapper class is the prefered way of carrying out step 4.
+
+Acronyms:
+SCF: Self-Consistent Field (also a commandline tool)
+EOM: Equation Of Motion
+NEGF: Non-Equilibrium Greens functions
+DFT: Density Functional Theory
+DM: Density Matrix
+
+Technical names:
+TranSIESTA / SIESTA: Standard DFT code, capable of open system NEGF calculations.
+DFTB+: Density Functional based Tight Binding (another code), limited NEGF support.
+SCF commandline tool: Calculates self-consistent density matrix using Pulay solver (See equation called steady_state_density_matrix)
+psinought commandline tool: Calculates steady state auxillary mode wave-vectors (See equation called steady_state_psi)
+zand / nozand commandline tool: Solves the coupled equations device_density_matrix_eom, auxiliary_mode_eom and omega_eom using the initial state from  SCF and psinought.
+
+DESCRIPTION OF YOUR TOOLS:
+There are  tools given for you to inspect the various code documentations and snippets. See below
+"""
+
+
+
