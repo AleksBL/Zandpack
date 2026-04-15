@@ -51,7 +51,8 @@ drop_names_SiP =[
               'Put_Variable_Charged_Sphere_On_All', 'run_fatbands', 'Wrap_unit_cell',
               'reset_minimal_hamiltonian', "Passivate_with_molecule",'run_gulp_in_dir',
               'add_elecs', 'get_labelled_indices','ideal_cell_charge','is_siesta_done',
-              'run_analyze_in_dir', 'relaxed_system_energy', 
+              'run_analyze_in_dir', 'relaxed_system_energy', "add_buffer","get_potential_energy",
+              "get_pseudo_paths","self_energy_from_tbtrans", "fdf_relax",
               
               ]
 SiP_method_table = [v for v in SiP_method_table if v not in drop_names_SiP]
@@ -88,12 +89,14 @@ generic_drop = ['__class__',
  '__setattr__', '__sizeof__',
  '__static_attributes__', '__str__',
  '__subclasshook__', '__weakref__',]
-
+control_drop = ["create_subfolder", "create_wd", "init_from_other",
+                "into_wd", "out_wd", "rawlog", "write_rawlog", "write_log",
+                ""]
 transiesta_hook_method_table = [v for v in transiesta_hook_method_table 
                                 if v not in generic_drop]
 Control_method_table = dir(Control)
 Control_method_table = [v for v in Control_method_table 
-                                if v not in generic_drop]
+                                if v not in generic_drop + control_drop]
 Input_method_table = dir(Input)
 Input_method_table = [v for v in Input_method_table 
                                 if v not in generic_drop]
@@ -349,7 +352,7 @@ examples = [('examples/generic_wrapper/wrapper_script.py',
              "Allows one to use the DFTB+ code to get the electronic Hamiltonian for both steady-state SCF and timedependent calculations."
              ),
             ("examples/AGNR+Tip/3E_6_2/Bias.py",
-             "Zandpack step 4. Imports Hamiltonian function from DFTB_driver.py and uses it to define the density matrix dependence of the Hamiltonian. Also contains a linearization scheme for faster Hamiltonian evaluation."
+             "Zandpack step 4. Imports Hamiltonian function from DFTB_driver.py and uses it to define the density matrix dependence of the Hamiltonian. Also contains linearization schemes for faster Hamiltonian evaluation."
              ),
             ("examples/AGNR+Tip/3E_6_2/Initial.py",
              "Zandpack step 4. Normal Initial.py file."
@@ -381,11 +384,91 @@ def get_equation(name):
         return Eqs[name]
     except:
         return "EquationNotFound"
+
 structure_description+=f"""
+There are furthermore more examples than what is listed here, but you will have to see the zandpack_directory_tree to see all examples. You will also find jupyter notebooks that you can get information from.
+
+EQUATIONS
 Equations for what is being solved is also available using the get_equations tool. It will return equations for the following names:
 """
 for k in Eqs.keys():
     structure_description += k +'\n'
+banned_folders = set(["__pycache__", "mpitest", "_devel", "_junk", "dep_mpi_jena", "Pade_data", "nb_tutorial_old", "svg"])
+banned_files = ["DOP54.py", "GETPATH.py", "HartreeFromDensity.py",
+                "Interpolation.py", "LDA.py", "LanczosAlg.py",
+                "Linalg_factorisation.py", "Plotting.py","Louivillian.py",
+                "Optimized_RK45.py", "basicbackground.txt", "mpi_RK4_pars.py"]
+import os
+def is_dirs_banned(dirs):
+    for d in dirs:
+        #print(d)
+        if d in banned_folders:
+            # print("Found Banned")
+            return True
+    return False
+def get_zandpack_readme(Input: str) -> str:
+    """
+    Args:
+       Any argument will get the readme
+    Returns
+       README.md from Zandpack top folder
+    """
+    return open(_basedir+"../README.md", "r").read()
+def get_cmdtools_readme(Input: str) -> str:
+    """
+    Args:
+       Any argument will get the readme
+    Returns
+       README.txt from cmdtools folder
+    """
+    return open(_basedir+"cmdtools/README.txt", "r").read()
+def get_mpi_readme(Input: str) -> str:
+    """
+    Args:
+       Any argument will get the readme
+    Returns
+       README.txt from mpi folder
+    """
+    return open(_basedir+"mpi/README.txt","r").read()
+def get_tool_help(cmd: str) -> str:
+    """
+    Args:
+       toolname: str: "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info"
+    """
+    return open(_basedir+'cmdtools/'+cmd+'_help.txt',"r").read()
+def zandpack_directory_tree(Input: str) -> str:
+    """
+    Args:
+       Any argument will get the file tree
+    Returns
+       Directory tree structure for Zandpack package
+    """
+    startpath = _basedir
+    tree = "Zandpack directory structure"
+    for root, dirs, files in os.walk(startpath):
+        dirs[:] = [d for d in dirs if d not in banned_folders]
+        level = root.replace(startpath, '').count(os.sep)
+        indent = ' ' * 2 * (level)
+        tree += '{}{}/'.format(indent, os.path.basename(root)) +"\n"
+        subindent = ' ' * 2 * (level + 1)
+        for f in files:
+            if any([ff in f for ff in banned_files]):
+                pass
+            else:
+                tree += '{}{}'.format(subindent, f)+"\n"
+    return tree
+structure_description+=f"""
+Tool for total Zandpack package README file:
+get_zandpack_readme (takes argument "true")
+Tool for cmdtools README file (description for each tool in one file):
+get_cmdtools_readme (takes argument "true" )
+Tool for mpi README file (description for zand and nozand usage):
+get_mpi_readme (takes argument "true")
+Tool for Zandpack directory file structure (file tree):
+zandpack_directory_tree (takes argument "true")
+Tool for full keyword list for some of the tools in the cmdtools folder:
+get_tool_help (takes string argument "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info")
+"""
 
 available_functions = {"TD_Transport_method_description": TD_Transport_method_description,
                        "TD_Transport_method_source_code": TD_Transport_method_source_code,
@@ -401,4 +484,9 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "block_sparse_method_source_code":block_sparse_method_source_code,
                        "get_example": get_example,
                        "get_equation":get_equation,
+                       "get_zandpack_readme":get_zandpack_readme,
+                       "get_cmdtools_readme":get_cmdtools_readme,
+                       "get_mpi_readme":get_mpi_readme,
+                       "zandpack_directory_tree":zandpack_directory_tree,
+                       "get_tool_help":get_tool_help,
                        }
