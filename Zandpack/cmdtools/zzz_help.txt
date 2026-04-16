@@ -1,0 +1,9 @@
+['--help']
+This tool is for compression and easy transfer of files for the Zandpack code.
+Usage:
+     (compression and upload): 
+            zzz Dir=$PWD folder=tmp files=* command="rsync -a tmp.tar.xz name@clusterlogin.dk:/dir/upload/" delete_all=True
+     (decompression): 
+            zzz Dir=$PWD folder=tmp.tar.xz mode=decompress
+default options:
+      {'folder': 'tmp', 'files': '{}', 'mode': 'compress', 'delete': 'False', 'command': 'None', 'delete_all': 'False'}

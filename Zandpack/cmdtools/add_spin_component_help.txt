@@ -1,0 +1,7 @@
+add_spin_component:  Program Start
+
+add_spin_component:  sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//add_spin_component', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after add_spin_component command (no spaces!)
+file : TDT_file
+outfile : NewTDT_file

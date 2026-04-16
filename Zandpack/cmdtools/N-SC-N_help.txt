@@ -1,0 +1,9 @@
+modify_occupations  Program Start
+
+modify_occupations  sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//N-SC-N', '--help']
+
+Keywords and default values. Assign with "keyword=value" argument after N-SC-N command (no spaces!)
+file : TDT_file
+outfile : NewSCTDT_file
+PairingField : PairingField.py
+SpinOrbit : None

@@ -1,0 +1,6 @@
+Keywords and default values. Assign with "keyword=value" argument after qp_grid command (no spaces!)
+Emin : -1.0
+Emax : +1.0
+file : SteadyStateFile
+dE : 0.1
+dt : 1.0

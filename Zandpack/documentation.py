@@ -412,7 +412,10 @@ def get_zandpack_readme(Input: str) -> str:
     Returns
        README.md from Zandpack top folder
     """
-    return open(_basedir+"../README.md", "r").read()
+    try:
+        return open(_basedir+"../README.md", "r").read()
+    except:
+        return "ERROR: reading README failed."
 def get_cmdtools_readme(Input: str) -> str:
     """
     Args:
@@ -420,7 +423,10 @@ def get_cmdtools_readme(Input: str) -> str:
     Returns
        README.txt from cmdtools folder
     """
-    return open(_basedir+"cmdtools/README.txt", "r").read()
+    try:
+        return open(_basedir+"cmdtools/README.txt", "r").read()
+    except:
+        return "ERROR: READING cmdtools README failed."
 def get_mpi_readme(Input: str) -> str:
     """
     Args:
@@ -428,19 +434,28 @@ def get_mpi_readme(Input: str) -> str:
     Returns
        README.txt from mpi folder
     """
-    return open(_basedir+"mpi/README.txt","r").read()
+    try:
+        return open(_basedir+"mpi/README.txt","r").read()
+    except:
+        return "ERROR: READING mpi README failed."
 def get_tool_help(cmd: str) -> str:
     """
     Args:
        toolname: str: "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info"
     """
-    return open(_basedir+'cmdtools/'+cmd+'_help.txt',"r").read()
+    try:
+        return open(_basedir+'cmdtools/'+cmd+'_help.txt',"r").read()
+    except:
+        return "ERROR: failed to get help for "+cmd
 def get_main_directory_file_descriptions(Input: str) -> str:
     """
     Args:
        toolname: Any string argument will get the readme.
     """
-    return open(_basedir+'filedescriptions.txt',"r").read()
+    try:
+        return open(_basedir+'filedescriptions.txt',"r").read()
+    except:
+        return "ERROR: reading filedescriptions failed."
 
 def zandpack_directory_tree(Input: str) -> str:
     """
