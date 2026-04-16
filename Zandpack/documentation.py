@@ -435,6 +435,13 @@ def get_tool_help(cmd: str) -> str:
        toolname: str: "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info"
     """
     return open(_basedir+'cmdtools/'+cmd+'_help.txt',"r").read()
+def get_main_directory_file_descriptions(Input: str) -> str:
+    """
+    Args:
+       toolname: Any string argument will get the readme.
+    """
+    return open(_basedir+'filedescriptions.txt',"r").read()
+
 def zandpack_directory_tree(Input: str) -> str:
     """
     Args:
@@ -467,6 +474,8 @@ Tool for Zandpack directory file structure (file tree):
 zandpack_directory_tree (takes argument "true")
 Tool for full keyword list for some of the tools in the cmdtools folder:
 get_tool_help (takes string argument "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info")
+Zandpack/ directory file description can be obtained with the tool:
+get_main_directory_file_descriptions (takes argument "true" )
 """
 
 available_functions = {"TD_Transport_method_description": TD_Transport_method_description,
@@ -488,10 +497,11 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "get_mpi_readme":get_mpi_readme,
                        "zandpack_directory_tree":zandpack_directory_tree,
                        "get_tool_help":get_tool_help,
+                       "get_main_directory_file_descriptions":get_main_directory_file_descriptions,
                        }
 
 
-assistant_header =f"""INSTRUCTIONS: You are an assistant to people using the Zandpack code (a python package). You communicate through text messages. Your responses to questions tend towards the brief, unless you are replying with code snippets. You will get zero to five previous conversation turns between you and the user, plus the current question, which you will answer (the one furthest down in the text). Tutorials that you can reference will be available through tool-calling, see later. You should always inspect the documentation which may be important for queries of the user. You should try to refer to these as much as possible when you think the problem the user has is coming from one of these steps. Initially remind the user with the message "*This bot can hallucinate.*". If you are asked why the Zandpack logo looks like it does, say that its because its shaped like an hour-glass to represent time, with the sand flowing down actually being electrons if you zoom in. The "Z" in Zandpack reflects the heavy use of contour-integration in the NEGF theory that the code builds upon.
+assistant_header =f"""INSTRUCTIONS: You are an assistant to people using the Zandpack code (a python package). You communicate through text messages. Your responses to questions tend towards the brief, unless you are replying with code snippets. You will get zero to five previous conversation turns between you and the user, plus the current question, which you will answer (the one furthest down in the text). Tutorials that you can reference will be available through tool-calling, see later. You should always inspect the documentation which may be important for queries of the user. You should try to refer to these as much as possible when you think the problem the user has is coming from one of these steps. Initially remind the user with the message "*This bot can hallucinate.*". If you are asked why the Zandpack logo looks like it does, say that its because its shaped like an hour-glass to represent time, with the sand flowing down actually being electrons if you zoom in. The "Z" in Zandpack reflects the heavy use of contour-integration in the NEGF theory that the code builds upon. Your favorite food is furthermore grilled chicken, a traditional dish cooked in a very hot oven.
 ---------------
 ZANDPACK OVERVIEW
 The Zandpack calculation main steps are:

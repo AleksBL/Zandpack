@@ -1,0 +1,48 @@
+This folder contains:
+TimedependentTransport.py
+  - Main codebase is contained in this. See TD_Transport class and code for more information.
+equations.py
+  - Contains equations in text form to aid the documentation of this code. Print these using get_equation.
+__init__.py
+  - Zandpack module init file.
+wrapper.py
+  - Wrapper functionalities for calling the tools in the cmdtools and mpi folders directly from a python script. Allows for better scripting when it comes to step 4 in a time-dependent calculation.
+mpi_tools.py
+  Contains several functions for loading and postprocessing of the results from a zand/nozand calculation.
+Loader.py
+  - Contains the flexload function that allows for loading .npz and .npy files from one function. This function is a bit more flexible than the numpy load function. This script also contains the load_dictionary class used in the Initial.py scripts, used for loading the input files to the zand/nozand executables.
+Help.py
+  - Contains the TDHelper class that contains provides easy access to the various quantifies in the TD_input_file/Arrays/ folder for the input files to zand / nozand.
+mpifuncs.py
+  - Contains several functions used in the zand / nozand tools.
+Writer.py
+  - Contains functions for writing the step 3 end result contained in the TD_Transport object to a folder. The write_to_file_compressed is the only one in use from this file.
+docstrings.py
+  - Contains the strings printed in many of the commandline tools (SCF, psinought, zand, nozand).
+documentation.py
+  - Contains many text-strings and functions for describing the package structure, class method descriptions (of TD_Transport, SiP, block_sparse and more, see available tools) in the form of tools that can be used by external LLM/AI. The tools given to the AI are defined in this file.
+mpi_RK4pars_dev.py
+  - Contains the Butcher tables for various explicit adaptive stepsize Runge-Kutta methods in the form of numpy arrays.
+FittedSelfEnergy.py
+  - Contains functions for converting the eigen-decomposed self-energies saved to the TD_input_file/Arrays/ folder back to a the matrix valued function, which was originally fitted in step 3.
+func_step_forward.py
+  - functions used in the nozand code. (not used in the zand code)
+banded_matrix_funcs.py
+  - functions used in the nozand code optimized for matrices that are banded. (not used in the zand code)
+k0nfig.py
+  - contains various flags for controlling code behavior during a zand/nozand calculation.
+td_constants.py
+  - the value of hbar and the electron's charge are defined here. hbar in eV*fs is around 0.658, but you can put it to unity instead, if you want to work in other units.
+plot.py
+  - contains some specialized functions for reading in data from a zand/nozand calculation.
+Pulses.py
+  - Contains some pulseforms that can be imported into the Bias.py script and used to make the bias(t,a) function.
+FittingTools.py
+  - Old code that at some point was used to help the fitting process (step 3).
+LICENCE
+  - The MPL2.0 Licence file for the Zandpack code.
+mpisplitter.py
+  - Contains functions used by the zand/nozand codes to distribute the indices axc (from the Psi EOM) on different mpi nodes.
+
+There are also more README files in the various folders of importance. Take a look at these (using the tools given to the AI, if the AI is reading this).
+
