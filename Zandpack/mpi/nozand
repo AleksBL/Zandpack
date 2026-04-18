@@ -73,14 +73,11 @@ if True in Check:
 # Initial Handling of keywords given
 from Initial import Arrs as D
 from Initial import (
-    t0, t1,
-    stepsize,
+    t0, t1, stepsize,
     print_timings,
     usesave, saveevery,
     name, eps, hbar,
-    n_dm_compress,
-    save_PI,
-)
+    n_dm_compress, save_PI, )
 from Initial import checkpoints, save_checkpoints, LoadFromFull
 # New flags, put inside try for backwards compatibility
 import Initial as _initp
@@ -93,10 +90,7 @@ if hasattr(_initp, "dm_triu_only"):
     dm_triu_only = _initp.dm_triu_only
 if hasattr(_initp, "dm_occ_only"):
     dm_occ_only = _initp.dm_occ_only
-
-    
-    
-                
+               
 checkpoints = np.array(checkpoints)
 checkpoints = checkpoints[checkpoints > t0]
 checkpoints = checkpoints[checkpoints < t1]
@@ -107,13 +101,10 @@ from Bias import dH, bias, dissipator
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-
 # Shorthands
 nax = np.newaxis
 DT = np.complex128
 mpi_dtype_size = MPI.DOUBLE_COMPLEX.Get_size() # complex128 datatype
-
-# multidot = np.linalg.multi_dot
 
 def CZ(s):
     return np.zeros(s, dtype=DT)
@@ -169,7 +160,6 @@ for v in src:
 # Timer class for printing timings
 _Timer = TimeBot(ROLE, print_timings)  # simple timing class
 
-
 def start_print():
     print(docstring)
     print("\nMASTER PROCESS STARTED\n")
@@ -199,9 +189,6 @@ def start_print():
             pass
         else:
             print(kw+" : " +str( _initp.__dict__[kw]))
-    
-    # print("NumPy Config:")
-    # np.show_config()
     print("\n")
     print("Args: " + str(args))
     print("Source-scheme:\n")
@@ -248,8 +235,6 @@ def transform_vec_vT(vec, T):
                     vec[i1, i2, i3, i4, :] = vec[i1, i2, i3, i4, :] @ T[i1]
 
 # Function for density matrix EOM
-
-
 def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     dot_prod_zero_tol = 1e-10
     try:
@@ -289,7 +274,6 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     else:
         skip_bw = False
     del H0_BW_L, H0_BW_U, MM_nblocks
-    ####
     
     Ht = CZ(H0.shape)
     D_tmp_sig = CZ(H0.shape)
@@ -329,7 +313,6 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                               shape=gpsi_shape)
     comm.Barrier() # Barrier 1, make global_psi
     
-    
     # Shared memery array for sig and H
     sigHt_shape  = (2 * NK, NO, NO)
     sigHt_size   = np.prod(sigHt_shape)
@@ -350,13 +333,11 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     for v in Worker_idx:
         #             local nk     # local na  local nx     orb  orb
         PSI_buff += [CZ((len(v[0]), len(v[1]), len(v[2]), len(v[3]), NO))]
-
     # Create save directory
     try:
         os.mkdir(name + "_save")
     except:
         pass
-
     files = os.listdir(name + "_save")
     for f in files:
         if f[0:2] == "DM":
@@ -614,22 +595,12 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 + "|\033[4m #stp "
                 + str(step_count)+ " "*(5-len(str(step_count)))+"\033[0m" 
                 + (" |Tr(S*σ)="+str(np.round(_N_last.real, 3)).replace("[","").replace("]","") + " "*20)[0:16]
-                #+ (" | OPU="+str(np.round(_projs[0].real*100/_N_last.real)).replace("[","").replace("]","") 
-                #   + " (%)" + " "*20 )[0:23]
-                ## + " | "+str(np.round(_projs[1].real, 3)).replace("[","").replace("]","")
-                #+ (" | OPU="+str(np.round(_projs[1].real,4)).replace("[","").replace("]","") 
-                #    + " (%)" + " "*20 )[0:30]
-                + " |\n"
-                )
-            
+                + " |\n" )
             if _FIRST_POST:
                 _FIRST_POST = False
                 CHUNK_STRING = "---------|----|------------|------------|---------------|-----------------------------|\n" + CHUNK_STRING 
                 CHUNK_STRING = "---------|----|    Bias    |  Current   | Device charge |      Occ  /  Part  /  Uocc  |\n" + CHUNK_STRING
                 CHUNK_STRING = "  Time   |----|    Error   | Num. steps |---------------|-----------------------------|\n" + CHUNK_STRING 
-                
-            #else:
-            # CHUNK_STRING = "\033[4m" + CHUNK_STRING +"\033[0m \n"
             for k, c in enumerate(currents):
                 _cur = np.array(c[-1])
                 _bias  = Delta_a[k]
@@ -643,9 +614,6 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 _tcur_str = repl_flstr(str(format(sum(c[-1]), ".2e")))
                 if _tcur_str[0]!='-':
                     _tcur_str = '+'+_tcur_str
-                #_tmpopuvals = _projs[k+2].real
-                #if (abs(_cur)<1e-3).any():
-                #    _tmpopuvals = _tmpopuvals * np.nan
                 _the_print_string = "         |\u237A=" \
                 + str(k)                           \
                 + " | \u0394="                   \
@@ -653,14 +621,11 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 + " | J" \
                 + "=" \
                 + _cur_str  +" "\
-                +"|              " \
-                #+ ((" | OPU="+str(np.round(_tmpopuvals,4))).replace("[","").replace("]","")
-                #    + " " + " "*20 )[0:30]
+                +"|              " 
                 if k < _nlpr - 2:
                     _the_print_string = _the_print_string + " "*(37 - len(_the_print_string))+" |\n"
                 else:
                     _the_print_string = _the_print_string + " "*(37 - len(_the_print_string))+" |"
-                #print(_the_print_string)
                 if k==0:
                     _tmpaddstr = "δt="+str(format(h, ".1e")).replace("e-0","e-")
                     _the_print_string = (_tmpaddstr
@@ -669,9 +634,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 CHUNK_STRING += _the_print_string
             print(CHUNK_STRING)
             _Timer.time(["Print out"])
-            #print('DM_Proj : \n', str(np.round(_projs[0], 2)))
-            #print('PI_Proj : \n', str(np.round(_projs[1], 2)))
-        
+            
         _Timer.time(["Full Save"], skip_next=[True])
         mystring = _Timer.generate_timings()
         if print_timings:
@@ -683,8 +646,6 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     return
 
 # Function for Psi and Omega EOM.
-
-
 def Worker(role_info):
     assert "Worker" in role_info[0]
     dot_prod_zero_tol = 1e-10
@@ -860,12 +821,8 @@ def Worker(role_info):
                     ravelled_lrz_idx_all += [ko_it]
                 ko_it += 1
     ravelled_lrz_idx_all = np.array(ravelled_lrz_idx_all)
-    #print('lrz idx all\n')
-    #print(ravelled_lrz_idx_all)
-    #print('lrz idx all\n')
     del ko_it, ko_i, ko_a, ko_x, ko_c
     _null_idx = np.where(_is_fpole_loc==False)[0]
-    
     
     assert _is_fpole_all.ndim == 1
     assert _is_fpole_loc.ndim == 1
@@ -1222,8 +1179,6 @@ def Worker(role_info):
                                alloc_omg_2_shape_v2
                               ),      # assign, used, resets from last step
                               )
-                            #print()
-                        
                         # Ψ^T * xi         term
                         _Timer.time(["Calculate local dOmega/dt P1",
                                      "Calculate local dOmega/dt P2"]
@@ -1316,7 +1271,6 @@ def Worker(role_info):
         if print_timings:
             with open(filename, "a") as file:
                 file.write(mystring)
-
 
 if ROLE == "Sigma":
     SIGMA()
