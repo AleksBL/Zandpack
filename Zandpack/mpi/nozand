@@ -64,16 +64,13 @@ if True in Check:
         print("Dir = /path/to/somewhere/ ")
         print("Stopping processes")
         print("\n\n\n")
-
         assert 1 == 0
-
     path = args[0].replace(" ", "").split("=")[1]
     os.chdir(path)
     new_folder = os.getcwd()
     sys.path.append(new_folder)
 
 # Initial Handling of keywords given
-
 from Initial import Arrs as D
 from Initial import (
     t0, t1,
@@ -147,7 +144,6 @@ def PI_np(psi_a, ixi, nonzero_idx=None):
     # Removed addition of complex conjugate here
     res *= (1 / hbar)
     return res
-
 
 Nblocks_min_banded = config.N_blocks_min
 
@@ -226,22 +222,12 @@ def start_print():
 
     print("\n")
     print("Zand program sourcecode location: \n", __file__)
-    #print("\n")
     print("Timedependent Bias:")
     print(SourceCode(bias))
-    #print("\n")
     print("Timedependent part of Hamiltonian dH:")
     print(SourceCode(dH))
-    #print("\n")
     print("Dissipator ")
     print(SourceCode(dissipator))
-    #print("\n\n")
-    # print("hbar = " + str(hbar))
-    # print("\n\n")
-    # print("Will save checkpoints: ", save_checkpoints)
-    # print("Checkpoints: ")
-    # print(checkpoints, " \n")
-    # print("Using previous save: ", usesave)
     print("\n\n-----------------")
     print("# Start of Run! # ")
     print("-----------------")
@@ -355,7 +341,6 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                               shape=sigHt_shape)
     comm.Barrier() # Barrier 2, make global sigHt
     
-    
     # Initial Values for sigma
     SIGS[-1] = sig0
     del sig0
@@ -432,16 +417,14 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                                         tmp_sig, np.array(_idx_i) )
                     
                 _Timer.time(
-                    ["Initial Matrix Multiplication", "System creation at ts"]
-                )
+                    ["Initial Matrix Multiplication", "System creation at ts"] )
                 # system parameters at the time ts
                 ts = t0 + dt[i]
                 Ht = H0 + dH(ts, tmp_sig)
                 for _not_i in range(NL):
                     Delta_a[_not_i] = bias(ts, _not_i)
                 _Timer.time(
-                    ["System creation at ts", "Broadcast System at ts"]
-                )
+                    ["System creation at ts", "Broadcast System at ts"] )
                 # Broadcast system parameters to worker nodes
                 h_ts = (h, ts)
                 h_ts = comm.bcast(h_ts, root=0)
@@ -450,20 +433,16 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 sigHt[0:NK, :, :] = Ht[:, :, :]
                 sigHt[NK:, :, :]  = tmp_sig[:, :, :]
                 _Timer.time(
-                    ["Broadcast System at ts", "Barrier 3 wait"]
-                )
+                    ["Broadcast System at ts", "Barrier 3 wait"] )
                 comm.Barrier() # Barrier 3, wait for assignment of values to
                                # global sigHt
                 # shared_memory_instead!
                 ### comm.Bcast(sigHt,   root=0)
                 _Timer.time(
-                    ["Barrier 3 wait", "Broadcast Deltas"]
-                )
+                    ["Barrier 3 wait", "Broadcast Deltas"] )
                 comm.Bcast(Delta_a, root=0)
                 _Timer.time(
-                    ["Broadcast Deltas", "Commutator for sigma"]
-                )
-                
+                    ["Broadcast Deltas", "Commutator for sigma"] )
                 # While the worker nodes compute, the master node computes
                 # the RHS of the sigma EOM.
                 #   Commutator simplifies when H(t) and sigma are hermitian

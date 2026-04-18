@@ -11,9 +11,12 @@ from inspect import getsource
 from siesta_python.siesta_python import SiP
 from Zandpack.TimedependentTransport import TD_Transport
 from Zandpack.wrapper import transiesta_hook, Control, Input
+from Zandpack.docstrings import ZP_BIBTEX
 from Block_matrices.Block_matrices import block_sparse
 from functools import partial
 from Zandpack.equations import Eqs
+import pathlib
+
 
 SiP_method_table= dir(SiP)
 drop_names_SiP =[
@@ -272,6 +275,9 @@ block_sparse class has methods:
 """
 
 _basedir = __file__[:-len("documentation.py")]
+examples_path = pathlib.Path(_basedir+"/examples")
+cmdtools_path = pathlib.Path(_basedir+"/cmdtools")
+
 examples = [('examples/generic_wrapper/wrapper_script.py', 
              "generic implementation of Zandpack Step 4 using the wrapper module."
              ),
@@ -358,16 +364,10 @@ examples = [('examples/generic_wrapper/wrapper_script.py',
 #             ),
             ]
 
-def get_example(examplename: str) -> str:
-    try:
-        txt = open(_basedir+examplename,"r").read()
-    except:
-        txt = 'FileNotFound'
-    return txt
 
 structure_description += f"""
 EXAMPLES
-There are  examples available through calling the get_example tool. Always look for a README file in hte directories of the example under consideration to see comments from the author.
+There are  examples available through calling the get_example tool. Always look for a README file in the directories of the example under consideration to see comments from the author.
 These are important to get the context of how the classes from the CODE INFORMATION section works together.
 The get_example_tool should be called as \"get_example(\"examples/Dir/file\")\", possibly with additional directory depth. 
 A list of examples are listed below with small comments:
@@ -400,9 +400,7 @@ banned_files = ["DOP54.py", "GETPATH.py", "HartreeFromDensity.py",
 import os
 def is_dirs_banned(dirs):
     for d in dirs:
-        #print(d)
         if d in banned_folders:
-            # print("Found Banned")
             return True
     return False
 def get_zandpack_readme(Input: str) -> str:
@@ -441,21 +439,70 @@ def get_mpi_readme(Input: str) -> str:
 def get_tool_help(cmd: str) -> str:
     """
     Args:
-       toolname: str: "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info"
+       toolname: str: "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info", ...
     """
+    name      = _basedir+'cmdtools/'+cmd+'_help.txt'
+    file_path = pathlib.Path(name)
     try:
-        return open(_basedir+'cmdtools/'+cmd+'_help.txt',"r").read()
+        assert file_path.is_relative_to(cmdtools_path)
+        return open(name,"r").read()
     except:
         return "ERROR: failed to get help for "+cmd
 def get_main_directory_file_descriptions(Input: str) -> str:
     """
     Args:
-       toolname: Any string argument will get the readme.
+       Input: Any string argument will get the readme.
     """
     try:
         return open(_basedir+'filedescriptions.txt',"r").read()
     except:
         return "ERROR: reading filedescriptions failed."
+
+def get_convergence_checklist(Input: str) -> str:
+    """
+    Args:
+       Input: Any string argument will get the readme.
+    """
+    out = f"""** The steady-state calculation should be converged.
+Here the reader is referred to references and the
+TranSIESTA tutorials for the details of carrying out
+a steady-state calculation. (Ref 16: N. Papior et al, Improvements on non-equilibrium and transport green
+function techniques: The next-generation transiesta, Computer
+Physics Communications 212 (2017) 8–24., Ref. 18: M. Brandbyge et al,
+Density-functional method for nonequilibrium electron transport, Physical Review B 65 (16) (2002) 165401.)
+
+** The energy window around the equilibrium Fermi
+energy on which we fit Γα should extend well be-
+yond peak values of the time-dependent chemical
+potentials (μ_α + ∆_α(t)).
+
+** The Lorentzian expansion of the level-width func-
+tion (see Eq. (10)) should both reproduce the ref-
+erence steady-state transmission function well over
+the energy window, while at the same time be pos-
+itive semi-definite.
+
+** Number of poles in the Fermi-function should be
+sufficient to describe the electrode filling over the
+entire interval where Γ_α is nonzero.
+
+** The contour chosen for the SCF tool needs to con-
+verge the density matrix. Inspect the value of
+max (| dσ^0/dt |) printed in the output of the psinought
+code. The printed value is the derivative of σ0
+when computed with the Fermi function pole-expansion.
+
+** The error tolerance given to the adaptive Runge-
+Kutta solver needs to be checked for convergence.
+"""
+    return out
+
+def get_zandpack_paper_reference(Input: str) -> str:
+    """
+    Args:
+       Input: Any string argument will get the readme.
+    """
+    return ZP_BIBTEX
 
 def zandpack_directory_tree(Input: str) -> str:
     """
@@ -478,6 +525,17 @@ def zandpack_directory_tree(Input: str) -> str:
             else:
                 tree += '{}{}'.format(subindent, f)+"\n"
     return tree
+
+def get_example(examplename: str) -> str:
+    name      = _basedir+examplename
+    file_path = pathlib.Path(name)
+    try:
+        assert file_path.is_relative_to(examples_path)
+        txt = open(name,"r").read()
+    except:
+        txt = 'FileNotFound'
+    return txt
+
 structure_description+=f"""
 Tool for total Zandpack package README file:
 get_zandpack_readme (takes argument "true")
@@ -513,6 +571,8 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "zandpack_directory_tree":zandpack_directory_tree,
                        "get_tool_help":get_tool_help,
                        "get_main_directory_file_descriptions":get_main_directory_file_descriptions,
+                       "get_convergence_checklist": get_convergence_checklist,
+                       "get_zandpack_paper_reference": get_zandpack_paper_reference,
                        }
 
 
