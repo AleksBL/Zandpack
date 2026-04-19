@@ -9,7 +9,7 @@ Join the signal group chat:
 
 <img src="./Zandpack/svg/GroupChat.png" width="150">
 
-Ask questions, suggest improvements, or chat with an LLM about the code!
+Ask questions, suggest improvements, or chat with an LLM about the code and get a start-up example!
 
 
 # Introduction
