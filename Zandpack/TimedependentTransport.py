@@ -47,11 +47,11 @@ class TD_Transport:
     def Make_Contour(self, sampling, N_F, tol = 1e-6, eps = 1e-12, 
                      pole_mode = 'JieHu2011', save_pics = False,
                      Emin = None, Emax = None, tol_aaa = None):
-        """ sampling  :  array of shape (N_lead, N_E) and is the line on which the 
+        """ sampling  :  array of shape (N_lead, N_E) and is the line on which the
                          W_alc is gonna get fitted on. 
             N_F       : is the number of Pade poles of the Fermi-distibution of lead
                         alpha. (int)
-            pole_mode : string, JieHu2011 or Croy2009.
+            pole_mode : string, JieHu2011 or Croy2009. (Croy2009 is quite inefficient)
             save_pics : bool, save a plot of the fermi function if true.
             tol and eps controls when the points are close enough to each other
             to count as one.
@@ -60,8 +60,9 @@ class TD_Transport:
             Here, replicas of the same energy for different leads are counted 
             as one. One contour that combines the samplings given for each lead
             is given to TBtrans.
+            It should be noted you can set N_F = 1 and later use the modify_occupations
+            to set the number of Fermi poles that you want.
             """
-        
         if pole_mode == 'Croy2009':
             zi, ci = Pade_poles_and_coeffs( N_F ) # Routine for expansion from Croy 2009 appendix 
         if pole_mode == 'JieHu2011':
@@ -69,9 +70,6 @@ class TD_Transport:
         # if pole_mode == 'AAA':
         #     zi, ci = AAA_poles(Emin, Emax, tol)
         F_poles = np.zeros((self.num_leads, 2 * N_F), dtype = np.complex128)
-        
-        
-        
         self.zi = zi
         self.coeffs_fermi = ci.copy()
         self.num_poles = N_F
@@ -94,7 +92,7 @@ class TD_Transport:
             
         if sampling.shape[0] != self.num_leads or F_poles.shape[0] != self.num_leads: 
             print('Give as many sets of poles as there are leads!\n')
-            assert  1 == 0
+            assert  1 == 0, "Something is wrong with the sampling given, or the Fermi expansion"
         
         # Here the various points are collected in one countour.
         # The added "eps" is a really small number that makes sorting easier,
@@ -133,8 +131,8 @@ class TD_Transport:
                 F_poles_idx[a,i]  = idx
         
         # sanity checks
-        assert (F_poles_idx  >= 0).all()
-        assert (sampling_idx >= 0).all()
+        assert (F_poles_idx  >= 0).all(), "All Fermi poles are not contained in the line (self.Contour)"
+        assert (sampling_idx >= 0).all(), "All sampling points are not contained in the line (self.Contour)"
         assert np.allclose(line[F_poles_idx], F_poles)
         assert np.allclose(line[sampling_idx], sampling)
         
@@ -2880,7 +2878,7 @@ class sisl_replica:
     def to_sisl(self):
         return sisl.Geometry.fromASE(self.toASE())
 
-# "Overloaded" sile classes, either outputs regular sisl classes
+# "replicated" sile classes, either outputs regular sisl classes
 # or the "fake-sisl" classes emulating the regular sisl-behavior.
 # depends on if regular TBT.nc files are found or if the fakeTBT files are present
 #

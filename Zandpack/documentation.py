@@ -263,6 +263,14 @@ Use SiP_method_source_code for method source code.
 SiP class has methods:
 """ +table2str(SiP_method_table)+"""
 
+Furthmore, the siesta_python package has the interpolate_and_fft function contained in the siesta_python.funcs module, which takes a non-uniform signal (x, y)  (such as time and current)  and interpolates it on points from min(x) to max(x) in N points
+It is imported as:
+```python
+from siesta_python import interpolate_and_fft
+# call as, and returns amplitide A(w) and w:
+A, w  = interpolate_and_fft(x, y, N)
+```
+
 The Block_matrices code contains the block_sparse class, described here.
 ```python
 from Block_matrices.Block_matrices import block_sparse
@@ -536,6 +544,93 @@ def get_example(examplename: str) -> str:
         txt = 'FileNotFound'
     return txt
 
+def search_keyword_in_file(file_path, keyword, n=5, linemax = 500):
+    """
+    Search for a keyword (case-insensitive) in a text file and return n lines above and below each occurrence.
+
+    Args:
+        file_path (str): Path to the text file.
+        keyword (str): Keyword to search for (case-insensitive).
+        n (int): Number of lines to return above and below each occurrence. Default is 2.
+
+    Returns:
+        list: A list of strings, each representing a block of lines (n above, the match, n below).
+    """
+    keyword = keyword.lower()
+    results = []
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+    
+    linecount = 0
+    for i, line in enumerate(lines):
+        if keyword in line.lower() and linecount < linemax:
+            start = max(0, i - n)
+            end = min(len(lines), i + n + 1)
+            block = lines[start:end]
+            results.append(''.join(block))
+            linecount += len(lines[start:end])
+    return results
+siesta_manual  = "/home/aleks/Documents/Zandpack_text_files/siesta.txt"
+tbtrans_manual = "/home/aleks/Documents/Zandpack_text_files/tbtrans.txt"
+zandpack_paper = "/home/aleks/Documents/Zandpack_text_files/Zandpack_paper.txt"
+
+
+def search_siesta_user_manual(Keyword_Nlines: str) -> str:
+    """
+    Searches the SIESTA 5.2.2 documentation for the keyword given in the input
+    Args: 
+        Keyword + Nlines in the format "keyword|N" format. the | character will
+        be replaced internally.
+    
+    Returns:
+        The N lines around each instance of the searched keyword.
+    """
+    try:
+        KW = Keyword_Nlines.split("|")[0]
+        N  = int(Keyword_Nlines.split("|")[1])
+        return search_keyword_in_file(siesta_manual, KW, n=N)
+    except:
+        return "ErrorInInput"
+    
+
+def search_tbtrans_user_manual(Keyword_Nlines: str) -> str:
+    """
+    Searches the SIESTA 5.2.2 documentation for the keyword given in the input
+    Args: 
+        Keyword + Nlines in the format "keyword|N" format. the | character will
+        be replaced internally.
+    
+    Returns:
+        The N lines around each instance of the searched keyword.
+    """
+    try:
+        KW = Keyword_Nlines.split("|")[0]
+        N  = int(Keyword_Nlines.split("|")[1])
+        return search_keyword_in_file(tbtrans_manual, KW, n=N)
+    except:
+        return "ErrorInInput"
+def search_zandpack_paper(Keyword_Nlines: str) -> str:
+    """
+    Searches the SIESTA 5.2.2 documentation for the keyword given in the input
+    Args: 
+        Keyword + Nlines in the format "keyword|N" format. the | character will
+        be replaced internally.
+    
+    Returns:
+        The N lines around each instance of the searched keyword.
+    """
+    if Keyword_Nlines.lower() == "all":
+        with open(zandpack_paper, 'r', encoding='utf-8') as file:
+            fulltext = file.read()
+        return fulltext
+    try:
+        KW = Keyword_Nlines.split("|")[0]
+        N  = int(Keyword_Nlines.split("|")[1])
+        return search_keyword_in_file(zandpack_paper, KW, n=N)
+    except:
+        return "ErrorInInput"
+    
+
 structure_description+=f"""
 Tool for total Zandpack package README file:
 get_zandpack_readme (takes argument "true")
@@ -549,6 +644,18 @@ Tool for full keyword list for some of the tools in the cmdtools folder:
 get_tool_help (takes string argument "Adiabatic", "SCF", "psinought", "modify_occupations", "td_info")
 Zandpack/ directory file description can be obtained with the tool:
 get_main_directory_file_descriptions (takes argument "true" )
+
+
+Tool for SIESTA user manual search:
+search_siesta_user_manual (takes argument as "keyword|N" where keyword the word to search for and N is the number of lines around the keyword you want)
+Avoid searching for common words like "the", "it", etc. keywords should be somewhat distinct. A maximum of 500 total lines can only be returned, so be specific. 
+Tool for TBtrans user manual search:
+search_tbtrans_user_manual (takes argument as "keyword|N" where keyword the word to search for and N is the number of lines around the keyword you want)
+Avoid searching for common words like "the", "it", etc. keywords should be somewhat distinct. A maximum of 500 total lines can only be returned, so be specific. 
+Tool for Zandpack paper search:
+search_zandpack_paper (takes argument as "keyword|N" where keyword the word to search for and N is the number of lines around the keyword you want)
+For the search_zandpack_paper function, if it is given the argument "all", the whole text will be returned (no restriction on amount of lines).
+Avoid searching for common words like "the", "it", etc. keywords should be somewhat distinct. A maximum of 500 total lines can only be returned, so be specific if searching. 
 """
 
 available_functions = {"TD_Transport_method_description": TD_Transport_method_description,
@@ -573,8 +680,10 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "get_main_directory_file_descriptions":get_main_directory_file_descriptions,
                        "get_convergence_checklist": get_convergence_checklist,
                        "get_zandpack_paper_reference": get_zandpack_paper_reference,
+                       "search_siesta_user_manual": search_siesta_user_manual,
+                       "search_tbtrans_user_manual": search_tbtrans_user_manual,
+                       "search_zandpack_paper":search_zandpack_paper,
                        }
-
 
 assistant_header =f"""INSTRUCTIONS: You are an assistant to people using the Zandpack code (a python package). You communicate through text messages. Your responses to questions tend towards the brief, unless you are replying with code snippets. You will get zero to five previous conversation turns between you and the user, plus the current question, which you will answer (the one furthest down in the text). Tutorials that you can reference will be available through tool-calling, see later. You should always inspect the documentation which may be important for queries of the user. You should try to refer to these as much as possible when you think the problem the user has is coming from one of these steps. Initially remind the user with the message "*This bot can hallucinate.*". If you are asked why the Zandpack logo looks like it does, say that its because its shaped like an hour-glass to represent time, with the sand flowing down actually being electrons if you zoom in. The "Z" in Zandpack reflects the heavy use of contour-integration in the NEGF theory that the code builds upon. Your favorite food is furthermore grilled chicken, a traditional dish cooked in a very hot oven.
 ---------------
@@ -593,7 +702,7 @@ Step 4: Three parts to step 4: [TIME-PROPAGATION, optionally using DFT]
     4.1 SCF command line tool to get the equilibrium density matrix again, now with the fitted level-width functions (run SCF --help in a bash shell to get the inputs )
     4.2 The psinought command-line tool to calculate the equilibrium auxillary mode wave-vectors. (run psinought --help in a bash shell to get the inputs )
     4.3 The zand / nozand command line tool to carry out the time-dependent propagation. Refer to the examples folder to see how this tool is used. (mpirun zand (or nozand) Dir=working/directory is the basic command)
-In step 4, the wrapper classes from Zandpack.wrapper can also be used (see examples/generic_wrapper/wrapper_script.py). Using the wrapper class is the prefered way of carrying out step 4.
+In step 4, the wrapper classes from Zandpack.wrapper can also be used (see examples/generic_wrapper/wrapper_script.py). Using the wrapper class is the prefered way of carrying out step 4. All Zandpack tools are written in python.
 
 Acronyms:
 SCF: Self-Consistent Field (also a commandline tool)
@@ -605,9 +714,12 @@ DM: Density Matrix
 Technical names:
 TranSIESTA / SIESTA: Standard DFT code, capable of open system NEGF calculations.
 DFTB+: Density Functional based Tight Binding (another code), limited NEGF support.
-SCF commandline tool: Calculates self-consistent density matrix using Pulay solver (See equation called steady_state_density_matrix)
+SCF commandline tool: Calculates self-consistent density matrix using Pulay solver (See equation called steady_state_density_matrix).
 psinought commandline tool: Calculates steady state auxillary mode wave-vectors (See equation called steady_state_psi)
 zand / nozand commandline tool: Solves the coupled equations device_density_matrix_eom, auxiliary_mode_eom and omega_eom using the initial state from  SCF and psinought.
+
+FORMATTING OF RESPONSE:
+You will format your response to be readable in plain text, since you will be communicating through a simple text editor where there is no options for markdown. Greek letters can be rendered, but support for other, fancier symbols is very limited.
 
 DESCRIPTION OF YOUR TOOLS:
 There are  tools given for you to inspect the various code documentations and snippets. See below
