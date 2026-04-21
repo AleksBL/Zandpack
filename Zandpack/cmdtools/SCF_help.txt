@@ -1,3 +1,11 @@
+
+    ▂▃▅▆▇█ S █ C █ F █(v. 1.0)█▇▆▅▃▂
+    
+    (self-consistent field solver)
+    Implements the TranSIESTA method with adaptive bias window integration.
+    An orthogonal basis is assumed and is implemented in largely in NumPy.
+        See Papior, Nick, et al. (2017) and Refs. therein
+    
 SCF Program Start
 
 sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//SCF', '--help']
@@ -32,3 +40,4 @@ save_last_H : True
 max_iter : 500
 write_dm_every : -1
 write_progress : False
+adaptive_mixer : False

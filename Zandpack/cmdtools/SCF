@@ -64,6 +64,7 @@ options = {'Contour':'None',
            'max_iter':'500',
            'write_dm_every':'-1',
            'write_progress':'False',
+           'adaptive_mixer':'False',
            }
 
 SCF_place = __file__[:-3]
@@ -115,7 +116,10 @@ else:
 # Shift Contour, (Re(Ei), Im(Ei),Re(Wi), Im(Wi))  in (np, 4) format
 Cntr[:,0] +=  _mu.min()
 nprocs     =  int(options['nprocs'])
-mixer      =  sisl.mixing.PulayMixer(weight=float(options['weight']),history = int(options['history']))
+if options["adaptive_mixer"]=='False':
+    mixer  = sisl.mixing.PulayMixer(weight=float(options['weight']),history = int(options['history']))
+else:
+    mixer  = sisl.mixing.AdaptivePulayMixer(weight=float(options['weight']),history = int(options['history']))
 if options['DM_start_file']!='None':
     rhoi    = flexload(options['DM_start_file'])
 else:
@@ -230,15 +234,12 @@ if True:
     def G_l(_E):
         if isinstance(_E, float): E = np.array([_E])
         else:                     E = _E
+        #E = E + 0.001j
         gr, SE_list = Gr(E)
         SE_l_tot    = sum([(-fdf(E, _mu[i], _kT[i]))*(SE_list[i] - SE_list[i].conj().transpose(0,1,3,2))
                             for i in range(len(SE_list))])[:,:,idx_SE_o[:, None], idx_SE_o[None,:]].copy()
-        
-        #Gams     = [Sig_l(E, i) for i in range(len(SEs))]
-        #SE_l_tot = sum([Sig_l(E, i) for i in range(len(SEs))])
-        
-        #out = ((-1j/(2*np.pi))*gr@SE_l_tot@(gr.conj().transpose(0,1,3,2))).transpose(1,2,3,0)
-        out = ((-1j/(2*np.pi))*gr@SE_l_tot@(gr.conj().transpose(0,1,3,2))).transpose(1,2,3,0)
+        out  = (gr @ SE_l_tot @ (gr.conj().transpose(0,1,3,2))).transpose(1,2,3,0)
+        out *= (-1j/(2*np.pi))
         if isinstance(_E, float):
             out = out[...,0]
         return out
@@ -288,24 +289,14 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
     rhof = sum(Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
                (Jl.delayed(funci)(islice) for islice in np.array_split(np.arange(len(Cntr)), splitN))
                )
-    #import matplotlib.pyplot as plt
     if options['Nonequilibrium']=='True' and options['real_line_integral']!='True':
         del fdf
         def fdf(E,mu,kT):
             return (1/(1+np.exp((E-mu)/kT))) - (1/(1+np.exp((E-mu_min)/kT_min)))
-        #def Noneq(el):
-        #    e1,e2 = el
         e1,e2 = lims
-        _R,_E = quad_vec(G_l, e1,e2, epsabs=1e-5,epsrel=1e-4,
+        _R,_E = quad_vec(G_l, e1, e2, epsabs=1e-5,epsrel=1e-4,
                          workers = int(options['quadvec_workers']), quadrature='gk21')
         rhof += _R
-        #   return (_R, _E)
-        #Neq_split = 4*int(options['nprocs'])
-        #ls    = np.linspace(lims[0], lims[1], Neq_split)
-        #elims = [(ls[i], ls[i+1]) for i in range(Neq_split-1)]
-        #res_neq = (Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
-        #                  (Jl.delayed(Noneq)(eslice) for eslice in elims))
-        #rhof += sum([res_neq[i][0] for i in len(res_neq)])
         
     delta          = rhof - rhoi
     outmix         = mixer(ravel(rhoi), ravel(delta))

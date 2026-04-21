@@ -15,6 +15,8 @@ from copy import deepcopy
 from pickle import load
 import datetime
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
+from textwrap import dedent
+
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -86,7 +88,9 @@ class Input:
             f.write(text)
         if self.verbose:
             print("Wrote Initial.py file")
-    def write_bias(self, prefix, more_imports = None, mpi4py=True,os_envvar=[], bias=None, dH=None, hook = None, use_lin=False):
+    def write_bias(self, prefix, more_imports = None, mpi4py=True,
+                   os_envvar=[], bias=None, dH=None, 
+                   hook = None, use_lin=False, dm_diff_tol = 1e-4):
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
@@ -96,7 +100,7 @@ class Input:
             text+="rank=0 \n"
         if more_imports is not None:
             if isinstance(more_imports, str):
-                text += more_imports
+                text += more_imports + "\n"
             if isinstance(more_imports, list):
                 for l in more_imports:
                     text += l + "\n"
@@ -127,13 +131,16 @@ class Input:
         text+= "        X = r.dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
         text+= "        return F \n"
         text+= "else: \n    def ramp_field(r,t): return 0.0\n"
-        if dH is None:
-            text += "def Ramp(t): \n"
-            text += "    return Hlp.approxfield2mat(t, ramp_field, orthogonal=orth) \n"
-        else:
-            text+= inspect.getsource(dH)
+        #if dH is None:
+        text += "def Ramp(t): \n"
+        text += "    return Hlp.approxfield2mat(t, ramp_field, orthogonal=orth)\n"
+        #else:
+        #   text+= dedent(inspect.getsource(dH))
         text += '\n'
-        text+= inspect.getsource(bias) 
+        if isinstance(bias, str):
+            text += dedent(bias)
+        else:
+            text += dedent(inspect.getsource(bias))
         text+='\n'
         text+="def dH(t, sig):\n"
         text+="    out = np.zeros(sig.shape,dtype=complex)\n"
@@ -154,7 +161,7 @@ class Input:
                 text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
-                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < 1e-4\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
                 text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
                 text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
                 text+="ldH = lin_dh.linearized_H\n"
@@ -168,7 +175,7 @@ class Input:
                 text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
-                text+="    assert np.abs(lin_dh.dm0-Hlp.DM0).max() < 1e-4\n"
+                text+="    assert np.abs(lin_dh.dm0-Hlp.DM0).max() < "+str(dm_diff_tol)+"\n"
                 text+="    if np.abs(lin_dh.dm0-Hlp.DM0).max() > 1e-7:\n"
                 text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
                 text+="ldH = lin_dh.linearized_H\n"
@@ -182,7 +189,7 @@ class Input:
                 text+="lin_dh = Linear(\"DM_Lin_NO.npz\", rank)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
-                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < 1e-4\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
                 text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
                 text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
                 text+="ldH = lin_dh.linearized_H\n"
@@ -301,6 +308,8 @@ class Control:
                 self.systemcall(cmd)
                 cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
                 self.systemcall(cmd)
+                print("Removed: " +self.working_dir+"/"+self.input.name+'_SRC')
+                print("and put in copy from "+self.srcf)
             else:
                 pass
         else:
@@ -325,7 +334,8 @@ class Control:
     def write_hook(self, **kwargs):
         self.hook.write_hook(self.input.name, self.working_dir, self.basedir,  
                              **kwargs)
-    
+    #def noneq_run(self, V):
+    #    
     def init_from_other(self, file_or_dir, newname):
         """
         This function is useful if you have a working directory and you want to reuse
@@ -425,11 +435,6 @@ class Control:
                 print("Fermi expansion bad")
                 print("maxdiff: " + str(maxdiff))
             
-            
-            
-            
-            
-            
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
                                 newlead=None, scale_gamma=None):
@@ -504,7 +509,7 @@ class Control:
                       DM_randomness  = None, random_on_diag_only = None, 
                       memory_conserve= None, fact_kT= None, tolerance  = None,
                       quadvec_workers= None, Bias   = None, save_last_H= None, 
-                      write_dm_every=None, write_progress=None):
+                      write_dm_every=None, write_progress=None, adaptive_mixer = False):
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
@@ -603,7 +608,12 @@ class Control:
         cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
         self.systemcall(cmd)
         self.out_wd()
-
+    def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
+        self.into_wd()
+        archive_calculation(self.input.name+"_save", arc_name, 
+                            keep_psi_omg_in_arc = keep_psi_omg_in_arc,
+                            clean_original = clean_original)
+        self.out_wd()
 class transiesta_hook:
     def __init__(self, indev, scheme, nsc=(1,1,1)):
         if type(indev) is str:
@@ -887,4 +897,20 @@ class DM_Lin_NO:
         dq = np.diag(sigNO[0]) - self.q
         dH = self.dHdQ @ dq
         return dH
+
+def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
+    os.system("cp -R "+name + " " + arc_name)
+    if keep_psi_omg_in_arc == False:
+        os.system("rm "+arc_name + "/last_psi.npy")
+        os.system("rm "+arc_name + "/last_omg.npy")
+    if clean_original:
+        os.system("rm "+name+"/DM*.npy")
+        os.system("rm "+name+"/current*.npy")
+        os.system("rm "+name+"/times*.npy")
+    
+
+        
+        
+
+
 

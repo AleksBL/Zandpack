@@ -2,8 +2,6 @@ import numpy as np
 from numba import njit
 from scipy.interpolate import CubicSpline
 import os
-#import GETPATH
-
 D = __file__[:-10]
 P1 = np.load(D+'/ExpPulses/air_photonics_pulse.npy')
 t1,p1 = P1.T
@@ -19,12 +17,10 @@ t2 = t2[90:170]
 p2 = p2[90:170]
 p2 = p2 / np.abs(p2).max()
 t2 = t2 - t2.min()
-
 cs1 = CubicSpline(t1,p1)
 cs2 = CubicSpline(t2,p2)
 x1,c1 = cs1.x, cs1.c
 x2,c2 = cs2.x, cs2.c
-
 k = 3
 ts = 15
 ts2 = 300
@@ -40,7 +36,6 @@ def air_photonics_pulse(t):
         res += c1[m, i] * (t - x1[i])**(k-m)
     res  = res * (np.tanh((t-100) / ts) - np.tanh((t - 550) / ts)) / 2
     return res
-
 @njit
 def toptica_pulse(t):
     dt = t - t2
@@ -54,11 +49,9 @@ def toptica_pulse(t):
         res += c2[m, i] * (t - x2[i])**(k-m)
     res  = res * (np.tanh((t-300) / ts2) - np.tanh((t - 4000) / ts2)) / 2
     return res
-
 @njit
 def env1(x):
     return np.exp(- x**2)
-    
 @njit
 def generic_pulse(t, s, f, phase, delay, envelope):
     """Args: 
@@ -71,25 +64,20 @@ def generic_pulse(t, s, f, phase, delay, envelope):
         
         """
     x = (t-delay)/s
-    return envelope(x) * np.sin(2 * np.pi * f * t - phase)
-
+    return envelope(x) * np.sin(2 * np.pi * f * (t-delay) - phase)
 @njit
 def zero_bias(t, a):
     return 0.0
-
 @njit
 def zero_dH(t, sigma):
     A = np.zeros(sigma.shape, dtype=np.complex128)
     return A
-
 @njit
 def box_pulse(t, tp, ts, V):
     return V * (np.tanh(t / ts) - np.tanh((t - tp) / ts)) / 2
-
 @njit
 def step(x, mu, s):
     return 1 / (1 + np.exp((x - mu) / s))
-
 def make_constant_bias(const):
     @njit
     def constant_bias(t,a):
@@ -98,14 +86,12 @@ def make_constant_bias(const):
         if a == 1:
             return -const/2
     return constant_bias
-
 @njit
 def stairs(x,stair_height, stair_width,n, softness=0.1):
     res = 0.0
     for i in range(1,n):
         res = res + (1-step(x, i * stair_width, softness))*stair_height
     return res
-
 @njit
 def pumpprobe(t, fpump, fprobe, Trep, t1,t2, tstep = 5.0):
     val = fpump(t)
@@ -116,13 +102,3 @@ def pumpprobe(t, fpump, fprobe, Trep, t1,t2, tstep = 5.0):
         val += fprobe(dt-Trep)*box_pulse(dt-Trep, Trep, tstep, 1.0)
         val += fprobe(dt+Trep)*box_pulse(dt+Trep, Trep, tstep, 1.0)
     return val
-
-        
-
-
-
-
-
-#print(__file__)
-
-
