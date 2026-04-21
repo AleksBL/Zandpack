@@ -20,7 +20,8 @@ def stepwise_const_bias(ControlInstance,
                         skip_steady_state = False
                         ):
     """
-    Automated stepwise time-dependent calculation.
+    Automated stepwise time-dependent calculation. ControlInstance should be initialized using
+    the set_direc, init and set_hook methods. The rest is done in here (if skip_steady_state is False).
     Args:
         ControlInstance: Initialized Control instance (from Zandpack.wrapper Control)
         n_steps : How many steps there is in the bias function
@@ -99,9 +100,9 @@ def const_bias_and_sine(ControlInstance,
                         nozand = True, mpi = 'mpirun '):
     """
     Function for running a series of calculations with a bias function as
-    V(t) = C + A*sin(wt). Please note you have to give this function a 
+    V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
     Control object where you have the full equilibrium (V=0) steady state already (And much preferably
-    the linearization also). The sine will be introduced at tstart
+    the linearization also). The sine will be introduced at tstart. 
     Args:
         ConstrolInstance: Control object from the Zandpack.wrapper module
         V: scalar or 1D array of voltages.

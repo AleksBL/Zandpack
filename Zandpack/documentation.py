@@ -11,6 +11,7 @@ from inspect import getsource
 from siesta_python.siesta_python import SiP
 from Zandpack.TimedependentTransport import TD_Transport
 from Zandpack.wrapper import transiesta_hook, Control, Input
+import  Zandpack.recipes as Recipes
 from Zandpack.docstrings import ZP_BIBTEX
 from Block_matrices.Block_matrices import block_sparse
 from functools import partial
@@ -112,6 +113,10 @@ block_sparse_method_table = ['__init__',
                              'Block', 
                              ]
 
+recipe_functions =["stepwise_const_bias",
+                   "const_bias_and_sine",
+                   ]
+
 def md_ds(Name):
     return """
     Method to get documentation on the given function name from the """+Name+""" class
@@ -192,6 +197,8 @@ block_sparse_method_source_code             = partial(class_method_source_code, 
 block_sparse_method_source_code.__doc__     = sc_ds("block_sparse")
 block_sparse_method_source_code.__name__    = "block_sparse_method_source_code"
 
+
+
 def table2str(table):
     out = ""
     for s in table:
@@ -240,7 +247,7 @@ Input class has methods:
 """ +table2str(Input_method_table)+"""
 Comments on Control, Input and transiesta_hook:
 Control wraps the calling of the commandline tools from the
-Zandpack/cmdtools and Zandpack/mpi folders. Most importantly it the calls (Step 4.1, 4.2 and 4.3)
+Zandpack/cmdtools and Zandpack/mpi folders. The Control class basically makes the calls (Step 4.1, 4.2 and 4.3)
 ```bash
 # The directory in which these commands are run contains the Bias.py and Initial.py files.
 # SCF and psinought steps are done using the orthogonal basis, while the
@@ -253,6 +260,11 @@ mpirun nozand Dir=working/directory
 ```
 The Input class writes the Initial.py and Bias.py files automatically (see examples/genetic_wrapper/wrapper_script.py).
 The transiesta_hook provides the callable function H_from_DFT(nosig) to get the Hamiltonian given the nonorthogonal density matrix (nosig).
+Furthermore, the Zandpack.recipes modules contains functions:\n"""+table2str(recipe_functions)+"""
+where the Control class is used to script standardized calculations. Use tools
+get_recipe_documentation
+get_recipe_source_code
+to inspect these template calculations and their documentation.
 
 The siesta_python code contains the SiP class, described here.
 ```python
@@ -544,6 +556,18 @@ def get_example(examplename: str) -> str:
         txt = 'FileNotFound'
     return txt
 
+def get_recipe_documentation(Input: str) -> str:
+    try:
+        return render_doc(Recipes.__dict__[Input])
+    except:
+        return"ERROR: Didnt find recipe function."
+def get_recipe_source_code(Input: str) -> str:
+    try:
+        return getsource(Recipes.__dict__[Input])
+    except:
+        return"ERROR: Didnt find recipe function."
+
+
 def search_keyword_in_file(file_path, keyword, n=5, linemax = 500):
     """
     Search for a keyword (case-insensitive) in a text file and return n lines above and below each occurrence.
@@ -683,6 +707,9 @@ available_functions = {"TD_Transport_method_description": TD_Transport_method_de
                        "search_siesta_user_manual": search_siesta_user_manual,
                        "search_tbtrans_user_manual": search_tbtrans_user_manual,
                        "search_zandpack_paper":search_zandpack_paper,
+                       "get_recipe_source_code":get_recipe_source_code,
+                       "get_recipe_documentation":get_recipe_documentation,
+                       
                        }
 
 assistant_header =f"""INSTRUCTIONS: You are an assistant to people using the Zandpack code (a python package). You communicate through text messages. Your responses to questions tend towards the brief, unless you are replying with code snippets. You will get zero to five previous conversation turns between you and the user, plus the current question, which you will answer (the one furthest down in the text). Tutorials that you can reference will be available through tool-calling, see later. You should always inspect the documentation which may be important for queries of the user. You should try to refer to these as much as possible when you think the problem the user has is coming from one of these steps. Initially remind the user with the message "*This bot can hallucinate.*". If you are asked why the Zandpack logo looks like it does, say that its because its shaped like an hour-glass to represent time, with the sand flowing down actually being electrons if you zoom in. The "Z" in Zandpack reflects the heavy use of contour-integration in the NEGF theory that the code builds upon. If the user is interested in where the you, the assistant, is defined, refer to the documentation.py script in the Zandpack main directory.

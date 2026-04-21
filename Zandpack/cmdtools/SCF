@@ -234,7 +234,6 @@ if True:
     def G_l(_E):
         if isinstance(_E, float): E = np.array([_E])
         else:                     E = _E
-        #E = E + 0.001j
         gr, SE_list = Gr(E)
         SE_l_tot    = sum([(-fdf(E, _mu[i], _kT[i]))*(SE_list[i] - SE_list[i].conj().transpose(0,1,3,2))
                             for i in range(len(SE_list))])[:,:,idx_SE_o[:, None], idx_SE_o[None,:]].copy()
