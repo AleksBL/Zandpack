@@ -4,6 +4,7 @@ import re
 import numba as nb
 from tqdm import tqdm
 from Zandpack.Loader import flexload
+from scipy.interpolate import interp1d
 
 ld = os.listdir
 
@@ -224,7 +225,21 @@ def partial_charges(dirs, times_label = 'DMt', Transform=None):
     T   =  np.hstack(T)
     return T, Ni
 
-
+def interp_and_fft(x,y,N):
+    xx = np.linspace(x.min(), x.max(), N)
+    f  = interp1d(x,y)
+    yy = f(xx)
+    yy = np.pad(yy,(N//2, N//2))
+    dx = xx[1] - xx[0]
+    return np.fft.rfft(yy), np.fft.rfftfreq(2*N, dx)
+def interp_and_fft_complex(x,y,N):
+    xx = np.linspace(x.min(), x.max(), N)
+    fr  = interp1d(x,y.real)
+    fi  = interp1d(x,y.imag)
+    yy = fr(xx) + 1j * fi(xx)
+    yy = np.pad(yy,(N//2, N//2))
+    dx = xx[1] - xx[0]
+    return np.fft.fft(yy), np.fft.fftfreq(2 * N, dx)
 
 #def compute_neumann_entropy(dirs,times_label = 'DMt'):
 #    S = []

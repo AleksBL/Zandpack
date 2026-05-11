@@ -750,6 +750,10 @@ You will format your response to be readable in plain text, since you will be co
 
 DESCRIPTION OF YOUR TOOLS:
 There are  tools given for you to inspect the various code documentations and snippets. See below
+
+PRACTICAL TIPS
+Sometimes having several layers of buffer atoms (see TranSIESTA manual and examples) can help make the time-dependent propagation part more stable.
+
 """
 
 

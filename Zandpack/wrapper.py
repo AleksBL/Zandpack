@@ -16,17 +16,15 @@ from pickle import load
 import datetime
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
 from textwrap import dedent
+from numba import njit
 
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
 
-class Input:
+class Input:   # Handles the Initial.py file
     def __init__(self, 
-                 name,
-                 t0=0.0, 
-                 t1=50.0, 
-                 eps=1e-7, 
+                 name, t0=0.0, t1=50.0, eps=1e-7, 
                  usesave=True,
                  LoadFromFull=True,
                  checkpoints = None,
@@ -90,7 +88,9 @@ class Input:
             print("Wrote Initial.py file")
     def write_bias(self, prefix, more_imports = None, mpi4py=True,
                    os_envvar=[], bias=None, dH=None, 
-                   hook = None, use_lin=False, dm_diff_tol = 1e-4):
+                   hook = None, use_lin=False, dm_diff_tol = 1e-4, 
+                   lines_inside_bias= None,
+                   lines_outside_bias=None):
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
@@ -128,7 +128,7 @@ class Input:
         text+= "    X0 = Po.min(); X1 = Po.max()\n"
         text+= "    def ramp_field(r,t):\n"
         text+= "        # Modify this at will. \n        # this is a crude 2E version \n"
-        text+= "        X = r.dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
+        text+= "        X = (r - P1).dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
         text+= "        return F \n"
         text+= "else: \n    def ramp_field(r,t): return 0.0\n"
         #if dH is None:
@@ -137,6 +137,11 @@ class Input:
         #else:
         #   text+= dedent(inspect.getsource(dH))
         text += '\n'
+        if isinstance(hook, dftb_hook):
+            text += "try:\n"
+            text += "    S_ee = float(os.environ[\"S_EE\"])\n"
+            text += "except:\n"
+            text += "    S_ee = 1.0\n"
         if isinstance(bias, str):
             text += dedent(bias)
         else:
@@ -148,7 +153,14 @@ class Input:
         text+="    DL  = [bias(t, a) for a in range(nlead) ]\n"
         text+="    out+=  Hlp.lead_dev_dyncorr(DeltaList = DL, orthogonal=orth)\n"
         text+="    out+= kohn_sham(sig, orthogonal=orth)\n"
+        if lines_inside_bias is not None:
+            for l in lines_inside_bias:
+                text+="    " +l + "\n"
         text+="    return out\n"
+        if lines_outside_bias is not None:
+            for l in lines_outside_bias:
+                text += l +"\n"
+        
         if hook is None:
             text+="def kohn_sham(sig):\n"
             text+="    return 0.0"
@@ -156,6 +168,8 @@ class Input:
             text+="from "+hook.scriptname.replace(".py","") +" import H_from_DFT\n"
             text+="# below, if linearization is active, we check if the DM used for linearization and the \n"
             text+="# and orthogonal DM from the Arrays directory are the same (in the orth.basis or nonorth. depending on the case)\n"
+            text+="if rank == 0:\n"
+            text+="    bareH0 = Hlp.bare_H0(orthogonal=orth)\n"
             if hook.scheme == 'lin_mul':
                 text+="from Zandpack.wrapper import Mull_Lin_NO as Linear\n"
                 text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank)\n"
@@ -167,9 +181,9 @@ class Input:
                 text+="ldH = lin_dh.linearized_H\n"
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
-                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
                 text+="    else:\n"
-                text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
             elif hook.scheme == 'lin_odm':
                 text+="from Zandpack.wrapper import DM_Lin_O as Linear\n"
                 text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank)\n"
@@ -181,9 +195,9 @@ class Input:
                 text+="ldH = lin_dh.linearized_H\n"
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
-                text+="        return HamNO2O( lin_dh.H0 + ldH(sig)) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sig)) - bareH0 \n"
                 text+="    else:\n"
-                text+="        return lin_dh.H0 + ldH(sigNO2O(sig)) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return lin_dh.H0 + ldH(sigNO2O(sig)) - bareH0 \n"
             elif hook.scheme == 'lin_nodm':
                 text+="from Zandpack.wrapper import DM_Lin_NO as Linear\n"
                 text+="lin_dh = Linear(\"DM_Lin_NO.npz\", rank)\n"
@@ -195,16 +209,44 @@ class Input:
                 text+="ldH = lin_dh.linearized_H\n"
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
-                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
                 text+="    else:\n"
-                text+="        return lin_dh.H0 + ldH(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return lin_dh.H0 + ldH(sig) - bareH0 \n"
+            elif hook.scheme == 'lin_nodm_od':
+                text+="from Zandpack.wrapper import DM_Lin_NO_OD as Linear\n"
+                text+="lin_dh = Linear(\"DM_Lin_NO_OD.npz\", rank)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
+                text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0 \n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sig) - bareH0 \n"
             elif hook.scheme == 'full':
                 text+="def kohn_sham(sig, orthogonal=True):\n"
                 text+="    if orthogonal:\n"
-                text+="        return HamNO2O(H_from_DFT(sigO2NO(sig))) - (Hlp.H0 - Hlp.Hcorr)\n"
+                text+="        return HamNO2O(H_from_DFT(sigO2NO(sig))) - bareH0\n"
                 text+="    else:\n"
-                text+="        return H_from_DFT(sig) - HamO2NO(Hlp.H0 - Hlp.Hcorr)\n"
-                
+                text+="        return H_from_DFT(sig) - bareH0\n"
+            elif hook.scheme == 'lin_dftb':
+                text+="from Zandpack.wrapper import DFTB_Lin as Linear\n"
+                text+="lin_dh = Linear(\"Lin_DFTB.npz\", rank)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
+                text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
+            
         with open(prefix + "/Bias.py", "w") as f:
             f.write(text)
         if self.verbose:
@@ -228,7 +270,7 @@ def fmt_str_cmd(s):
         s2 = s2.replace(v, "")
     return s2
 
-class Control:
+class Control: # Replaces bash scripting
     def __init__(self, input_class, source_files=None, logfile = 'cmds_1.txt', 
                  livelog="cmds.txt", prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"]):
         self.input = input_class
@@ -437,7 +479,8 @@ class Control:
             
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
-                                newlead=None, scale_gamma=None):
+                                newlead=None, scale_gamma=None,
+                                custom_exec = None):
         """
         
         If None is given, the default value of the tool is used
@@ -465,11 +508,16 @@ class Control:
         for k in arg_values.args:
             if k=='self':
                 continue
+            if k=='custom_exec':
+                continue
             kwargs[k] = arg_values.locals[k]
-        self.run_cmd_standard("modify_occupations", " > modocc.out", **kwargs)
+        if custom_exec is None:
+            self.run_cmd_standard("modify_occupations", " > modocc.out", **kwargs)
+        else:
+            self.run_cmd_standard(custom_exec, " > modocc.out", **kwargs)
     def make_ts_contour(self, E1   = None, N_C= None,  N_F = None, 
                                fact = None, kT = None,  name= None,
-                               pp_path = None):
+                               pp_path = None, custom_exec = None):
         """
         
         Runs the make_ts_contour tool
@@ -498,8 +546,14 @@ class Control:
         for k in arg_values.args:
             if k=='self':
                 continue
+            if k=='custom_exec':
+                continue
             kwargs[k] = arg_values.locals[k]
-        self.run_cmd_standard("make_ts_contour", " > tscont.out", **kwargs)
+        if custom_exec is None:
+            self.run_cmd_standard("make_ts_contour", " > tscont.out", **kwargs)
+        else:
+            self.run_cmd_standard(custom_exec, " > tscont.out", **kwargs)
+            
     def run_scf(self, Contour = None,  kT     = None, kweights = None, 
                       drho_tol= None,  history= None, weight   = None, 
                       DM_start_file=None, nprocs= None, backend = None, 
@@ -509,7 +563,8 @@ class Control:
                       DM_randomness  = None, random_on_diag_only = None, 
                       memory_conserve= None, fact_kT= None, tolerance  = None,
                       quadvec_workers= None, Bias   = None, save_last_H= None, 
-                      write_dm_every=None, write_progress=None, adaptive_mixer = False):
+                      write_dm_every=None, write_progress=None, adaptive_mixer = False,
+                      custom_exec = None):
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
@@ -517,17 +572,22 @@ class Control:
         for k in arg_values.args:
             if k=='self':
                 continue
+            if k=='custom_exec':
+                continue
             kwargs[k] = arg_values.locals[k]
         print('Running SCF')
         exc = " ".join(self.prepend_env_vars + ["SCF"])
-        self.run_cmd_standard(exc," > scf.out", **kwargs)
+        if custom_exec is None:
+            self.run_cmd_standard(exc," > scf.out", **kwargs)
+        else:
+            self.run_cmd_standard(custom_exec," > scf.out", **kwargs)
     def run_psinought(self,maxiter=None, checkderivative=None,dl=None,
                            steptol=None, add_random=None, random_weight=None,
                            L_info =None, Axb_solver=None, start_psi = None,
                            memory_save = None, Xpp_optim = None,  printfile=None,
                            extreme_memory_save = None, Woodbury_inv =None,
                            prec_to_disk=None, outer_einsum=None,
-                           use_preconditioner = None ):
+                           use_preconditioner = None, custom_exec = None):
         """
         Please note the argument "Woodbury_inv" is a slightly different name
         compared to the actual psinought tool. This is because one cannot write the 
@@ -541,6 +601,8 @@ class Control:
         for k in arg_values.args:
             if k=='self':
                 continue
+            if k == 'custom_exec':
+                continue
             if k=="Woodbury_inv":
                 k2 ="Woodbury-inv"
                 kwargs[k2] = arg_values.locals[k]
@@ -548,7 +610,10 @@ class Control:
                 kwargs[k] = arg_values.locals[k]
         exc = " ".join(self.prepend_env_vars + ["psinought"])
         print('Running psinought')
-        self.run_cmd_standard(exc," > psi0.out", **kwargs)
+        if custom_exec is None:
+            self.run_cmd_standard(exc," > psi0.out", **kwargs)
+        else:
+            self.run_cmd_standard(custom_exec, " > psi0.out", **kwargs)
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "
         for kw in kwargs.keys():
@@ -560,16 +625,22 @@ class Control:
         self.systemcall(cmd + out)
         self.textlog += ['Ran '+cmd + "\n"]
         self.out_wd()
-    def run_zand(self, mpi="mpirun "):
+    def run_zand(self, mpi="mpirun ", custom_exec = None):
         self.textlog += ['Executing zand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "zand"])
         print('Running zand')
-        self.run_cmd_standard(exc, " > zand.out",)
-    def run_nozand(self, mpi="mpirun "):
+        if custom_exec is None:
+            self.run_cmd_standard(exc, " > zand.out",)
+        else:
+            self.run_cmd_standard(custom_exec, " > zand.out",)
+    def run_nozand(self, mpi="mpirun ", custom_exec = None):
         self.textlog += ['Executing nozand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
         print('Running nozand')
-        self.run_cmd_standard(mpi+"nozand ", " > nozand.out")
+        if custom_exec is None:
+            self.run_cmd_standard(exc, " > nozand.out")
+        else:
+            self.run_cmd_standard(custom_exec, " > nozand.out")
     def write_log(self,ftxt):
         with open(ftxt, "w") as f:
             for l in self.textlog:
@@ -602,6 +673,10 @@ class Control:
             fnc = 'linearize_mulliken'
         elif self.hook.scheme == 'lin_nodm':
             fnc = 'linearize_nodm'
+        elif self.hook.scheme == 'lin_nodm_od':
+            fnc = 'linearize_nodm_offdiag'
+        elif self.hook.scheme == 'lin_dftb':
+            fnc = "linearize_dftb"
         elif self.hook.scheme == 'full':
             print('Dont use hook_linearize when the hook scheme is \"full\"!')
             fnc = "empty"
@@ -640,7 +715,8 @@ class transiesta_hook:
                                  ], 
                                 name="DEFAULT")
     def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
-                   dq=0.005, Rmax = 12.5, use_orig_S=False, siesta_mpi = ""):
+                   dq=0.005, Rmax = 12.5, use_orig_S=False, siesta_mpi = "",
+                   Stol = 0.5):
         scriptname = 'transiesta'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -675,9 +751,10 @@ def sigNO2O(DMlike): return iL @ DMlike @ iL
 def HamO2NO(Hlike):  return iL @ Hlike  @ iL
 def HamNO2O(Hlike):  return L  @ Hlike  @ L
 nlead= int(np.load(\"{ArrayDir}\"+\"/Arrays/num_leads.npy\"))
+ncS = S.copy()
 for ilead in range(nlead):
     if {use_orig_S}:
-        S += np.load(\"{ArrayDir}\"+\"/Arrays/Sig1_NO_\"+str(ilead)+\".npy\")
+        ncS += np.load(\"{ArrayDir}\"+\"/Arrays/Sig1_NO_\"+str(ilead)+\".npy\")
 Rorb = Rorb[piv].copy()
 Dij  = np.linalg.norm(Rorb[:,None,:] - Rorb[None,:,:],axis=2)
 I, J = [], []
@@ -821,13 +898,215 @@ def linearize_nodm():
                         H0=H0, Rmax=Rmax, 
                         dq=dq, S=S, dm_in_ortho_basis=False)
 
-    
-    
+def linearize_nodm_offdiag():
+    dm0  = np.load(\"{ArrayDir}\"+\"/Arrays/DM_Ortho.npy\")
+    dm0  = sigO2NO(dm0)
+    try:
+        other_dm = np.load('DM_Lin_NO_OD.npz')["DM0"]
+        other_dq = np.load('DM_Lin_NO_OD.npz')["dq"]
+        if np.abs(dm0 - other_dm).max()<(dq/10) and np.allclose(dq, other_dq):
+            print("Found DM_Lin_NO_OD.npz with matching DM!")
+            return 
+        else:
+            pass
+    except:
+        pass
+    H0   = H_from_DFT(dm0)
+    no   = dm0.shape[-1]
+    idx_pairs = []
+    for i in range(no):
+        for j in range(i,no):
+            if np.abs(S[0,i,j])>{Stol}:
+                idx_pairs += [(i,j)]
+    dHdQ = np.zeros((len(idx_pairs), no, no),dtype=np.complex64)
+    for I in tqdm(range(len(idx_pairs))):
+        i,j = idx_pairs[I]
+        try:
+            dm = dm0.copy()
+            sgn = 1.0
+            dm[0,i,j] += dq
+            dm[0,j,i] += dq
+            e = np.linalg.eigvalsh(dm)
+            assert (e<1+dq/2).all()
+        except:
+            sgn = -1.0
+            dm = dm0.copy()
+            dm[0,i,j] -= dq
+            dm[0,j,i] -= dq
+            e = np.linalg.eigvalsh(dm)
+            if not (e>-dq/2).all():
+                dm  = dm0.copy()
+                sgn = 1.0
+                dm[0,i,j] += dq
+                dm[0,j,i] += dq
+        
+
+        res = (H_from_DFT(dm) - H0)/(dq * sgn)
+        dHdQ[I,:,:] = res
+    np.savez_compressed("DM_Lin_NO_OD.npz", 
+                        dHdQ=dHdQ, DM0=dm0, 
+                        H0=H0, Rmax=Rmax, idx_pairs = np.array(idx_pairs), 
+                        dq=dq, S=S, dm_in_ortho_basis=False )
+
 def empty():
     return None
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)
+
+
+class dftb_hook:
+    def __init__(self, indev, scheme, nsc=(1,1,1)):
+        if type(indev) is str:
+            dev = load(open(indev, 'rb'))
+        else:
+            dev = indev
+        self.fermi_level = dev.read_fermi_level_from_out()
+        self.devg  = sisl.get_sile(dev.dir+'/RUN.fdf').read_geometry()
+        self.devg.set_nsc(nsc)
+        dev2 = dev.clone(dev.dir+'_dm2h')
+        dev2.dic["dftb_charge"].file = dev2.dic["dftb_charge"].file.replace(dev.dir, dev.dir+'_dm2h')
+        self.devg.write(dev2.dir+'/geom.xyz')
+        self.dev = dev2
+        self.orig_dev = dev
+        self.scheme    = scheme
+        self.use_full  = True
+        self.scriptname = None
+        assert scheme in ['full', 'lin_dftb'], "The given scheme is not implemented (DFTB hook)."
+    def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
+                   dq=0.01, Rmax = 12.5, use_orig_S=False):
+        scriptname = 'dftb'
+        if len(suffix)>0:
+            scriptname += '_'+suffix
+        scriptname+= '.py'
+        gnsc = list(self.devg.nsc)
+        gnsc = [int(v) for v in gnsc]
+        self.scriptname = scriptname
+        self.dev.pickle(wdir+"/"+"namethatwillnotbeused")
+        code = (f"""\
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+save_sk = True
+getH, q0, Rmp = None, None, None
+dq = {dq}
+def H_from_DFT(A):
+    assert 1 == 0, "ERROR: H_from_DFT in dftb.py script called with rank != 0!!! "
+if rank == 0:
+    import sisl
+    from Zandpack.Help import TDHelper
+    from pickle import load
+    import numpy as np
+    from Initial import name
+    from time import time
+    import os
+    Dev = load(open('namethatwillnotbeused.SiP','rb'))
+    mu  = Dev.read_fermi_level_from_out() 
+    k    = np.array((.0, .0, .0))
+    wdir = os.getcwd()
+    def updateH():
+        os.chdir("..")
+        Dev.run_dftb_in_dir(silent= True, subprocess=True, wait=True)
+        os.chdir(wdir)
+    def evaluateHk():
+        os.chdir("..")
+        out = Dev.fast_dftb_hk(k = k, gamma_only = True)
+        os.chdir(wdir)
+        return out 
+    def q2Q(q):
+        Qv[piv] = q[:]
+        return Qv
+    def updateQ(Qv):
+        os.chdir("..")
+        Q.set_Q(Qv)
+        os.chdir(wdir)
+    piv   = np.load(name+'/Arrays/pivot.npy')
+    Q    = Dev.dic['dftb_charge']
+    _Q0  = Q.dic['init_Q'].copy()
+    Qv   = _Q0.copy()
+    q0   = _Q0[piv]
+    try:
+        os.chdir("..")
+        sk = Dev.fast_dftb_hk(k = k, label = 'overreal')
+        os.chdir(wdir)
+        if save_sk:
+            np.save("DFTB+_SK.npy", sk)
+    except:
+        print("sk calculate failed, fallback to reading previously calculated one!")
+        sk = np.load("DFTB+_SK.npy")
+    Hlp = TDHelper(name)
+    _S  = Hlp.ncS
+    _L  = Hlp.Lowdin
+    def sigO2NO(DMlike): return _L  @ DMlike @ _L
+    def sig2mul(dm_no):  return np.diag((dm_no @ _S + _S @ dm_no )[0]).real
+    def H_from_DFT(DMNO):
+        qv = sig2mul(DMNO)
+        return getH(qv)
+    def getH(qv):
+        updateQ(q2Q(qv))
+        updateH()
+        hk  = evaluateHk()
+        hk -= mu*sk
+        return hk[piv,:][:,piv]
+    def linearize_dftb():
+        dm0  = np.load(name+"/Arrays/DM_Ortho.npy")
+        dm0  = sigO2NO(dm0)
+        try:
+            other_dm = np.load('Lin_DFTB.npz')["DM0"]
+            other_dq = np.load('Lin_DFTB.npz')["dq"]
+            if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
+                print("Found Lin_DFTB.npz with matching DM!")
+                return 
+            else:
+                pass
+        except:
+            pass
+        Q0, H0 = sig2mul(dm0), H_from_DFT(dm0)
+        no     = dm0.shape[-1]
+        dHdQ   = np.zeros((no, no, no),dtype=np.complex64)
+        for i in range(no):
+            Qv = Q0.copy()
+            if Qv[i]+dq > 1.0:
+                sgn=-1.
+            else:
+                sgn= 1.
+            Qv[i] += dq * sgn
+            res = (getH(Qv) - H0)/(dq * sgn)
+            dHdQ[i,:,:] = res
+        np.savez_compressed("Lin_DFTB.npz", 
+                            dHdQ=dHdQ, DM0=dm0, 
+                            H0=H0,  Q0=Q0, 
+                            dq=dq, S=_S,
+                            dm_in_ortho_basis=False)
+
+""")
+        with open(wdir+'/'+scriptname, "w") as f:
+            f.write(code)
+        
+
+class DFTB_Lin:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0  = f["DM0"]
+            self.H0   = f["H0"]
+            self.q0   = f["Q0"]
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.FileNotFound = False
+            assert f["dm_in_ortho_basis"] == False
+        except:
+            self.FileNotFound = True    
+    def linearized_H(self, sigNO):
+        Q = self.S @ sigNO + sigNO @ self.S
+        q = np.diag(Q[0])
+        dq = q - self.q0
+        dH = self.dHdQ @ dq
+        return dH
 
 class Mull_Lin_NO:
     def __init__(self, file, rank):
@@ -854,6 +1133,7 @@ class Mull_Lin_NO:
         dq = q - self.q0
         dH = self.dHdQ @ dq
         return dH
+
 
 class DM_Lin_O:
     def __init__(self, file, rank):
@@ -897,7 +1177,38 @@ class DM_Lin_NO:
         dq = np.diag(sigNO[0]) - self.q
         dH = self.dHdQ @ dq
         return dH
+@njit
+def get_elements(M, idx):
+    n = out = len(idx)
+    out = np.zeros(len(idx),dtype=np.complex128)
+    for I in range(n):
+        i,j = idx[I]
+        out[I] = M[i,j]
+    return out
 
+class DM_Lin_NO_OD:
+    def __init__(self, file, rank):
+        if rank != 0:
+            return
+        try:
+            f = np.load(file)
+            self._f = f
+            self.dHdQ  = f["dHdQ"].transpose(1,2,0).copy()
+            self.dm0   = f["DM0"]
+            self.H0    = f["H0"]
+            # self.dq   = f["dq"]
+            self.idx_O = f["idx_pairs"]
+            self.dq    = f["dq"]
+            self.S     = f["S"]
+            self.q     = get_elements(self.dm0[0], self.idx_O)
+            self.FileNotFound = False
+            assert f["dm_in_ortho_basis"] == False
+        except:
+            self.FileNotFound = True
+    def linearized_H(self, sigNO):
+        dq = get_elements(sigNO[0], self.idx_O) - self.q
+        dH = self.dHdQ @ dq
+        return dH
 def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
     os.system("cp -R "+name + " " + arc_name)
     if keep_psi_omg_in_arc == False:
@@ -908,9 +1219,3 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
     
-
-        
-        
-
-
-

@@ -20,5 +20,6 @@ Get help by doing "executable --help" on any of these.
    Determination of wavevectors psi for steady-state.
 "td_info":
    Tool for plotting and quickly accessing information in a TD-calculation.
-
+"zzz":
+   Tool for compressing and transfering files.
 See examples and notebooks for more info.

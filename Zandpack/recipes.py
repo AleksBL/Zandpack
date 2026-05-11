@@ -97,7 +97,9 @@ def stepwise_const_bias(ControlInstance,
 
 def const_bias_and_sine(ControlInstance,
                         V, Ampl, w, tstart= 0.0,s = 2.5,
-                        nozand = True, mpi = 'mpirun '):
+                        nozand = True, mpi = 'mpirun ', 
+                        lines_inside_bias  = None,
+                        lines_outside_bias = None):
     """
     Function for running a series of calculations with a bias function as
     V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
@@ -147,7 +149,9 @@ def const_bias_and_sine(ControlInstance,
                 if first_step:
                     C.input.orthogonal=True
                     C.write_bias(bias=inspect.getsource(bias), hook=C.hook, 
-                                 more_imports=more_imports, dm_diff_tol = 1.0)
+                                 more_imports=more_imports, dm_diff_tol = 1.0,
+                                 lines_inside_bias = lines_inside_bias,
+                                 lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
                     C.run_scf(DM_randomness=0.0, write_dm_every=10, weight=0.1,
                               DM_start_file="UseThisDM.npy",
@@ -166,13 +170,17 @@ def const_bias_and_sine(ControlInstance,
                 if nozand:
                     C.input.orthogonal=False
                     C.write_bias(bias=bias, hook=C.hook, 
-                                 more_imports=more_imports, dm_diff_tol = 1.0)
+                                 more_imports=more_imports, dm_diff_tol = 1.0,
+                                 lines_inside_bias = lines_inside_bias,
+                                 lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
                     C.run_nozand(mpi)
                 else:
                     C.input.orthogonal=True
                     C.write_bias(bias=bias, hook=C.hook, 
-                                 more_imports=more_imports, dm_diff_tol = 1.0)
+                                 more_imports=more_imports, dm_diff_tol = 1.0,
+                                 lines_inside_bias = lines_inside_bias,
+                                 lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
                     C.run_nozand(mpi)
                 C.archive_calculation(C.input.name 

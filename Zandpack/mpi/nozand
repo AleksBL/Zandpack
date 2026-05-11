@@ -265,8 +265,18 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     ####
     H0  = S05 @ D["H_Ortho"] @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
+    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
+        print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
+        print("Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        H0 = 0.5 * (H0 + H0.conj().transpose(0,2,1))
     H0_BW_L,H0_BW_U = bandwidth(H0)
     H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
+    if (H0_BW_L == H0_BW_U ) == False:
+        print("is H0 hermitian: ", np.allclose(H0, H0.conj().transpose(0,2,1)))
+        print("Diff: ", np.abs((H0 - H0.conj().transpose(0,2,1))).max())
+        print('differing bandwidths:')
+        print(H0_BW_L)
+        print(H0_BW_U)
     assert H0_BW_L == H0_BW_U
     MM_nblocks = NO // H0_BW_L
     if MM_nblocks < Nblocks_min_banded:
@@ -751,8 +761,18 @@ def Worker(role_info):
     ####
     H0  = S05 @ D["H_Ortho"] @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
+    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
+        print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
+        print("Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        H0 = 0.5 * (H0 + H0.conj().transpose(0,2,1))
     H0_BW_L,H0_BW_U = bandwidth(H0)
     H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
+    if (H0_BW_L == H0_BW_U ) == False:
+        print("is H0 hermitian: ", np.allclose(H0, H0.conj().transpose(0,2,1)))
+        print("Diff: ", np.abs((H0 - H0.conj().transpose(0,2,1))).max())
+        print('differing bandwidths:')
+        print(H0_BW_L)
+        print(H0_BW_U)
     assert H0_BW_L == H0_BW_U
     MM_nblocks = NO // H0_BW_L
     if MM_nblocks < Nblocks_min_banded:
@@ -810,8 +830,14 @@ def Worker(role_info):
                         ravelled_lrz_idx_loc += [ko_it]
                     ko_it += 1
     ravelled_lrz_idx_loc = np.array(ravelled_lrz_idx_loc)
-    
-    assert global_psi.shape[3] == neig
+    # CHANGE 28.04.2026, neig can vary across worker nodes, depending on the eigtol cutoff.
+    # The elements are however put into the right places when local psis are assigned
+    # to global_psi, since the indices are known.
+    # The smaller eigenvalues are sensitive to how the iterative_PSD function
+    # removed the negative eigenvalues of Gamma, so there will be some difference
+    # in the size of the small eigenvalues. 
+    ## assert global_psi.shape[3] == neig # REMOVED AS OF 28.04.2026
+    #
     ravelled_lrz_idx_all = []
     ko_it = 0
     for ko_i in range(NK):

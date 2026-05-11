@@ -62,6 +62,7 @@ class TDHelper:
         self.Lowdin    = flexload(self.dir+'/S^(-0.5).npy')
         self.invLowdin = np.linalg.inv(self.Lowdin)
         self.S         = self.invLowdin @ self.invLowdin
+        self.ncS       = self.S + self.Sig1_NO.sum(axis=0)
         self.piv       = flexload(self.dir+'/pivot.npy')
         self.positions = flexload(self.dir+'/Positions.npy')
         try:
@@ -101,8 +102,6 @@ class TDHelper:
                 return self.Lowdin @ out @ self.Lowdin
             else:
                 return out
-    
-            
     def lowdin_transform(self, A):
         """ returns S^(-1/2) @ A @ S^(-1/2)
         """
@@ -123,11 +122,20 @@ class TDHelper:
             orthogonal basis or not (True or False).
         """
         if orthogonal:
-            return self.H0 - self.Sig0_O.sum(axis=0) - self.Hcorr
+            #return self.H0 \
+            #        - self.Hcorr
+            # error, corrected 11.05.2026
+            return self.H0 \
+                    - self.Sig0_O.sum(axis=0) \
+                    - self.Hcorr
         else:
+            #return  self.inv_lowdin_transform(self.H0) \
+            #      - self.inv_lowdin_transform(self.Hcorr)
+            # error, corrected 11.05.2026
             return  self.inv_lowdin_transform(self.H0) \
                   - self.Sig0_NO.sum(axis=0) \
                   - self.inv_lowdin_transform(self.Hcorr)
+                  
         
     def lead_dev_dyncorr(self, DeltaList = None, orthogonal = True):
         if DeltaList is None:
