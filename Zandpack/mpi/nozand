@@ -652,7 +652,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 file.write(mystring)
     TIME_STOP = time()
     print("RUNTIME: ", TIME_STOP - TIME_START)
-    comm.bcast(None, root=0)
+    comm.bcast((None, None), root=0)
     return
 
 # Function for Psi and Omega EOM.
@@ -1302,4 +1302,4 @@ if ROLE == "Sigma":
     SIGMA()
 elif "Worker" in ROLE:
     Worker(ROLE_INFO)
-comm.Abort()
+MPI.Finalize()

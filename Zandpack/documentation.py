@@ -10,7 +10,7 @@ from pydoc import render_doc
 from inspect import getsource
 from siesta_python.siesta_python import SiP
 from Zandpack.TimedependentTransport import TD_Transport
-from Zandpack.wrapper import transiesta_hook, Control, Input
+from Zandpack.wrapper import transiesta_hook, Control, Input, dftb_hook
 import  Zandpack.recipes as Recipes
 from Zandpack.docstrings import ZP_BIBTEX
 from Block_matrices.Block_matrices import block_sparse
@@ -97,6 +97,11 @@ control_drop = ["create_subfolder", "create_wd", "init_from_other",
                 ""]
 transiesta_hook_method_table = [v for v in transiesta_hook_method_table 
                                 if v not in generic_drop]
+dftb_hook_method_table = dir(transiesta_hook)
+dftb_hook_method_table = [v for v in dftb_hook_method_table 
+                          if v not in generic_drop]
+
+
 Control_method_table = dir(Control)
 Control_method_table = [v for v in Control_method_table 
                                 if v not in generic_drop + control_drop]
@@ -174,6 +179,13 @@ transiesta_hook_method_source_code             = partial(class_method_source_cod
 transiesta_hook_method_source_code.__doc__     = sc_ds("transiesta_hook")
 transiesta_hook_method_source_code.__name__    = "transiesta_hook_method_source_code"
 
+dftb_hook_method_description             = partial(class_method_description, "dftb_hook")
+dftb_hook_method_description.__doc__     = md_ds("transiesta_hook")
+dftb_hook_method_description.__name__    = "dftb_hook_method_description"
+dftb_hook_method_source_code             = partial(class_method_source_code, "dftb_hook")
+dftb_hook_method_source_code.__doc__     = sc_ds("dftb_hook")
+dftb_hook_method_source_code.__name__    = "dftb_hook_method_source_code"
+
 Control_method_description             = partial(class_method_description, "Control")
 Control_method_description.__doc__     = md_ds("Control")
 Control_method_description.__name__    = "Control_method_description"
@@ -225,8 +237,18 @@ from Zandpack.wrapper import transiesta_hook
 ```
 Use transiesta_hook_method_description for method description.
 Use transiesta_hook_method_source_code for method source code.
+
 transiesta_hook class has methods:
 """ +table2str(transiesta_hook_method_table)+"""
+
+dftb_hook:
+```python
+from Zandpack.wrapper import dftb_hook
+```
+Use dftb_hook_method_description for method description.
+Use dftb_hook_method_source_code for method source code.
+dftb_hook class has methods:
+""" +table2str(dftb_hook_method_table)+"""
 
 Control:
 ```python

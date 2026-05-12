@@ -40,6 +40,7 @@ class Input:   # Handles the Initial.py file
                  dm_triu_only=True,
                  dm_occ_only=False,
                  ):
+        """Initialize the Input class. This class will specify the contents of the Initial.py and Bias.py files."""
         self.name = name
         self.t0   = t0 
         self.t1   = t1
@@ -61,6 +62,10 @@ class Input:   # Handles the Initial.py file
         self.dm_triu_only=dm_triu_only
         self.dm_occ_only=dm_occ_only
     def write_initial(self, prefix):
+        """
+        Write the Initial.py file using the parameters defined in the initialization, or has been set manually after initialization.
+        The prefix argument specifies the folder in which this file will be written.
+        """
         text = "from Zandpack.td_constants import hbar\n"
         text+= "from Zandpack.Loader import load_dictionary\n"
         text+= "import numpy as np\n"
@@ -91,6 +96,10 @@ class Input:   # Handles the Initial.py file
                    hook = None, use_lin=False, dm_diff_tol = 1e-4, 
                    lines_inside_bias= None,
                    lines_outside_bias=None):
+        """
+        Writes the Bias.py file, where the timedependent bias functions are defined, together with the dH function, which specifies
+        how the Hamiltonian depends on time, spatial coordinates and density. The dissipator function is also defined here. 
+        """
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
         text+= "from Zandpack.Help import TDHelper\n"
@@ -111,6 +120,7 @@ class Input:   # Handles the Initial.py file
         text+= "Hlp = TDHelper(name); nlead=Hlp.num_leads\n"
         text+= "L   = Hlp.Lowdin; iL = Hlp.invLowdin\n"
         text+= "# Standard functions for various transformations \n# between orthogonal and nonorthogonal basis\n"
+        # Shorthands to change basis more easily. 
         text+= "def sigO2NO(DMlike): return L  @ DMlike @ L\n"
         text+= "def sigNO2O(DMlike): return iL @ DMlike @ iL\n"
         text+= "def HamO2NO(Hlike):  return iL @ Hlike  @ iL\n"
@@ -476,7 +486,7 @@ class Control: # Replaces bash scripting
             elif np.abs(F1 - F2).max()>=1e-5:
                 print("Fermi expansion bad")
                 print("maxdiff: " + str(maxdiff))
-            
+    
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
                                 newlead=None, scale_gamma=None,
@@ -1026,14 +1036,15 @@ if rank == 0:
     Qv   = _Q0.copy()
     q0   = _Q0[piv]
     try:
+        print("sk calculate failed, fallback to reading previously calculated one!")
+        sk = np.load("DFTB+_SK.npy")
+    except:
         os.chdir("..")
         sk = Dev.fast_dftb_hk(k = k, label = 'overreal')
         os.chdir(wdir)
         if save_sk:
             np.save("DFTB+_SK.npy", sk)
-    except:
-        print("sk calculate failed, fallback to reading previously calculated one!")
-        sk = np.load("DFTB+_SK.npy")
+
     Hlp = TDHelper(name)
     _S  = Hlp.ncS
     _L  = Hlp.Lowdin

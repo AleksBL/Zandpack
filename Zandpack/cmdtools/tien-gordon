@@ -47,7 +47,8 @@ options = {'file': 'SaveFile',   # directory
            'showplot':'False',
            'wtol':'1e-6',
            'int_epsrel':'1e-3',
-           'int_epsabs':'1e-4'
+           'int_epsabs':'1e-4',
+           'w_zero':"True"
            }
 
 pref = 'tien-gordon: '
@@ -177,7 +178,13 @@ def fd(E, kT):
         return 1.0
     return 1/(np.exp(x) + 1.0)
 def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
-    Nmax =  get_nmax(np.abs(ampl).max(), np.abs(hw).max())
+    if (np.abs(HW)< 1e-3).all():
+        switch_static = True
+        Nmax = 0
+    else:
+        switch_static = False
+        Nmax =  get_nmax(np.abs(ampl).max(), np.abs(hw).max())
+    
     Ei = E + _eta
     NELEC = len(AMPL)
     for j in range(NELEC):
@@ -190,6 +197,8 @@ def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
         kTj  = KTA[j]
         for n in range(-Nmax,Nmax + 1):
             fact = jn(n, Aj / hwj) * (1j**n)
+            if switch_static:
+                fact = 1.0
             ser  = SE[j].self_energy(Ei - n*hwj - eV0j, k=kp)
             gam  = 1j * (ser - ser.conj().T)
             fx   = fd(Ei.real - n*hwj - eV0j, kTj)
@@ -224,8 +233,11 @@ N_hw   = int((hw_max - hw_min)/float(options['dE'])) + 1
 N_ampl = int((ampl_max - ampl_min)/float(options['dE'])) + 1
 #hw_v   = np.logspace(np.log10(hw_min), np.log10(hw_max),     N_hw)
 #ampl_v = np.logspace(np.log10(ampl_min), np.log10(ampl_max), N_ampl)
+    
 hw_v   = np.linspace(hw_min,   hw_max,     N_hw)
 ampl_v = np.linspace(ampl_min, ampl_max, N_ampl)
+if options["w_zero"] == "True":
+    hw_v = np.hstack([np.array([0.0]), hw_v])
 PI     = np.zeros((len(hw_v), len(ampl_v), 2))
 ERR    = np.zeros((len(hw_v), len(ampl_v)   ))
 if rank == 0:
@@ -244,19 +256,14 @@ for i in range(len(hw_v)):
                            hw_v[i]])
             ampl = np.array([ ampl_v[j], 
                              -ampl_v[j] ])
-            nmax = get_nmax(ampl_v[j], hw_v[i])
-            limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.1
-            limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.1
-            #if options['showplot']=='True':
-            #    import matplotlib.pyplot as plt
-            #    Egrid = np.linspace(limlow, limhigh, 500) + _eta
-            #    res = np.array([calc_J(Ei, ampl, hw, bias, kTa) 
-            #                    for Ei in Egrid])
-            #    plt.plot(Egrid.real, res[:,1] - res[:,0])
-            #    plt.title("hw="+str(np.round(hw_v[i],3)) + ", ampl=" + str(np.round(ampl_v[j],3)))
-            #    plt.show()
-            El = []
-            Dl = []
+            if np.abs(hw_v[i]) < 1e-3:
+                print("Static switch on")
+                nmax = 0
+            else:
+                nmax = get_nmax(ampl_v[j], hw_v[i])
+            limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.125
+            limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.125
+            El, Dl = [], []
             out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
             lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
             higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
