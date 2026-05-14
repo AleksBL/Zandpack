@@ -4,13 +4,13 @@
 
 
 <img src="./Zandpack/svg/logo3.svg" width="200">
-
+<!--
 Join the signal group chat: 
 
 <img src="./Zandpack/svg/GroupChat.png" width="150">
 
 Ask questions, suggest improvements, or chat with an LLM about the code and get a start-up example!
-
+-->
 
 # Introduction
 Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields at the TD-DFT level. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code propagates the driven Heisenberg equation for the density matrix
