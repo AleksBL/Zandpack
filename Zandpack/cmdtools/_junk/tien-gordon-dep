@@ -14,8 +14,6 @@ import sisl
 from mpi4py import MPI
 from time import time, sleep
 from scipy.integrate import quad_vec
-from numba import njit
-from tqdm import tqdm
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -102,13 +100,11 @@ if os.path.isdir(options['device']):
         def __init__(self, fitSE, kidx):
             self.SE   = fitSE
             self.kidx = kidx
-            self.no   = fitSE.Coeffs.shape[-1]
+            self.no   = fitSE.Gi.shape[-1]
         def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
             # _kp is not used, only there for immitating the sisl method.
             _E = np.array([E])
-            # NOOPT = FALSE!
-            # Optimized functions.
-            return self.SE.evaluate(_E, noopt=False)[self.kidx, 0]
+            return self.SE.evaluate(_E)[self.kidx, 0]
     eidx = [np.arange(H.shape[-1])] * len(_SE)
     kidx = int(options['kidx'])
     if options['kidx'] != 'None':
@@ -152,7 +148,7 @@ else:
 SEr_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
 SEl_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
 SEg_eval = [np.zeros((se.no, se.no),dtype=complex)  for se in SE]
-# print(SEr_eval[0].shape)
+
 if mode=='sisl':
     Sk = Hd.Sk(k=kp); Hk = Hd.Hk(k=kp)
 elif mode=='fitted':
@@ -182,15 +178,6 @@ def fd(E, kT):
     if x<-150.0:
         return 1.0
     return 1/(np.exp(x) + 1.0)
-@njit
-def scalar_mult_add(A, s, out):
-    n1,n2 = A.shape
-    # print(A.shape, out.shape)
-    for i in range(n1):
-        for j in range(n1):
-            out[i,j] += s * A[i,j]
-SEg = np.zeros(Hk.shape,dtype=complex)
-SEl = np.zeros(Hk.shape,dtype=complex)
 def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
     if (np.abs(HW)< 1e-3).all():
         switch_static = True
@@ -202,36 +189,27 @@ def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
     Ei = E + _eta
     NELEC = len(AMPL)
     for j in range(NELEC):
-        SEr_eval[j][:,:] = 0.0
-        SEl_eval[j][:,:] = 0.0
-        SEg_eval[j][:,:] = 0.0
+        SEr_eval[j] = 0.0
+        SEl_eval[j] = 0.0
+        SEg_eval[j] = 0.0
         Aj   = AMPL[j]
         hwj  = HW[j]
         eV0j = BIAS[j]
         kTj  = KTA[j]
         for n in range(-Nmax,Nmax + 1):
+            fact = jn(n, Aj / hwj) * (1j**n)
             if switch_static:
                 fact = 1.0
-            else:
-                fact = jn(n, Aj / hwj) * (1j**n)
-            if mode == 'fitted':
-                ser  = SE[j].self_energy(Ei.real - n*hwj - eV0j, k=kp)
-            else:
-                ser  = SE[j].self_energy(Ei - n*hwj - eV0j, k=kp)
-            
+            ser  = SE[j].self_energy(Ei - n*hwj - eV0j, k=kp)
             gam  = 1j * (ser - ser.conj().T)
             fx   = fd(Ei.real - n*hwj - eV0j, kTj)
-            #scalar_mult_add(ser, fact, SEr_eval[j])
-            #scalar_mult_add(gam, ( 1j *  fact *      fx  ), SEl_eval[j])
-            #scalar_mult_add(gam, (-1j *  fact * (1 - fx) ), SEg_eval[j])
-            
-            SEr_eval[j] +=  fact * ser
+            SEr_eval[j] += fact * ser
             SEl_eval[j] += (1j *  fact *      fx  ) * gam
             SEg_eval[j] -= (1j * (fact * (1 - fx) ))* gam
     Gr = Sk * Ei
     Gr-= Hk
-    SEg[:,:] = 0.0
-    SEl[:,:] = 0.0
+    SEg = np.zeros(Gr.shape,dtype=complex)
+    SEl = np.zeros(Gr.shape,dtype=complex)
     for ie in range(NELEC):
         Gr [eidx[ie][:, None], eidx[ie][None,:]] -= SEr_eval[ie]
         SEg[eidx[ie][:, None], eidx[ie][None,:]] += SEg_eval[ie]
@@ -271,131 +249,40 @@ Eg_v  = []
 DOS_v = []
 hwa_inp=[]
 it     = 0
-
-if rank == 0:
-    avail = [True, ]*(size-1)
-    retn  = [None, ]*(size-1)
-    def get_status():
-        return [r.get_status() for r in retn]
-    
-    
-    N = len(hw_v) * len(ampl_v)
-    params = np.zeros((N, 2))
-    it = 0
-    for i in range(len(hw_v)):
-        for j in range(len(ampl_v)):
-            params[it, 0] =   hw_v[i]
-            params[it, 1] = ampl_v[j]
-            it+=1
-    del it
-    Results = []
-    it = 0
-    _t0 = time()
-    for p in params:
-        while any(avail)==False:
-            stats = get_status()
-            if any(stats):
-                avail[stats.index(True)]=True
-            sleep(0.05)
-        dest = avail.index(True)
-        _sendreq = comm.isend(p.copy(), dest=dest+1, tag=11)
-        _sendreq.wait()
-        avail[dest] = False
-        retn [dest] = comm.irecv(source = dest+1, tag=2)
-        print(" Done "+str(it) +" out of "+str(len(params)) )
-        it +=1
-        _tnow = time()
-        tperit = (_tnow - _t0)/it
-        its_left = len(params) - it
-        if np.mod(it, 10) == 0:
-            print(" Estimated time left: " + str(np.round(its_left * tperit/60, 3)) + " mins....")
-        
-        # out = comm.irecv(source = dest+1, tag=2)
-        # res = out.wait()
-        # Results += [res]
-        # print("Sent p=" +str(p))
-    
-    for i in range(1, size):
-        _sendreq = comm.isend('stop', dest=i, tag=11)
-        _sendreq.wait()
-    comm.Barrier()
-    sleep(2.0)
-    Results = []
-    for i in range(1, size):
-        Results.append(np.load("_rank"+str(i)+"res.npz",)["result"])
-    Results = np.vstack(Results)
-    Cur = np.zeros((len(hw_v), len(ampl_v), 2),dtype=complex)
-    Err = np.zeros((len(hw_v), len(ampl_v)),dtype=complex)
-    for i in range(len(hw_v)):
-        for j in range(len(ampl_v)):
-            hwi, ai = hw_v[i], ampl_v[j]
-            I = np.where((np.abs(Results[:,0] - hwi)<1e-10)*((np.abs(Results[:,1] - ai)<1e-10)))[0][0]
-            Cur[i,j,0] = Results[I,2]
-            Cur[i,j,1] = Results[I,3]
-            Err[i,j]   = Results[I,4]
-    np.savez_compressed(options["outfile"],
-                        cur=Cur,
-                        err=Err,
-                        hw=hw_v,
-                        ampl=ampl_v)
-    
+for i in range(len(hw_v)):
+    for j in range(len(ampl_v)):
+        if np.mod(it, size) == rank:
+            t1 = time()
+            hw = np.array([hw_v[i], 
+                           hw_v[i]])
+            ampl = np.array([ ampl_v[j], 
+                             -ampl_v[j] ])
+            if np.abs(hw_v[i]) < 1e-3:
+                print("Static switch on")
+                nmax = 0
+            else:
+                nmax = get_nmax(ampl_v[j], hw_v[i])
+            limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.125
+            limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.125
+            El, Dl = [], []
+            out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
+            lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
+            higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El))
             
-            
-            
-            
-    # print(Results.shape)
-else:
-    Res = []
-    while True:
-        req = comm.irecv(source=0, tag=11)
-        p   = req.wait()
-        # print("rank "+str(rank) + " received " +str(p))
-        if isinstance(p, str):
-            break
-        t1 = time()
-        hw   = np.array([p[0],  p[0]])
-        ampl = np.array([p[1], -p[1]])
-        if np.abs(p[0]) < 1e-3:
-            #print("Static switch on")
-            nmax = 0
-        else:
-            nmax = get_nmax(p[1], p[0])
-        limlow  =  -nmax * np.abs(hw).max() - np.abs(bias).max() - 0.125
-        limhigh =  +nmax * np.abs(hw).max() + np.abs(bias).max() + 0.125
-        El, Dl = [], []
-        
-        out    = quad_vec(calc_J, limlow, limhigh, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El), full_output=True)
-        lower  = quad_vec(calc_J, -np.inf, limlow, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El), full_output=True)
-        higher = quad_vec(calc_J, limhigh, np.inf, epsabs = epsabs, epsrel=epsrel, args=(ampl, hw, bias, kTa, Dl, El), full_output=True)
-        nev = out[2].neval + lower[2].neval + lower[2].neval
-        R1 = out[0][0] + lower[0][0] + higher[0][0]
-        R2 = out[0][1] + lower[0][1] + higher[0][1]
-        ERR= out[1]    + lower[1]    + higher[1]
-        # R1, R2, ERR, nev = 0.0, 0.0, 0.0, 0
-        Results = np.hstack([p,R1, R2, ERR])
-        #print(Results)
-        Res.append(Results)
-        t2 = time()
-        if False:
+            PI[i,j,0] = out[0][0]+lower[0][0]+higher[0][0]
+            PI[i,j,1] = out[0][1]+lower[0][1]+higher[0][1]
+            ERR[i,j]  = out[1] +lower[1]+higher[1]
+            t2 = time()
             print(  "rank " + str(rank) + ", progress: " 
                   + str(np.round(it*100 /(len(hw_v) * len(ampl_v)), 1)) 
-                  + ", T="+str(np.round(t2-t1, 1))+"s, res="+str([R1, R2, ERR]) 
+                  + ", T="+str(np.round(t2-t1, 1))+"s, res="+str(out[0]) 
                   + " #Bessel="+str(nmax) + " lims"+str(np.round(limlow,1)) 
-                  + " "+str(np.round(limhigh,1)) )
-            print(str(rank)+" #Evals: "+str(nev))
-        _sendreq = comm.isend(True, dest = 0, tag=2)
-        _sendreq.wait()
-        #_sendreq = comm.isend(Results, dest = 0, tag=2)
-        #_sendreq.wait()
-    np.savez_compressed("_rank"+str(rank)+"res.npz", result = Res)
-    comm.Barrier()
-    
-        
-        
-        
-        #Eg_v.append(  np.array(El) )
-        #DOS_v.append( np.array(Dl) )
-        #hwa_inp.append(np.hstack([hw, ampl]))
+                  + " "+str(np.round(limhigh,1))
+                  )
+            Eg_v.append(  np.array(El) )
+            DOS_v.append( np.array(Dl) )
+            hwa_inp.append(np.hstack([hw, ampl]))
+        it += 1
 
 Eg_v  = np.array(Eg_v, dtype=object)
 DOS_v = np.array(DOS_v, dtype=object)

@@ -17,7 +17,7 @@ import datetime
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
 from textwrap import dedent
 from numba import njit
-
+from time import sleep
 glob_test = False
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -459,8 +459,11 @@ class Control: # Replaces bash scripting
             return np.load(Hpath)
         except:
             print("Failed to load H from "+Hpath+". Did you run SCF first?")
-    def check(self):
+    def check(self, filename = None):
         HO = self.scf_H
+        Hdevi=np.abs(HO - HO.conj().transpose(0,2,1)).max()
+        if Hdevi>1e-5:
+            print("Your Hamiltonian is not Hermitian, check your calculation")
         if HO is None:
             print("No scf H in the directory.")
         else:
@@ -474,18 +477,20 @@ class Control: # Replaces bash scripting
                 return 1 / (1 + np.exp(E / kT))
             F2 = fd(e.ravel())
             maxdiff = np.abs(F1 - F2).max()
+            if filename is not None:
+                with open(filename, "w") as f:
+                    print("maxdiff: " + str(maxdiff), file=f)
+                    print("\nHermitian deviation: "+str(Hdevi),file=f)
+            
             if np.abs(F1 - F2).max()<1e-10:
                 print("Fermi expansion very good")
-                print("maxdiff: " + str(maxdiff))
             elif np.abs(F1 - F2).max()<1e-8:
                 print("Fermi expansion good")
-                print("maxdiff: " + str(maxdiff))
             elif np.abs(F1 - F2).max()<1e-5:
                 print("Fermi expansion mediocre")
-                print("maxdiff: " + str(maxdiff))
             elif np.abs(F1 - F2).max()>=1e-5:
                 print("Fermi expansion bad")
-                print("maxdiff: " + str(maxdiff))
+            print("maxdiff: " + str(maxdiff))
     
     def modify_occupation(self, N_F=None,     eigtol=None, 
                                 mu_i = None,  kT_i=None,
@@ -1221,12 +1226,19 @@ class DM_Lin_NO_OD:
         dH = self.dHdQ @ dq
         return dH
 def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
+    import shutil
+    
     os.system("cp -R "+name + " " + arc_name)
+    sleep(2.0)
     if keep_psi_omg_in_arc == False:
         os.system("rm "+arc_name + "/last_psi.npy")
         os.system("rm "+arc_name + "/last_omg.npy")
     if clean_original:
         os.system("rm "+name+"/DM*.npy")
+        os.system("rm "+name+"/DM*.npz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
-    
+
+def load_object(A):
+    import pickle
+    return pickle.load(open(A,'rb'))

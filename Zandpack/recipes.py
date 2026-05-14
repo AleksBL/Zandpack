@@ -99,7 +99,8 @@ def const_bias_and_sine(ControlInstance,
                         V, Ampl, w, tstart= 0.0,s = 2.5,
                         nozand = True, mpi = 'mpirun ', 
                         lines_inside_bias  = None,
-                        lines_outside_bias = None):
+                        lines_outside_bias = None,
+                        Contour=None):
     """
     Function for running a series of calculations with a bias function as
     V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
@@ -130,7 +131,7 @@ def const_bias_and_sine(ControlInstance,
     
     V    = np.round(V, 4)
     Ampl = np.round(Ampl,4)
-    w   = np.round(w, 4)
+    w    = np.round(w, 4)
     for vi in V:
         D = np.abs(np.array(SSV) - vi)
         idx = np.where(D == D.min())[0][0]
@@ -156,7 +157,7 @@ def const_bias_and_sine(ControlInstance,
                     C.run_scf(DM_randomness=0.0, write_dm_every=10, weight=0.1,
                               DM_start_file="UseThisDM.npy",
                               drho_tol = 1e-7, Nonequilibrium = True,
-                              # Contour="../mycontour_2.npy", 
+                              Contour=Contour, 
                               write_progress=True, adaptive_mixer = True
                               )
                     if C.scf_status==False:

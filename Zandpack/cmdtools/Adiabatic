@@ -65,7 +65,8 @@ options = {'dt': '0.5',          # fs
            'QP_n_wiggles': '10',
            'RefinedQP_outfile':'RefinedQP',
            'phase_convention_eigvecsumisreal':'1',
-           'Skip_section':'None'
+           'Skip_section':'None',
+           'start_only':'False',
            }
 
 
@@ -93,8 +94,11 @@ from Initial import t0, t1, hbar#, Arrs
 
 def dH_k(t,sigma):
     return dH(t,sigma)[int(options['ik'])]
+if options["start_only"]=='True':
+    times = np.array([t0])
+else:
+    times   = np.arange(t0,t1, float(options['dt']))
 
-times   = np.arange(t0,t1, float(options['dt']))
 Ham     = flexload(options['file']+'/Arrays/H_Ortho.npy')[int(options['ik'])]
 SEs     = from_saved_file(options['file'] + '/Arrays', ik = int(options['ik']))
 print('# SEs = ', len(SEs))
@@ -173,9 +177,9 @@ if options['Mode'] == 'Transport':
     print('Calculating steady-state/Adiabatic response properties at ', len(times), ' different timesteps!\n')
     print('')
 
-    if options['parallel'] == '0':
+    if options['parallel'] == '0' or options['parallel']=='False':
         Result = []
-        for ti in tqdm(times): Result += [[Current_DOS(ti)]]
+        for ti in tqdm(times): Result += [Current_DOS(ti)]
     else:
         Result = jl.Parallel(n_jobs  = int(options['num_procs']),
                              backend =     options['backend']   ,

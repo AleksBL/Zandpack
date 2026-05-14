@@ -11,7 +11,9 @@ import numba as nb
 from Block_matrices.Croy import (evaluate_Lorentz_basis_matrix, 
                                  evaluate_KK_matrix, 
                                  evaluate_Lorentz_basis_matrix_hermitian, 
-                                 evaluate_KK_matrix_hermitian)
+                                 evaluate_KK_matrix_hermitian,
+                                 evaluate_KK_matrix_opt,
+                                 evaluate_Lorentz_basis_matrix_opt)
 from Block_matrices.Block_matrices import Blocksparse2Numpy
 import sys
 sys.path.append(__file__[:-19])
@@ -30,7 +32,7 @@ class Lorentzian_SE:
         self.Ei     = Ei.copy()
         self.Gi     = Gi.copy()
     
-    def evaluate(self, E, bias = 0.0, tol = 1e-14, ik = 0, hermitian_parts=False):
+    def evaluate(self, E, bias = 0.0, tol = 1e-14, ik = 0, hermitian_parts=False, noopt = True):
         """E:    Complex (n,) np.ndarray
            bias: float, shifting E
         """
@@ -39,8 +41,15 @@ class Lorentzian_SE:
             im = -0.5j * evaluate_Lorentz_basis_matrix_hermitian(Ci, E-bias, Ei, Gi , tol  = tol)
             re =  0.5  * evaluate_KK_matrix_hermitian(           Ci, E-bias, Ei, Gi , tol  = tol)
         else:
-            im = -0.5j * evaluate_Lorentz_basis_matrix(Ci, E-bias, Ei, Gi , tol  = tol)
-            re =  0.5  * evaluate_KK_matrix(           Ci, E-bias, Ei, Gi , tol  = tol)
+            if noopt:
+                im = -0.5j * evaluate_Lorentz_basis_matrix(Ci, E-bias, Ei, Gi, tol  = tol)
+                re =  0.5  * evaluate_KK_matrix(           Ci, E-bias, Ei, Gi, tol  = tol)
+                return re + im
+            else:
+                res = np.zeros((Ci.shape[0], len(E), Ci.shape[2], Ci.shape[3]), dtype = np.complex128)
+                evaluate_Lorentz_basis_matrix_opt( Ci, E-bias, Ei, Gi, res , tol  = tol, fact = -0.5j)
+                evaluate_KK_matrix_opt(            Ci, E-bias, Ei, Gi, res , tol  = tol, fact =  0.5 )
+                return res
         return re+im
     
     def evaluate_gamma(self,E, bias = 0.0, tol=1e-15, force_hermitian=False):
