@@ -13,7 +13,7 @@ Ask questions, suggest improvements, or chat with an LLM about the code and get 
 
 
 # Introduction
-Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code propagates the driven Heisenberg equation for the density matrix
+Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields at the TD-DFT level. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code propagates the driven Heisenberg equation for the density matrix
 
 $i\hbar\frac{\mathrm{d}\sigma}{\mathrm{d}t} = [H(t, \sigma(t)), \sigma(t)] + i\sum_\alpha\left[\Pi_\alpha(t) + \Pi_\alpha^\dagger(t) \right]$. 
 
@@ -28,6 +28,7 @@ and allows for numerically exact open-system dynamics at the mean-field level. Y
        - The psinought tool for obtaining the steady state auxiliary mode wave-vectors.
        - The zand code to propagate the full initial state under timedependent bias and fields. This part is implemented using mpi4py and can scale to many compute nodes. 
  - Extensible: Supports custom interfaces for other LCAO-based DFT codes.
+       - Currently support for SIESTA and DFTB+ for use in open system TD-DFT. 
 
 ## Installation (see dependencies also)
 ### Untested way 
