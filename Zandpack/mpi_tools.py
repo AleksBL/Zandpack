@@ -68,18 +68,17 @@ def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, spli
             f = [f[i] for i in idx]
             tf= [tf[i] for i in idx]
         for ff in f:
-            #_dm = np.load(d+'/'+ff)
             _dm = flexload(d+'/'+ff)
             if insert_tril:
                 herm_insert_tril(_dm)
             DM += [_dm]
-        
         for ff in tf:
             T+=[np.load(d+'/'+ff)]
         count += 1
     DM  =  np.vstack(DM)
     T   =   np.hstack(T)#[:-count]
     return T, DM
+
 @nb.njit
 def herm_insert_tril(A):
     n1,n2 = A.shape[-2:]
@@ -171,16 +170,22 @@ def closest_dm(times, Dir, dt_avg, times_label = 'DMt'):
 #     N   =  np.vstack(N)
 #     T   =   np.hstack(T)
 #     return T, N
-def occupation_number(dirs, times_label = "DMt", insert_tril = False, S = None, splitN = None):
+
+def occupation_number(dirs, times_label = "DMt", insert_tril = False, S = None, splitN = None, X = None):
     """
     splitN is here to make it possible to split the DM loading into #splitN chunks
     thereby saving memory.
     S if given should be the overlap matrix to properly account for 
     a device overlap.
     if you have put dm_triu_only in the TDcalculation, set insert_tril=True
+    if you give X, then you will be calculating the expectation value of X 
+    during the time-dependent calculation, as if the central region was an isolated 
+    molecule (which is strictly speaking wrong).
     """
     if splitN is None:
         t,dm = combine_dm(dirs, times_label = times_label, insert_tril = insert_tril)
+        if X is not None:
+            dm = dm @ X
         if S is None:
             return t, np.trace(dm, axis1=2, axis2=3)
         else:
@@ -194,11 +199,37 @@ def occupation_number(dirs, times_label = "DMt", insert_tril = False, S = None, 
                                     split       = splitN, 
                                     split_rank  = i )
             ct += [t]
+            if X is not None:
+                dm = dm @ X
             if S is None:
                 cN += [np.trace(dm,axis1=2,axis2=3)]
             else:
                 cN += [np.sum(dm * S[None,:,:,:], axis=(2,3))]
         return np.hstack(ct), np.vstack(cN)
+
+def read_all_currents(Direc, name, n=2):
+    F = find_matches(os.listdir(Direc), name)
+    out = {}
+    for f in F:
+        try:
+            out[f]=combine_currents([Direc + f], n=n)
+        except:
+            print("Failed to read currents in" + Direc + f)
+    return out
+
+def eval_all(Direc, name, X=None,  times_label = "DMt", insert_tril = False, S = None, splitN = None):
+    F = find_matches(os.listdir(Direc), name)
+    out = {}
+    for f in F:
+        try:
+            out[f] = occupation_number([Direc + f], times_label=times_label ,insert_tril=insert_tril, 
+                                       S=S, splitN=splitN, X=X)
+        except:
+            print("Failed on " + Direc + f)
+    return out
+
+def find_matches(L, name):
+    return [fi for fi in L if name in fi]
 
 def partial_charges(dirs, times_label = 'DMt', Transform=None):
     from tqdm import tqdm
@@ -225,12 +256,32 @@ def partial_charges(dirs, times_label = 'DMt', Transform=None):
     T   =  np.hstack(T)
     return T, Ni
 
-def interp_and_fft(x,y,N):
-    xx = np.linspace(x.min(), x.max(), N)
-    f  = interp1d(x,y)
-    yy = f(xx)
-    yy = np.pad(yy,(N//2, N//2))
-    dx = xx[1] - xx[0]
+def rolling_minmax(x,y,W):
+    res = np.zeros((len(x), 2), dtype=y.dtype)
+    for i in range(len(x)):
+        xi   = x[i]
+        dt   = np.abs(x-xi)
+        idx  = np.where(dt<W)[0]
+        Ymin = y[idx].min()
+        Ymax = y[idx].max()
+        res[i,:] = Ymin, Ymax
+    return res
+
+def interp_and_fft(x,y,N, x0= None, x1 = None, fact= None):
+    if x0 is not None and x1 is not None and fact is not None:
+        idx = np.where((x>x0)*(x<x1))[0]
+        N =  fact * len(idx)
+        xx = np.linspace(x[idx].min(), x[idx].max(),N)
+        f  = interp1d(x,y)
+        yy = f(xx)
+        yy = np.pad(yy,(N//2, N//2))
+        dx = xx[1] - xx[0]
+    else:
+        xx = np.linspace(x.min(), x.max(), N)
+        f  = interp1d(x,y)
+        yy = f(xx)
+        yy = np.pad(yy,(N//2, N//2))
+        dx = xx[1] - xx[0]
     return np.fft.rfft(yy), np.fft.rfftfreq(2*N, dx)
 def interp_and_fft_complex(x,y,N):
     xx = np.linspace(x.min(), x.max(), N)

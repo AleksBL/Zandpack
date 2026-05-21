@@ -159,9 +159,21 @@ class TDHelper:
         specific_info+= '------------------------------------\n'
         specific_info+= '------------------------------------\n'
         return specific_info
-    
     def print_help(self):
         print(helpstring)
+    def S_subset(self, idx, noncorrected = True):
+        if noncorrected:
+            S = self.ncS.copy()
+        else:
+            S = self.S.copy()
+        idx2 = np.array([i for i in range(self.no) if i not in idx])
+        for i in idx2:
+            for j in range(self.no):
+                S[:,i,j] = 0.0
+        for i in idx:
+            for j in idx2:
+                S[:,i,j] = 0.0
+        return S
         
 helpstring = \
 """

@@ -185,7 +185,6 @@ def fd(E, kT):
 @njit
 def scalar_mult_add(A, s, out):
     n1,n2 = A.shape
-    # print(A.shape, out.shape)
     for i in range(n1):
         for j in range(n1):
             out[i,j] += s * A[i,j]
@@ -334,7 +333,7 @@ if rank == 0:
             Cur[i,j,1] = Results[I,3]
             Err[i,j]   = Results[I,4]
     np.savez_compressed(options["outfile"],
-                        cur=Cur,
+                        Jrect=Cur,
                         err=Err,
                         hw=hw_v,
                         ampl=ampl_v)
@@ -397,24 +396,24 @@ else:
         #DOS_v.append( np.array(Dl) )
         #hwa_inp.append(np.hstack([hw, ampl]))
 
-Eg_v  = np.array(Eg_v, dtype=object)
-DOS_v = np.array(DOS_v, dtype=object)
-hwa_inp = np.array(hwa_inp)
-
-np.savez_compressed("rank_tmp_"+str(rank)+options["outfile"], 
-                    Jrect = PI,  Eg_v  = Eg_v,
-                    err   = ERR, DOS_v = DOS_v, hwa_inp = hwa_inp
-                    )
-comm.Barrier()
-sleep(0.05)
-if rank == 0:
-    Jout = np.zeros((len(hw_v), len(ampl_v), 2))
-    Err  = np.zeros((len(hw_v), len(ampl_v)))
-    for i in range(size):
-        f   = np.load("rank_tmp_"+str(i)+options["outfile"])
-        res = f["Jrect"]
-        Jout += res
-        Err  += f["err"]
-    np.savez_compressed(options["outfile"],
-                        Jrect = Jout, err = Err,
-                        hw = hw_v, ampl=ampl_v)
+#Eg_v  = np.array(Eg_v, dtype=object)
+#DOS_v = np.array(DOS_v, dtype=object)
+#hwa_inp = np.array(hwa_inp)
+#
+#np.savez_compressed("rank_tmp_"+str(rank)+options["outfile"],
+#                    Jrect = PI,  Eg_v  = Eg_v,
+#                    err   = ERR, DOS_v = DOS_v, hwa_inp = hwa_inp
+#                    )
+#comm.Barrier()
+#sleep(0.05)
+#if rank == 0:
+#    Jout = np.zeros((len(hw_v), len(ampl_v), 2))
+#    Err  = np.zeros((len(hw_v), len(ampl_v)))
+#    for i in range(size):
+#        f   = np.load("rank_tmp_"+str(i)+options["outfile"])
+#        res = f["Jrect"]
+#        Jout += res
+#        Err  += f["err"]
+#    np.savez_compressed(options["outfile"],
+#                        Jrect = Jout, err = Err,
+#                        hw = hw_v, ampl=ampl_v)
