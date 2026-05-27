@@ -5,6 +5,7 @@ import numba as nb
 from tqdm import tqdm
 from Zandpack.Loader import flexload
 from scipy.interpolate import interp1d
+from scipy.integrate import cumulative_simpson
 
 ld = os.listdir
 
@@ -45,6 +46,17 @@ def combine_currents(dirs, n=2):
     CC  =  [np.vstack(C[i]) for i in range(n)]
     T   =   np.hstack(T)[:-count]
     return T, CC
+
+def rectified_charge(dirs, n = 2, wgts =[0.5, -0.5], idx = 0):
+    res = []
+    for d in dirs:
+        t,j = combine_currents([d])
+        Jt  = np.zeros(len(t))
+        for k in range(n):
+            Jt += wgts[k] * j[k][:, idx]
+        res.append([t[1:].copy(), cumulative_simpson(Jt, x = t)])
+    return res
+
 
 def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, split_rank = None):
     """

@@ -116,7 +116,13 @@ else:
 # Shift Contour, (Re(Ei), Im(Ei),Re(Wi), Im(Wi))  in (np, 4) format
 Cntr[:,0] +=  _mu.min()
 nprocs     =  int(options['nprocs'])
-if options["adaptive_mixer"]=='False':
+BAN_ADAPTIVE_MIXER = False
+if "BAN_ADAPTIVE_MIXER" in os.environ.keys():
+    if os.environ["BAN_ADAPTIVE_MIXER"] == "True":
+        print("SCF: Adaptive mixer BANNED!!")
+        BAN_ADAPTIVE_MIXER=True
+
+if options["adaptive_mixer"]=='False' or BAN_ADAPTIVE_MIXER:
     mixer  = sisl.mixing.PulayMixer(weight=float(options['weight']),history = int(options['history']))
 else:
     mixer  = sisl.mixing.AdaptivePulayMixer(weight=float(options['weight']),history = int(options['history']))

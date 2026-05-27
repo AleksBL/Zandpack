@@ -16,6 +16,7 @@ from time import time, sleep
 from scipy.integrate import quad_vec
 from numba import njit
 from tqdm import tqdm
+from Zandpack.td_constants import hbar
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -30,7 +31,7 @@ if rank == 0:
     print('')
 _check = True
 #Default values
-options = {'file': 'SaveFile',   # directory
+options = {# 'file': 'SaveFile',   # directory
            'dE_ampl':0.1,
            'dE_hw':0.1,
            'eta':1e-3,
@@ -51,7 +52,12 @@ options = {'file': 'SaveFile',   # directory
            'wtol':'1e-6',
            'int_epsrel':'1e-3',
            'int_epsabs':'1e-4',
-           'w_zero':"True"
+           'w_zero':"True",
+           'print':'False',
+           'read_hw_ampl': 'False',
+           'manual_hw'   : 'manual_hw.npy',
+           'manual_ampl' : 'manual_ampl.npy',
+           'phase_conv':"standard"
            }
 
 pref = 'tien-gordon: '
@@ -124,6 +130,7 @@ if os.path.isdir(options['device']):
     
 
 # N    = int(options['n_terms'])
+
 hw_min = float(options['hw_min'])
 hw_max = float(options['hw_max'])
 
@@ -177,9 +184,9 @@ def get_nmax(ampl, hw, nsamps = 4):
     return n - nsamps//2
 def fd(E, kT):
     x = E/kT
-    if x>150.0:
+    if x>200.0:
         return 0.0
-    if x<-150.0:
+    if x<-200.0:
         return 1.0
     return 1/(np.exp(x) + 1.0)
 @njit
@@ -190,6 +197,8 @@ def scalar_mult_add(A, s, out):
             out[i,j] += s * A[i,j]
 SEg = np.zeros(Hk.shape,dtype=complex)
 SEl = np.zeros(Hk.shape,dtype=complex)
+phase_conv = options["phase_conv"]
+
 def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
     if (np.abs(HW)< 1e-3).all():
         switch_static = True
@@ -208,16 +217,27 @@ def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
         hwj  = HW[j]
         eV0j = BIAS[j]
         kTj  = KTA[j]
+        if phase_conv == 'standard':
+            Phase = 1.0
+        elif phase_conv =='cos_t0':
+            if switch_static:
+                Phase = 1.0
+            else:
+                Phase = np.exp( + 1j * (Aj / hwj))
+        else:
+            print("Didnt recognize your phase convention, using standard.")
+            Phase = 1.0
+        
         for n in range(-Nmax,Nmax + 1):
             if switch_static:
                 fact = 1.0
             else:
-                fact = jn(n, Aj / hwj) * (1j**n)
+                fact = jn(n, Aj / hwj)  * (1j**n)
+                fact *= Phase
             if mode == 'fitted':
                 ser  = SE[j].self_energy(Ei.real - n*hwj - eV0j, k=kp)
             else:
                 ser  = SE[j].self_energy(Ei - n*hwj - eV0j, k=kp)
-            
             gam  = 1j * (ser - ser.conj().T)
             fx   = fd(Ei.real - n*hwj - eV0j, kTj)
             #scalar_mult_add(ser, fact, SEr_eval[j])
@@ -236,30 +256,35 @@ def calc_J(E, AMPL, HW, BIAS, KTA, DOS_list, Eg_list):
         SEg[eidx[ie][:, None], eidx[ie][None,:]] += SEg_eval[ie]
         SEl[eidx[ie][:, None], eidx[ie][None,:]] += SEl_eval[ie]
     if mode == 'sisl':
-        Gr = np.linalg.inv(  Gr.toarray()    )
+        Gr = np.linalg.inv( Gr.toarray() )
     elif mode=='fitted':
-        Gr = np.linalg.inv(  Gr  )
+        Gr = np.linalg.inv( Gr )
     Ga  = Gr.T.conj()
     out = np.zeros(NELEC)
     for ie in range(NELEC):
         idx  = eidx[ie]
         Gg2  = Gr[idx] @ SEg @ Ga[:, idx]
         Gl2  = Gr[idx] @ SEl @ Ga[:, idx]
-        out[ie]  = 2*np.einsum('ij,ji',Gg2, SEl_eval[ie]).real
-        out[ie] -= 2*np.einsum('ij,ji',Gl2, SEg_eval[ie]).real
-    DOS_list.append(1j*np.trace(Gr - Ga)/np.pi)
-    Eg_list.append(E)
+        # Pi = Gg2 @ SEl_eval[ie] - Gl2 @ SEg_eval[ie]
+        # out[ie] = 2 * np.trace(Pi).real/(2 * np.pi * hbar )
+        out[ie]  = 2*np.einsum('ij,ji',Gg2, SEl_eval[ie]).real / (2 * np.pi )
+        out[ie] -= 2*np.einsum('ij,ji',Gl2, SEg_eval[ie]).real / (2 * np.pi )
+        
+    # DOS_list.append(1j*np.trace(Gr - Ga)/np.pi)
+    # Eg_list.append(E)
     return out
 
-N_hw   = int((hw_max   - hw_min  ) / float(options['dE_hw']  )) + 1
-N_ampl = int((ampl_max - ampl_min) / float(options['dE_ampl'])) + 1
-#hw_v   = np.logspace(np.log10(hw_min), np.log10(hw_max),     N_hw)
-#ampl_v = np.logspace(np.log10(ampl_min), np.log10(ampl_max), N_ampl)
-    
-hw_v   = np.linspace(hw_min,   hw_max,     N_hw)
-ampl_v = np.linspace(ampl_min, ampl_max, N_ampl)
+if options["read_hw_ampl"]=='True':
+    hw_v = np.load(options["manual_hw"])
+    ampl_v=np.load(options["manual_ampl"])
+else:
+    N_hw   = int((hw_max   - hw_min  ) / float(options['dE_hw']  )) + 1
+    N_ampl = int((ampl_max - ampl_min) / float(options['dE_ampl'])) + 1
+    hw_v   = np.linspace(hw_min,   hw_max,     N_hw)
+    ampl_v = np.linspace(ampl_min, ampl_max, N_ampl)
 if options["w_zero"] == "True":
     hw_v = np.hstack([np.array([0.0]), hw_v])
+
 PI     = np.zeros((len(hw_v), len(ampl_v), 2))
 ERR    = np.zeros((len(hw_v), len(ampl_v)   ))
 if rank == 0:
@@ -276,8 +301,6 @@ if rank == 0:
     retn  = [None, ]*(size-1)
     def get_status():
         return [r.get_status() for r in retn]
-    
-    
     N = len(hw_v) * len(ampl_v)
     params = np.zeros((N, 2))
     it = 0
@@ -309,11 +332,6 @@ if rank == 0:
         if np.mod(it, 10) == 0:
             print(" Estimated time left: " + str(np.round(its_left * tperit/60, 3)) + " mins....")
         
-        # out = comm.irecv(source = dest+1, tag=2)
-        # res = out.wait()
-        # Results += [res]
-        # print("Sent p=" +str(p))
-    
     for i in range(1, size):
         _sendreq = comm.isend('stop', dest=i, tag=11)
         _sendreq.wait()
@@ -321,7 +339,7 @@ if rank == 0:
     sleep(2.0)
     Results = []
     for i in range(1, size):
-        Results.append(np.load("_rank"+str(i)+"res.npz",)["result"])
+        Results.append(np.load("_deletable_rank"+str(i)+"res.npz",)["result"])
     Results = np.vstack(Results)
     Cur = np.zeros((len(hw_v), len(ampl_v), 2),dtype=complex)
     Err = np.zeros((len(hw_v), len(ampl_v)),dtype=complex)
@@ -337,6 +355,7 @@ if rank == 0:
                         err=Err,
                         hw=hw_v,
                         ampl=ampl_v)
+    print("TOTAL RUNTIME " +str((time() - _t0)/60) + " min")
     
             
             
@@ -353,7 +372,8 @@ else:
             break
         t1 = time()
         hw   = np.array([p[0],  p[0]])
-        ampl = np.array([p[1], -p[1]])
+        # Sign here is somewhat ambigous???
+        ampl = np.array([-p[1], p[1]])
         if np.abs(p[0]) < 1e-3:
             #print("Static switch on")
             nmax = 0
@@ -372,7 +392,8 @@ else:
         ERR= out[1]    + lower[1]    + higher[1]
         # R1, R2, ERR, nev = 0.0, 0.0, 0.0, 0
         Results = np.hstack([p,R1, R2, ERR])
-        #print(Results)
+        if options["print"]=='True':
+            print(Results)
         Res.append(Results)
         t2 = time()
         if False:
@@ -386,7 +407,9 @@ else:
         _sendreq.wait()
         #_sendreq = comm.isend(Results, dest = 0, tag=2)
         #_sendreq.wait()
-    np.savez_compressed("_rank"+str(rank)+"res.npz", result = Res)
+    name = "_deletable_rank"+str(rank)+"res.npz"
+    os.system("rm " + name)
+    np.savez_compressed(name, result = Res)
     comm.Barrier()
     
         

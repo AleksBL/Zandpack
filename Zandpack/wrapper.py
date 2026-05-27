@@ -152,6 +152,12 @@ class Input:   # Handles the Initial.py file
             text += "    S_ee = float(os.environ[\"S_EE\"])\n"
             text += "except:\n"
             text += "    S_ee = 1.0\n"
+        else:
+            text += "try:\n"
+            text += "    S_ee = float(os.environ[\"S_EE\"])\n"
+            text += "except:\n"
+            text += "    S_ee = 1.0\n"
+
         if isinstance(bias, str):
             text += dedent(bias)
         else:
@@ -182,7 +188,7 @@ class Input:   # Handles the Initial.py file
             text+="    bareH0 = Hlp.bare_H0(orthogonal=orth)\n"
             if hook.scheme == 'lin_mul':
                 text+="from Zandpack.wrapper import Mull_Lin_NO as Linear\n"
-                text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank)\n"
+                text+="lin_dh = Linear(\"MullikenLin_NO.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
                 text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
@@ -196,7 +202,7 @@ class Input:   # Handles the Initial.py file
                 text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
             elif hook.scheme == 'lin_odm':
                 text+="from Zandpack.wrapper import DM_Lin_O as Linear\n"
-                text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank)\n"
+                text+="lin_dh = Linear(\"DM_Lin_O.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
                 text+="    assert np.abs(lin_dh.dm0-Hlp.DM0).max() < "+str(dm_diff_tol)+"\n"
@@ -210,7 +216,7 @@ class Input:   # Handles the Initial.py file
                 text+="        return lin_dh.H0 + ldH(sigNO2O(sig)) - bareH0 \n"
             elif hook.scheme == 'lin_nodm':
                 text+="from Zandpack.wrapper import DM_Lin_NO as Linear\n"
-                text+="lin_dh = Linear(\"DM_Lin_NO.npz\", rank)\n"
+                text+="lin_dh = Linear(\"DM_Lin_NO.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
                 text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
@@ -224,7 +230,7 @@ class Input:   # Handles the Initial.py file
                 text+="        return lin_dh.H0 + ldH(sig) - bareH0 \n"
             elif hook.scheme == 'lin_nodm_od':
                 text+="from Zandpack.wrapper import DM_Lin_NO_OD as Linear\n"
-                text+="lin_dh = Linear(\"DM_Lin_NO_OD.npz\", rank)\n"
+                text+="lin_dh = Linear(\"DM_Lin_NO_OD.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
                 text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
@@ -244,7 +250,7 @@ class Input:   # Handles the Initial.py file
                 text+="        return H_from_DFT(sig) - bareH0\n"
             elif hook.scheme == 'lin_dftb':
                 text+="from Zandpack.wrapper import DFTB_Lin as Linear\n"
-                text+="lin_dh = Linear(\"Lin_DFTB.npz\", rank)\n"
+                text+="lin_dh = Linear(\"Lin_DFTB.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
                 text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
@@ -629,6 +635,43 @@ class Control: # Replaces bash scripting
             self.run_cmd_standard(exc," > psi0.out", **kwargs)
         else:
             self.run_cmd_standard(custom_exec, " > psi0.out", **kwargs)
+    def run_tiengordon(self, hwv, amplv, mpi="mpirun ", eta=0.01, 
+                       bias=[0.0, 0.0], kT = [0.025, 0.025], kidx=0, outfile='tgout.npz', 
+                       wtol=1e-5, int_epsrel=1e-3, int_epsabs=1e-4, w_zero=False, read_hw_ampl=True,
+                       ):
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        kwargs["device"]         = self.input.name
+        kwargs["read_hw_ampl"] = "True"
+        kwargs["manual_hw"]    = "tg_manual_hw.npy"
+        kwargs["manual_ampl"]  = "tg_manual_ampl.npy"
+        kwargs["hw_min"]  = "0.0"
+        kwargs["hw_max"]  = "0.0"
+        kwargs["ampl_min"]= "0.0"
+        kwargs["ampl_max"]= "0.0"
+        
+        self.into_wd()
+        np.save("tg_manual_hw.npy",   hwv )
+        np.save("tg_manual_ampl.npy", amplv)
+        self.out_wd()
+        for k in arg_values.args:
+            if k=='self':
+                continue
+            elif k == 'hwv':
+                continue
+            elif k =='amplv':
+                continue
+            else:
+                kwargs[k] = arg_values.locals[k]
+        exc = " ".join(self.prepend_env_vars + [mpi, "tien-gordon"])
+        print('Running tien-gordon')
+        self.run_cmd_standard(exc," > tg.out", **kwargs)
+        res   = np.load(self.working_dir + "/"+outfile)
+        Jrect = res["Jrect"]
+        Err   = res["err"]
+        return Jrect, Err
+    
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "
         for kw in kwargs.keys():
@@ -1101,10 +1144,11 @@ if rank == 0:
         
 
 class DFTB_Lin:
-    def __init__(self, file, rank):
+    def __init__(self, file, rank, S_ee):
         if rank != 0:
             return
         try:
+            print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
             self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
@@ -1114,6 +1158,7 @@ class DFTB_Lin:
             self.dq   = f["dq"]
             self.S    = f["S"]
             self.FileNotFound = False
+            self.S_ee = S_ee
             assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True    
@@ -1121,14 +1166,15 @@ class DFTB_Lin:
         Q = self.S @ sigNO + sigNO @ self.S
         q = np.diag(Q[0])
         dq = q - self.q0
-        dH = self.dHdQ @ dq
+        dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 
 class Mull_Lin_NO:
-    def __init__(self, file, rank):
+    def __init__(self, file, rank, S_ee):
         if rank != 0:
             return
         try:
+            print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
             self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
@@ -1139,6 +1185,7 @@ class Mull_Lin_NO:
             self.dq   = f["dq"]
             self.S    = f["S"]
             self.FileNotFound = False
+            self.S_ee = S_ee
             assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True
@@ -1147,15 +1194,16 @@ class Mull_Lin_NO:
         Q = self.S @ sigNO + sigNO @ self.S
         q = np.diag(Q[0])
         dq = q - self.q0
-        dH = self.dHdQ @ dq
+        dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 
 
 class DM_Lin_O:
-    def __init__(self, file, rank):
+    def __init__(self, file, rank, S_ee):
         if rank != 0:
             return
         try:
+            print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
             self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
@@ -1165,18 +1213,20 @@ class DM_Lin_O:
             self.S    = f["S"]
             self.q    = np.diag(self.dm0[0])
             self.FileNotFound = False
+            self.S_ee = S_ee
             assert f["dm_in_ortho_basis"] == True
         except:
             self.FileNotFound = True
     def linearized_H(self, sigO):
         dq = np.diag(sigO[0]) - self.q
-        dH = self.dHdQ @ dq
+        dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 class DM_Lin_NO:
-    def __init__(self, file, rank):
+    def __init__(self, file, rank, S_ee):
         if rank != 0:
             return
         try:
+            print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
             self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
@@ -1186,12 +1236,13 @@ class DM_Lin_NO:
             self.S    = f["S"]
             self.q    = np.diag(self.dm0[0])
             self.FileNotFound = False
+            self.S_ee = S_ee
             assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True
     def linearized_H(self, sigNO):
         dq = np.diag(sigNO[0]) - self.q
-        dH = self.dHdQ @ dq
+        dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 @njit
 def get_elements(M, idx):
@@ -1203,10 +1254,11 @@ def get_elements(M, idx):
     return out
 
 class DM_Lin_NO_OD:
-    def __init__(self, file, rank):
+    def __init__(self, file, rank, S_ee):
         if rank != 0:
             return
         try:
+            print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
             self.dHdQ  = f["dHdQ"].transpose(1,2,0).copy()
@@ -1218,13 +1270,15 @@ class DM_Lin_NO_OD:
             self.S     = f["S"]
             self.q     = get_elements(self.dm0[0], self.idx_O)
             self.FileNotFound = False
+            self.S_ee = S_ee
             assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True
     def linearized_H(self, sigNO):
         dq = get_elements(sigNO[0], self.idx_O) - self.q
-        dH = self.dHdQ @ dq
+        dH = self.dHdQ @ (dq * self.S_ee)
         return dH
+
 def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
     import shutil
     

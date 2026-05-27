@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue May 26 10:37:30 2026
+
+@author: aleks
+"""
+
+import numpy as np
+from scipy.special import jn
+import sys
+import os
+args    = sys.argv[1:]
+options = {"hw_v":"hw.npy",
+           "ampl_v":"ampl.npy",
+           "file":"SteadyStateFile.npz",
+           'i':"0", 
+           'j':"1",
+           "Nmax":"2",
+           "mu":"0.0",
+           "outfile":"tgnaivecond.npz",
+           "show":"False",
+           }
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+f = np.load(options["file"])
+T = f["Transmission"][0,int(options["i"]),int(options["j"])]
+E = f["Eg_DOS"]
+Emin, Emax = E.min(), E.max()
+hwv  = np.load(options["hw_v"])
+ampl = np.load(options["ampl_v"])
+nw = len(hwv)
+na = len(ampl)
+res= np.zeros((nw, na))
+N  = int(options["Nmax"])
+mu = float(options["mu"])
+for iw in range(nw):
+    hw = hwv[iw]
+    for ia in range(na):
+        ai = ampl[ia]
+        for iN in range(-N, N+1):
+            Ei = mu + iN * hw
+            if (Ei > Emax) or Ei < Emin:
+                print("Energy outside of range from the "+options["file"])
+                print("Inserting NaN")
+                res[iw, ia]  = np.nan
+            else:
+                res[iw, ia] += jn(iN, ai/hw)**2 * np.interp(Ei, E, T)
+
+np.savez_compressed(options["outfile"], conductance = res)
+if options["show"] == 'True':
+    import matplotlib.pyplot as plt
+    plt.matshow(res)
+    plt.show()
+    plt.plot(hwv, res)
+    plt.xlabel(r"$\hbar \omega$ [eV]")
+    plt.show()
+    plt.plot(ampl, res.T)
+    plt.xlabel(r"Amplitude")
+    plt.show()
+    

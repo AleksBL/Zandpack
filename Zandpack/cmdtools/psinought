@@ -34,6 +34,15 @@ print('psinought program start')
 print('')
 print('sys.argv:', sys.argv)
 print('OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)')
+print("Current envvars:")
+try:
+    print("OMP_NUM_THREADS=" + os.environ["OMP_NUM_THREADS"])
+except:
+    pass
+try:
+    print("MKL_NUM_THREADS=" + os.environ["MKL_NUM_THREADS"])
+except:
+    pass
 print('')
 _check = True
 
@@ -45,7 +54,7 @@ options = {'file': 'SaveFile',   # directory
            'dl':'1.0', # dep.
            'steptol':'1e-8',#tolerance
            'add_random':'False',     # initial guess
-           'random_weight':'0.0001', # initial guess
+           'random_weight':'0.0', # initial guess
            #'use_csr':'False',
            'L_info':'False',         # additional information related to ODE.
            'Axb_solver':'cgs',       # scipy solver, cgs, minres, gmres
@@ -58,7 +67,8 @@ options = {'file': 'SaveFile',   # directory
            'prec_to_disk':'False',
            'outer_einsum':'True',
            'use_preconditioner':'True',
-           'start_psi':'None'
+           # 'start_psi':'None'
+           "reuse_psi":"True",
            }
 
 
@@ -153,11 +163,12 @@ def SM(iA, u, v, out):
 
 PSI = np.zeros((nk,na,nx, noT,no),dtype=complex)
 OMG = np.zeros((nk,na,nx, noT,na,nx, noT),dtype=complex)
+savedir=options['file']+'_save'
 
 print(pref + 'Converging steady-state with DM from     '+options['file']+'/Arrays/   folder.')
 print(pref + 'Particle number: ', np.trace(DM0,axis1=1,axis2=2))
 print(pref + 'Bias:            ', bias_a)
-print(pref + 'size:            ', (nk,na,nx,noT,no))
+print(pref + 'size:            ', (int(nk),int(na),int(nx),int(noT),int(no)))
 print(pref + 'Operator Dims:   ', np.prod((nk,na,nx,noT,no)), ' X ',np.prod((nk,na,nx,noT,no)),)
 mdot = np.linalg.multi_dot
 inv  = np.linalg.inv
@@ -367,7 +378,6 @@ for IK in range(nk):
     if options['extreme_memory_save']=='True':
         print(pref + ' Attempting to use float16 during construction of preconditioner! ')
     bvec     = B3()
-    print(pref + 'Construct preconditioner done.')
     def matvec3(v):
         return Av3(v, outvec, OPSI, alloc_psi, psic#, includefrac=fracdef
                    )
@@ -381,18 +391,39 @@ for IK in range(nk):
         x        = preconditioner@bvec
     else:
         preconditioner = None
-        x = np.random.random(len(bvec),dtype=complex)
+        x  = bvec.copy()
+        x += np.random.random(len(bvec))
+        x *= 0.1 / np.linalg.norm(x)
+    print(pref + 'Construct preconditioner done.')
     if options['add_random']=='True':
         x   += np.random.random(len(bvec))*float(options['random_weight'])
     if options['start_psi']!='None':
-        x    = np.load(options['start_psi'])[IK].reshape(na*nx*noT*no)
-        x = np.hstack([x.real, x.imag])
-        print(pref + "Read initial Psi given in "+options["start_psi"])
+        try:
+            x = np.load(options['start_psi'])[IK].reshape(na*nx*noT*no)
+            x = np.hstack([x.real, x.imag])
+            print(pref + "Read initial Psi given in "+options["start_psi"])
+        except:
+            print("Failed to read start_psi = " + options["start_psi"] )
+            pass
+    elif options["reuse_psi"] == 'True':
+        # Here we try to reuse the obvious place any previously calculated psi
+        # would be (in the name_save directory).
+        try:
+            _x = np.load(savedir+'/last_psi.npy')[IK].reshape(na*nx*noT*no)
+            x  = np.hstack([_x.real, _x.imag])
+            del _x
+            print(pref + "Read initial psi0 given in " + savedir)
+        except:
+            if options["use_preconditioner"]=='True':
+                print("Starting Calculation with x = Preconditioner * b ")
+            else:
+                print("Using random start: norm(x) = "+str(np.linalg.norm(x)))
+            pass
     print(pref + options['Axb_solver'] + ' solver started')
-    LO       = LinearOperator((N,N), matvec = matvec3,dtype=np.float64)
+    LO        = LinearOperator((N,N), matvec = matvec3,dtype=np.float64)
     maxit     = int(options['maxiter'])
     fails     = 0
-    fracdef   =  0.0
+    fracdef   = 0.0
     step      = float(options['dl'])
     t1        = time()
     x,info,its= solve_sparse(LO, bvec, 
@@ -415,7 +446,11 @@ for IK in range(nk):
                                                    +np.conj(PSI[IK,aa,xx,:]).dot(   xi[a,x,o]) * deltaP[a,x,o]
                                                     )*(1j*hbar)/(xpm[aa, xx,:] - xpp[a,x,o])
     
-    # Calculate Derivative
+    # Calculate derivative
+    # Note that there is some not errornous but badly coded in terms of 
+    # readability when the derivative of psi ad sigma is calculated in each
+    # k-point. In dPsi, the first index is always used, even though its an 
+    # array with nk entries in the first index. 
     if options['checkderivative']=='True':
         dPsi = np.zeros(PSI.shape,dtype=complex)
         for a in range(na):
@@ -448,7 +483,6 @@ for IK in range(nk):
         print(pref +'----------------------')
         
 files = os.listdir()
-savedir=options['file']+'_save'
 if savedir not in files:
     os.mkdir(savedir)
 np.save(savedir+'/last_psi.npy',PSI)
