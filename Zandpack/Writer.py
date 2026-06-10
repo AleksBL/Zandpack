@@ -100,7 +100,18 @@ def write_to_file_compressed(A, dirname):
     np.save('_GpC_Eigenvalues',A.GpC_eig)
     np.save('Positions',       A.Device.pos_real_space)
     for _ie, idx in enumerate(A.read_coupling_inds):
-        np.save("read_coupling_idx_"+str(_ie), np.array([np.where(K==A.pivot)[0][0] for K in idx]))
+        # This way does not work when A.pivot are a subset of the original pivot indices
+       ## np.save("read_coupling_idx_"+str(_ie), np.array([np.where(K==A.pivot)[0][0] for K in idx]))
+        # NEW 10.06.2026
+        # Here we check if the index is in the subbed pivot indices, else we just skip it. 
+        elec_idx=[]
+        for K in idx:
+            if K in A.pivot:
+                elec_idx += [np.where(K==A.pivot)[0][0]]
+            else:
+                pass
+        np.save("read_coupling_idx_"+str(_ie), np.array(elec_idx))
+        
     try:
         import sisl
         HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".TSHS").read_hamiltonian()

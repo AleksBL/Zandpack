@@ -100,7 +100,7 @@ def const_bias_and_sine(ControlInstance,
                         nozand = True, mpi = 'mpirun ', 
                         lines_inside_bias  = None,
                         lines_outside_bias = None,
-                        Contour=None):
+                        Contour=None, label = ""):
     """
     Function for running a series of calculations with a bias function as
     V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
@@ -184,10 +184,9 @@ def const_bias_and_sine(ControlInstance,
                                  lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
                     C.run_nozand(mpi)
-                C.archive_calculation(C.input.name 
-                                      + "_save_V_"+str(vi)
-                                      + "_A_"+str(ai)
-                                      + "_w_"+str(wi))
+                outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
+                outname = label + outname
+                C.archive_calculation(outname)
 
 
 

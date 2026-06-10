@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue May 26 10:37:30 2026
+
+@author: aleks
+"""
+
+import numpy as np
+from scipy.special import jn
+import sys
+import os
+from scipy.integrate import solve_ivp
+import sisl
+from time import time
+from Zandpack.td_constants import hbar
+from numba import njit
+
+args    = sys.argv[1:]
+options = {"proj_inds":"projs.npy",
+           "kT":"0.025",
+           "max_iter": "100",
+           "drho_tol":"0.0001", 
+           "obs":'None',
+           "t0":"-10.0", 
+           "t1":"30.0", 
+           "mu":"0.0",
+           'fig':'plot.svg',
+           'scaleX':'1.0',
+           'jdos':'False',
+           'hw_min':"0.0",
+           "hw_max":"8.0",
+           'hw_N':"2000",
+           "eta":"0.05", 
+           "NI":"False",
+           'ylabel':r"$\mu_x / E_x$",
+           'xlabel':r"$\hbar\omega$",
+           "gauss_spread":"None"
+           }
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+import Initial as init
+from Bias import dH, orth
+assert orth
+
+idx = np.load(options["proj_inds"])
+dm0 = np.load(init.name + '/Arrays/DM_Ortho.npy')[:, idx][:,:,idx].copy()
+h0  = np.load(init.name + '/Arrays/H_Ortho.npy' )[:, idx][:,:,idx].copy()
+kT  = float(options["kT"])
+mu  = float(options["mu"])
+#if options[""]
+t0  = float(options["t0"])
+t1  = float(options["t1"])
+DM_full = np.load(init.name + '/Arrays/DM_Ortho.npy')
+def dm2DM(dm):
+    ic = 0
+    for i in idx:
+        jc = 0
+        for j in idx:
+            DM_full[:,i,j] = dm[:, ic, jc]
+            jc += 1
+        ic += 1
+@njit
+def dm2DM_fast(dm, DM):
+    ic = 0
+    for i in idx:
+        jc = 0
+        for j in idx:
+            DM[:,i,j] = dm[:, ic, jc]
+            jc += 1
+        ic += 1
+
+def f(E):
+    return 1/(1 + np.exp((E - mu)/kT))
+
+def undiag(f,v):
+    F = np.zeros(v.shape,dtype=complex)
+    for i in range(f.shape[-1]):
+        F[:, i,i] = f[:,i]
+    return v @ F @ np.conj(v.transpose(0,2,1))
+
+def h2dm(h):
+    e,v = np.linalg.eigh(h)
+    fe  = f(e)
+    dm  = undiag(fe, v)
+    return dm
+def proj2inds(M):
+    if M.ndim==2:
+        return M[idx[:, None], idx[None,:]]
+    elif M.ndim == 3:
+        return M[:, idx[:, None], idx[None,:]]
+    else:
+        assert 1 == 0, "Dim error in proj2inds"
+def dm2h(t, dm):
+    # dm2DM(dm)
+    dm2DM_fast(dm, DM_full)
+    return h0 + proj2inds(dH(t, DM_full))
+nk    = 1
+no    = h0.shape[-1]
+mixer = sisl.mixing.AdaptivePulayMixer(weight=0.1, history=6)
+def unravel(s):
+    n = nk*no*no
+    a = np.zeros(Shape, dtype=np.complex128)
+    a[:,:,:] +=    s[0:n  ].reshape(Shape)
+    a[:,:,:] += 1j*s[n:2*n].reshape(Shape)
+    return a
+def ravel(s):
+    return np.hstack([s.ravel().real, s.ravel().imag])
+
+rhoi    = dm0.copy()
+Shape   = rhoi.shape
+counter = 0
+_t1     = time()
+maxit   = int(options['max_iter'])
+success = True
+delta   = np.random.random((100))
+while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
+    print("Tr(rho) = "+str(np.round(np.trace(rhoi,axis1=1,axis2=2), 5)))
+    H    = dm2h(t0, rhoi)
+    rhof = h2dm(H)
+    delta= rhof - rhoi
+    delta          = rhof - rhoi
+    outmix         = mixer(ravel(rhoi), ravel(delta))
+    rhoi[:,:,:]    = unravel(outmix)
+    counter += 1
+dm0 = rhoi
+print("Tr(rho) = "+str(np.trace(dm0,axis1=1,axis2=2)))
+@njit
+def calcJDOS(E, e, fe, eta):
+    out = 0.0 + 0.0j
+    n   = len(e)
+    ieta= 1/eta
+    for i in range(n):
+        for j in range(n):
+            fd  = fe[i] - fe[j]
+            ed  = e[j]  - e[i]
+            out+= fd * np.exp(-(((E - ed)*(ieta))**2))
+    return out
+
+@njit
+def calc_whole_jdos(hw_v, e, fe, eta):
+    nk = e.shape[0]
+    res = np.zeros((nk, hw_v.shape[0]),dtype=np.complex128)
+    for ik in range(nk):
+        for i in range(len(hw_v)):
+            res[ik, i] = calcJDOS(hw_v[i], e[ik], fe[ik], eta)
+    return res
+
+if options["jdos"] == 'True':
+    e   = np.linalg.eigvalsh(dm2h(t0, dm0))
+    hwl = np.linspace(float(options["hw_min"]),
+                      float(options["hw_max"]),
+                      int(options["hw_N"]))
+    eta = float(options['eta'])
+    hwl = hwl
+    fe = f(e)
+    print("calculating JDOS")
+    JDOS = calc_whole_jdos(hwl, e, fe, eta)
+    print("JDOS done")
+    JDOS = JDOS.sum(axis=0)*(1/np.pi)
+if options["NI"] == "False":
+    NI = False
+else:
+    NI = True
+
+C = -1j / hbar
+def heis(t, y):
+    dm   = y.reshape(nk, no, no)
+    if NI:
+        Hdm  = dm2h(t, dm0)
+    else:
+        Hdm  = dm2h(t, dm)
+    res  = Hdm @ dm
+    res -= res.conj().transpose(0,2,1)
+    assert np.abs(dm  -  dm.conj().transpose(0,2,1)).max()<1e-7, "ERROR : " +str(np.abs(dm- dm.conj().transpose(0,2,1)).max()) + " at t="+str(t)
+    assert np.abs(Hdm - Hdm.conj().transpose(0,2,1)).max()<1e-7, "ERROR : " +str(np.abs(Hdm- Hdm.conj().transpose(0,2,1)).max()) + " at t="+str(t)
+    res *= C
+    return res.ravel()    
+
+Nt    = 4000
+teval = np.linspace(t0, t1, Nt)
+_T1   = time()
+out   = solve_ivp(heis, (t0, t1), dm0.ravel(), 
+                  method='DOP853', t_eval=teval,
+                  rtol=1e-10, atol=1e-10, )
+_T2 = time()
+print("TDDFT took : " + str(np.round(_T2 - _T1, 2)) +"secs")
+print(out.y.shape)
+DMf = out.y.T.reshape(len(teval), nk, no,no)
+if options["obs"] != "None":
+    import matplotlib.pyplot as plt
+    from Zandpack.plot import interp_and_fft
+    X  = np.load(options["obs"])[..., idx,:][..., idx].copy() * float(options["scaleX"])
+    print(np.abs(X).max())
+    x  = np.trace(X @ DMf, axis1=2, axis2=3 )
+    x -= x[0]
+    fs, w = interp_and_fft(teval, x[:,0].real, Nt)
+    if options["gauss_spread"] != None:
+        gauss_s = float(options["gauss_spread"])
+    else:
+        gauss_s = 0.5
+    fb,wb = interp_and_fft(teval, np.array([0.01 * np.exp(-(ti/gauss_s)**2) for ti in teval]), Nt)
+    idx_max = np.where(np.abs(fb) <(0.025 * np.abs(fb).max()))[0][0]
+    wmax = wb[idx_max]
+    ii = np.where(w<wmax)[0]
+    y = np.abs(fs[ii]/fb[ii])
+    if options["jdos"]=='True':
+        plt.plot(hwl,JDOS/JDOS.max() * 2.0 * y.max(),label = 'JDOS')
+    label = "Response"
+    if options["NI"]=='True':
+        label += " (Non-int.)"
+    plt.plot(2 * np.pi * hbar * w[ii], np.abs(fs[ii]/fb[ii]), label = label)
+    plt.xlim(0,    2 * np.pi * hbar *  wmax )
+    plt.ylim(0, None)
+    plt.legend()
+    plt.grid(which='both', linestyle='-', linewidth=0.5, alpha=0.5)
+    plt.minorticks_on()
+    plt.xlabel( r"" + options['xlabel'])
+    plt.ylabel( r"" + options['ylabel'])
+    plt.savefig(options["fig"])

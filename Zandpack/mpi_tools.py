@@ -57,7 +57,6 @@ def rectified_charge(dirs, n = 2, wgts =[0.5, -0.5], idx = 0):
         res.append([t[1:].copy(), cumulative_simpson(Jt, x = t)])
     return res
 
-
 def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, split_rank = None):
     """
     like combine_currents, but for the density matrix instead.
@@ -226,7 +225,7 @@ def read_all_currents(Direc, name, n=2):
         try:
             out[f]=combine_currents([Direc + f], n=n)
         except:
-            print("Failed to read currents in" + Direc + f)
+            print("Failed to read currents in " + Direc + f)
     return out
 
 def eval_all(Direc, name, X=None,  times_label = "DMt", insert_tril = False, S = None, splitN = None):

@@ -95,7 +95,8 @@ class Input:   # Handles the Initial.py file
                    os_envvar=[], bias=None, dH=None, 
                    hook = None, use_lin=False, dm_diff_tol = 1e-4, 
                    lines_inside_bias= None,
-                   lines_outside_bias=None):
+                   lines_outside_bias=None, put_lob_last=False, 
+                   check_H_hermitian=False):
         """
         Writes the Bias.py file, where the timedependent bias functions are defined, together with the dH function, which specifies
         how the Hamiltonian depends on time, spatial coordinates and density. The dissipator function is also defined here. 
@@ -173,7 +174,7 @@ class Input:   # Handles the Initial.py file
             for l in lines_inside_bias:
                 text+="    " +l + "\n"
         text+="    return out\n"
-        if lines_outside_bias is not None:
+        if lines_outside_bias is not None and put_lob_last == False:
             for l in lines_outside_bias:
                 text += l +"\n"
         
@@ -262,7 +263,17 @@ class Input:   # Handles the Initial.py file
                 text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
                 text+="    else:\n"
                 text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
-            
+            if check_H_hermitian:
+                text += "if rank == 0:\n"
+                text += "    from Zandpack.Help import check_H_herm\n"
+                text += "    if orth:\n"
+                text += "        check_H_herm(Hlp.DM0,          Hlp.H0,          "+str(self.t0)+", dH)\n"
+                text += "    else:\n"
+                text += "        check_H_herm(sigO2NO(Hlp.DM0), HamO2NO(Hlp.H0), "+str(self.t0)+", dH)\n"
+                
+        if lines_outside_bias is not None and put_lob_last:
+            for l in lines_outside_bias:
+                text += l +"\n"
         with open(prefix + "/Bias.py", "w") as f:
             f.write(text)
         if self.verbose:

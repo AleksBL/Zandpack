@@ -1831,7 +1831,8 @@ class TD_Transport:
                     self.setLval(e, I, J, i, j, rn, ik=ik)
     
     def Inspect_Transmission(self,i, j,lead = 0, kpnt = None,
-                             return_result = False, invinp = None, xlims = None):
+                             return_result = False, invinp = None, xlims = None,
+                             fname = None):
         print('\n Subbed transmission vs TBtrans transmission. \n')
         '''
         This function is for checking the transmission and comparing your subbed 
@@ -1868,6 +1869,8 @@ class TD_Transport:
             plt.legend()
             if xlims is not None:
                 plt.xlim(xlims)
+            if fname is not None:
+                plt.savefig(fname)
             plt.show()
         else:
             T01 = _T01[kpnt]

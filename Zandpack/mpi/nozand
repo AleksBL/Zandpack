@@ -253,7 +253,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     def hnew(hin, TEin):
         return hnew_func(hin, TE, eps)
 
-    Sm05 = D["S^(-0.5)"]  # NEW
+    Sm05 = D["S^(-0.5)"].astype(np.complex128)  # NEW
     S05  = np.linalg.inv(Sm05)  # NEW
     _overlap = S05 @ S05
     _overlap_nonzero = np.abs(_overlap)>1e-6
@@ -263,17 +263,27 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     else:
         _orthogonal = False
     ####
-    H0  = S05 @ D["H_Ortho"] @ S05  # NEW
+    H0  = S05 @ D["H_Ortho"].astype(np.complex128) @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
     if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
         print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
-        print("Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
         H0 = 0.5 * (H0 + H0.conj().transpose(0,2,1))
+    else:
+        print("nozand error in check for hermiticity. Your device Hamiltonian is not hermitian.")
+        print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
+        assert 1 == 0, "H0 is not Hermitian, why is this??"
     H0_BW_L,H0_BW_U = bandwidth(H0)
     H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
     if (H0_BW_L == H0_BW_U ) == False:
         print("is H0 hermitian: ", np.allclose(H0, H0.conj().transpose(0,2,1)))
-        print("Diff: ", np.abs((H0 - H0.conj().transpose(0,2,1))).max())
+        print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (OHam): " + str(np.abs(D["H_Ortho"] - D["H_Ortho"].transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (S05): " + str(np.abs(S05 - S05.transpose(0,2,1).conj()).max()))
+        
         print('differing bandwidths:')
         print(H0_BW_L)
         print(H0_BW_U)
@@ -682,7 +692,7 @@ def Worker(role_info):
     eig_idx = role_info[4]
     neig = len(eig_idx)
     
-    Sm05 = D["S^(-0.5)"]  # NEW
+    Sm05 = D["S^(-0.5)"].astype(np.complex128)  # NEW
     S05  = np.linalg.inv(Sm05)  # NEW
     Sm1  = Sm05 @ Sm05  # NEW
     if np.abs((S05 @ S05) - np.eye(Sm1.shape[-1])).max() < 1e-10:
@@ -759,8 +769,9 @@ def Worker(role_info):
     tmp_Ht       = CZ((nk, NO, NO))
     
     ####
-    H0  = S05 @ D["H_Ortho"] @ S05  # NEW
+    H0  = S05 @ D["H_Ortho"].astype(np.complex128) @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
+    print("Worker Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
     if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
         print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
         print("Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))

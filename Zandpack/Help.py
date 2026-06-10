@@ -64,6 +64,9 @@ class TDHelper:
         self.S         = self.invLowdin @ self.invLowdin
         self.ncS       = self.S + self.Sig1_NO.sum(axis=0)
         self.piv       = flexload(self.dir+'/pivot.npy')
+        # ADDED 01.06.2026
+        # self.ipiv      = np.array([np.where(self.piv == i)[0][0] for i in range(len(self.piv))])
+        # 
         self.positions = flexload(self.dir+'/Positions.npy')
         try:
             o2a = flexload(self.dir+'/pivot_o2a.npy')
@@ -110,6 +113,11 @@ class TDHelper:
         """ returns S^(1/2) @ A @ S^(1/2)
         """
         return self.invLowdin @ A @ self.invLowdin
+    def get_DM(self, orthogonal=False):
+        if orthogonal:
+            return self.DM0
+        else:
+            return self.lowdin_transform(self.DM0)
     def bare_H0(self, orthogonal = False):
         """ The Hamiltonian without the lead-device orthogonalisation terms and
             the correction to H (from using the Renormalise_H function in the TD_Transport class).
@@ -243,4 +251,26 @@ def wait_for_new_H():
 def remove_NEWH():
     os.remove('NEWH.txt')
 
+def check_H_herm(dm, H0, t0, dH, n = 10, tol = 1e-6, rweight=0.0125, hard_fail = False):
+    shape = dm.shape
+    all_passed = True
+    for i in range(n):
+        dr  = (np.random.random(shape) - 0.5) * rweight
+        dr += dr.transpose(0,2,1).conj()
+        dm_test = dm + dr
+        H = H0 + dH(t0, dm_test)
+        diff = np.abs(H - H.conj().transpose(0,2,1)).max()
+        if diff > tol:
+            print("Tested H was not hermitian within tolerance " + str(tol))
+            all_passed = False
+            if hard_fail:
+                assert 1 == 0, "H was not found to be hermitian"
+    if all_passed:
+        print("H passed the test for hermiticity.")
+        
+    
+    
+    
+    
+    
 
