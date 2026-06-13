@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 14 14:47:00 2022
+
+@author: aleksander
+
+Set the savetime of a calculation specified in
+the two positional arguments
+
+do a lossydm --help to see usage.
+
+"""
+
+import sys
+import os
+import numpy as np
+from Zandpack.plot import DM
+from time import sleep
+args = sys.argv[1:]
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+options = {'folder':'ABC_save',
+           'delete':'False',
+           "tol":"1e-6",
+           "delete":"True",
+           }
+for a in args:
+    if 'command' not in a:
+        split = a.replace(' ', '').split('=')
+    else:
+        split = a.split('=')
+    options.update({split[0]:split[1]})
+
+if '--help' in args:
+    print("Args: ")
+    print(options)
+    #print('Usage: set_time Dir=$PWD "folder" "float"')
+    exit()
+
+tdm, dm = DM([options["folder"]])
+
+ti    = tdm[0] + 0.0
+dmi   = dm[0].copy()
+tout  = [ti]
+dmout = [dmi]
+nt    = len(tdm)
+tol   = float(options["tol"])
+for i in range(1,nt):
+    if np.abs(dmi - dm[i]).max()>tol:
+        ti  = tdm[i] + 0.0
+        dmi =  dm[i].copy()
+        tout.append(ti)
+        dmout.append(dmi)
+
+tout  = np.array(tout)
+dmout = np.array(dmout)
+print("From "+str(nt) + " to " + str(len(tout)) + " points ")
+#print(tout.shape)
+#print(dmout.shape)
+#print(tdm.shape)
+#print(dm.shape)
+np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", tdm = tout, dm = dmout, t_orig = tdm)
+assert "LossyDensityMatrix.npz" in os.listdir(options["folder"])
+
+if "LossyDensityMatrix.npz" in os.listdir(options["folder"]):
+    if options["delete"]=="True":
+        os.system("rm "+options["folder"]+"/DM*.npy")
+        os.system("rm "+options["folder"]+"/DM*.npz")
+    
+# import matplotlib.pyplot as plt
+# plt.plot(tdm, dm[:, 0, 55,55].real)
+# plt.plot(tout, dmout[:, 0, 55,55].real, linestyle="dashed")
+# plt.show()
+
+
+        
+
+# print()
+# 
+# for f in os.listdir():
+#     if 'last_time' in f:
+#         np.save(f, t_new)
+# os.chdir('..')
+
+
