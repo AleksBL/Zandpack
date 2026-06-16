@@ -57,7 +57,8 @@ def rectified_charge(dirs, n = 2, wgts =[0.5, -0.5], idx = 0):
         res.append([t[1:].copy(), cumulative_simpson(Jt, x = t)])
     return res
 
-def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, split_rank = None):
+def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, split_rank = None, 
+               prefer_lossy_dm = True, lossy_dm_arc=False, prefer_full=True):
     """
     like combine_currents, but for the density matrix instead.
     """
@@ -68,7 +69,21 @@ def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, spli
     
     for d in dirs:
         f = ld(d)
+        if "LossyDensityMatrix.npz" in f:
+            arc = np.load(d+"/"+"LossyDensityMatrix.npz")
+        else:
+            arc = None
         f = [v for v in f if 'DM' in v and 'DMt' not in v]
+        if len(f)>0 and prefer_full:
+            pass
+        else:
+            if lossy_dm_arc:
+                return arc
+            dm = arc["dm"]
+            if insert_tril:
+                herm_insert_tril(dm)
+            return arc["tdm"], dm
+        
         f.sort(key=natural_keys)
         tf = [v for v in ld(d) if times_label in v]
         tf.sort(key=natural_keys)

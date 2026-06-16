@@ -24,7 +24,7 @@ new_folder = os.getcwd()
 sys.path.append(new_folder)
 options = {'folder':'ABC_save',
            'delete':'False',
-           "tol":"1e-6",
+           "tol":"0.5e-6",
            "delete":"True",
            }
 for a in args:
@@ -37,7 +37,6 @@ for a in args:
 if '--help' in args:
     print("Args: ")
     print(options)
-    #print('Usage: set_time Dir=$PWD "folder" "float"')
     exit()
 
 tdm, dm = DM([options["folder"]])
@@ -49,40 +48,38 @@ dmout = [dmi]
 nt    = len(tdm)
 tol   = float(options["tol"])
 for i in range(1,nt):
-    if np.abs(dmi - dm[i]).max()>tol:
+    if np.abs(dmi-dm[i]).max()>tol:
         ti  = tdm[i] + 0.0
         dmi =  dm[i].copy()
         tout.append(ti)
         dmout.append(dmi)
-
 tout  = np.array(tout)
 dmout = np.array(dmout)
 print("From "+str(nt) + " to " + str(len(tout)) + " points ")
-#print(tout.shape)
-#print(dmout.shape)
-#print(tdm.shape)
-#print(dm.shape)
-np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", tdm = tout, dm = dmout, t_orig = tdm)
+np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", 
+                    tdm = tout, dm = dmout, t_orig = tdm, tol = tol)
 assert "LossyDensityMatrix.npz" in os.listdir(options["folder"])
 
 if "LossyDensityMatrix.npz" in os.listdir(options["folder"]):
     if options["delete"]=="True":
+        print("Deleting previous DMs from "+options["folder"])
         os.system("rm "+options["folder"]+"/DM*.npy")
         os.system("rm "+options["folder"]+"/DM*.npz")
-    
-# import matplotlib.pyplot as plt
-# plt.plot(tdm, dm[:, 0, 55,55].real)
-# plt.plot(tout, dmout[:, 0, 55,55].real, linestyle="dashed")
-# plt.show()
 
 
-        
 
-# print()
-# 
-# for f in os.listdir():
-#     if 'last_time' in f:
-#         np.save(f, t_new)
-# os.chdir('..')
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

@@ -182,7 +182,51 @@ class TDHelper:
             for j in idx2:
                 S[:,i,j] = 0.0
         return S
-        
+    
+
+    
+def spectrumX(Hlp, Dir, X, t_lims = [-10, 60], hwmax=6.0, 
+              use_ncS=True, insert_tril=False, f_pert=None, N_interp=4,
+              use_current=False, k_idx = 0, jweight = [0.5, -0.5]):
+    from Zandpack.plot import interp_and_fft, N, J
+    from Zandpack.td_constants import hbar
+    
+    if isinstance(X, str):
+        X = np.load(X)
+    if isinstance(Hlp, str):
+        Hlp = TDHelper(Hlp)
+    S = Hlp.S
+    if use_ncS:
+        S = Hlp.ncS
+    if use_current:
+        t,j = J([Dir])
+        x = np.zeros((len(t)),dtype=complex)
+        for k in len(j):
+            x += j[k][:,k_idx]*jweight[k]
+        x = x.real
+    else:
+        t, x = N([Dir], insert_tril = insert_tril, S=S, X=X)
+        x  = x[:,0].real
+    idx = np.where((t>t_lims[0])*(t<t_lims[1]))[0]
+    f,  w  = interp_and_fft(t[idx], x[idx],N_interp*len(idx))
+    idx2 = np.where(w<(hwmax/((2 * np.pi * hbar))))[0]
+    wresp = np.pi * 2 * hbar * w[idx2]
+    fresp = f[idx2]
+    
+    if f_pert is None:
+        return wresp, fresp
+    else:
+        fb, wb = interp_and_fft(t[idx], np.array([f_pert(ti) for ti in t[idx]]), N_interp*len(idx))
+        R = fresp / fb[idx2]
+        return wresp, R
+    
+    
+    
+    
+    
+    
+
+
 helpstring = \
 """
     This class is intended for helping with:
@@ -268,9 +312,3 @@ def check_H_herm(dm, H0, t0, dH, n = 10, tol = 1e-6, rweight=0.0125, hard_fail =
     if all_passed:
         print("H passed the test for hermiticity.")
         
-    
-    
-    
-    
-    
-
