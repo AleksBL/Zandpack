@@ -58,7 +58,7 @@ import numpy as np
 #     os.chdir('../')
 
 
-def write_to_file_compressed(A, dirname):
+def write_to_file_compressed(A, dirname, write_ixi=True):
     try:
         os.mkdir(dirname)
     except:
@@ -94,7 +94,8 @@ def write_to_file_compressed(A, dirname):
     np.save('diff_GGP_GLP',    A.diff_ggp_glp)
     np.save('diff_GGM_GLM',    A.diff_ggm_glm)
     np.savez_compressed('xi',  A.xi)
-    np.savez_compressed('Ixi', A.Ixi)
+    if write_ixi:
+        np.savez_compressed('Ixi', A.Ixi)
     np.save('_Gl_Eigenvalues', A.Gl_eig)
     np.save('_GpB_Eigenvalues',A.GpB_eig)
     np.save('_GpC_Eigenvalues',A.GpC_eig)
@@ -145,7 +146,9 @@ def write_to_file_compressed(A, dirname):
     
     os.chdir('../')
     os.chdir('../')
-    
+
+
+# DEPRECATED WRITE FUNCTION
 def write_to_file(A, dirname):
     try:
         os.mkdir(dirname)

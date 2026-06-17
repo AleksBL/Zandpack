@@ -93,10 +93,15 @@ def from_saved_file(directory, ik = None, print_nonherm_warning=True):
     
     if mode == 'fromeig':
         Nl        =  np.load(directory + '/num_lorentzians.npy')
-        #Nf        =  np.load(directory + '/num_poles_fermi.npy')
+        # Nf        =  np.load(directory + '/num_poles_fermi.npy')
         Nlead     =  np.load(directory + '/num_leads.npy'   )
         xi        =  flexload(directory + '/xi.npy')
-        Ixi       =  flexload(directory + '/Ixi.npy')
+        try:
+            Ixi   =  flexload(directory + '/Ixi.npy')
+        except:
+            # Added 17.06.2026 to enable smaller file sizes.
+            print("Warning: Failed to find Ixi.npy, defaulting to hermitian conjugate of xi")
+            Ixi   = xi.conj()
         EigVal_Gl =  np.load(directory + '/_Gl_Eigenvalues.npy')
         #EigVal_Gp =  np.load(directory + '/_Gp_Eigenvalues.npy')
         SEs       =  []

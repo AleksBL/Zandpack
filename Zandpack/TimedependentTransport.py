@@ -1115,7 +1115,8 @@ class TD_Transport:
         print('\n----------------\n ' + str((self.psi_idx == -1).sum() / self.psi_idx.size * 100) + '% of psis are set to zero!')
     
     def tofile(self,name='TDT', tol=1e-7,create_arrays=False, 
-                fixphase=None, sorting='abs', exact_fermi=False):
+                fixphase=None, sorting='abs', exact_fermi=False,
+                write_ixi=True):
         """Wraps a series of steps for obtaining the end file
            in an easy to use function. 
            specifies the lowest absolute value for the eigenvalues.
@@ -1128,7 +1129,7 @@ class TD_Transport:
         self.diagonalise(sorting=sorting, fixphase=fixphase)
         self.get_propagation_quantities(use_exact_fermi=exact_fermi)
         self.get_dense_matrices_purenp(zero_tol=tol,create_arrays=create_arrays)
-        self.write_to_file(name=name)
+        self.write_to_file(name=name, write_ixi=write_ixi)
     
     def Renormalise_H(self, custom_mat):
         """
@@ -2184,12 +2185,18 @@ class TD_Transport:
         plt.plot(E,   block[ik,:,i,j].imag,label = r'Lorentz fit of $-\Gamma/2$'+string,linestyle = 'dashed', color='red')
         plt.legend()
     
-    def write_to_file(self, name='TDT', compressed=True):
-        if compressed:
-            from Writer import write_to_file_compressed as write
-        else:
-            from Writer import write_to_file as write
-        write(self, name)
+    def write_to_file(self, name='TDT', compressed=True, write_ixi=True):
+        from Writer import write_to_file_compressed as write
+        write(self, name, write_ixi=write_ixi)
+        if compressed==False:
+            print("compressed keyword in write to file does not have any effect anymore. Compression is always used now.")
+        #Removed 17.06.2026 to always use the compressed version.
+        #if compressed:
+        #    from Writer import write_to_file_compressed as write
+        #else:
+        #    from Writer import write_to_file as write
+        #write(self, name)
+        
     
     def figures(self,subE = None, manual_D = None, 
                 axes=[0,1], custom_bp = None, spin=0, 
