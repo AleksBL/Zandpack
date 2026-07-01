@@ -17,15 +17,17 @@ import os
 import numpy as np
 from Zandpack.plot import DM
 from time import sleep
+import subprocess
 args = sys.argv[1:]
 path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
 options = {'folder':'ABC_save',
-           "tol":"1e-9",
+           "tol":"0.5e-7",
            "delete":"True",
-           "interpolation":"step"
+           "interp":"step",
+           "usexz":"True"
            }
 if '--help' in args:
     print("Args: ")
@@ -51,6 +53,7 @@ nt    = len(tdm)
 tol   = float(options["tol"])
 
 if options["interp"]=="step":
+    print("step interpolation")
     for i in range(1,nt):
         if np.abs(dmi-dm[i]).max()>tol:
             ti  = tdm[i] + 0.0
@@ -61,6 +64,7 @@ if options["interp"]=="step":
     dmout = np.array(dmout)
     
 elif options["interp"]=="linear":
+    print("linear interpolation")
     from numba import njit
     @njit
     def absmax(A, tv, idx):
@@ -121,18 +125,34 @@ print("From "+str(nt) + " to " + str(len(tout)) + " points ")
 # plt.show()
 # assert 1 == 0
 
-
 # Transpose of dm for better time-locality in the data, which means more similar numbers
-np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", 
-                    tdm = tout, dm = dmout.transpose(1,2,3,0), 
-                    t_orig = tdm, tol = tol)
-assert "LossyDensityMatrix.npz" in os.listdir(options["folder"])
+if options["usexz"] == "False":
+    np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", 
+                        tdm = tout, dm = dmout.transpose(1,2,3,0), 
+                        t_orig = tdm, tol = tol)
+else:
+    npz_path = options["folder"] + "/LossyDensityMatrix.npz"
+    np.savez(npz_path,  # uncompressed, so xz has raw bytes to work with
+             tdm=tout, dm=dmout.transpose(1,2,3,0),
+             t_orig=tdm, tol=tol)
+    subprocess.run(["xz", "-9", "-e", "-T0", "-f", npz_path], check=True)
+assert ("LossyDensityMatrix.npz.xz" in os.listdir(options["folder"]) ) or ("LossyDensityMatrix.npz" in os.listdir(options["folder"]))
 
-if "LossyDensityMatrix.npz" in os.listdir(options["folder"]):
+if options["usexz"]=="True":
     if options["delete"]=="True":
         print("Deleting previous DMs from "+options["folder"])
         os.system("rm "+options["folder"]+"/DM*.npy")
         os.system("rm "+options["folder"]+"/DM*.npz")
+        os.system("rm "+options["folder"]+"/LossyDensityMatrix.npz")
+if options["usexz"]=="False":
+    if options["delete"]=="True":
+        print("Deleting previous DMs from "+options["folder"])
+        os.system("rm "+options["folder"]+"/DM*.npy")
+        os.system("rm "+options["folder"]+"/DM*.npz")
+        os.system("rm "+options["folder"]+"/LossyDensityMatrix.npz.xz")
+
+
+    
 
 
 

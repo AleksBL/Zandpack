@@ -6,6 +6,7 @@ from tqdm import tqdm
 from Zandpack.Loader import flexload
 from scipy.interpolate import interp1d
 from scipy.integrate import cumulative_simpson
+import lzma, io
 
 ld = os.listdir
 
@@ -69,7 +70,10 @@ def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, spli
     
     for d in dirs:
         f = ld(d)
-        if "LossyDensityMatrix.npz" in f:
+        if "LossyDensityMatrix.npz.xz" in f:
+            with lzma.open(d+"/"+"LossyDensityMatrix.npz.xz", "rb") as f:
+                arc = np.load(io.BytesIO(f.read()))
+        elif "LossyDensityMatrix.npz" in f:
             arc = np.load(d+"/"+"LossyDensityMatrix.npz")
         else:
             arc = None
