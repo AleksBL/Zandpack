@@ -23,10 +23,15 @@ os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
 options = {'folder':'ABC_save',
-           'delete':'False',
-           "tol":"0.5e-6",
+           "tol":"1e-9",
            "delete":"True",
+           "interpolation":"step"
            }
+if '--help' in args:
+    print("Args: ")
+    print(options)
+    exit()
+
 for a in args:
     if 'command' not in a:
         split = a.replace(' ', '').split('=')
@@ -34,10 +39,6 @@ for a in args:
         split = a.split('=')
     options.update({split[0]:split[1]})
 
-if '--help' in args:
-    print("Args: ")
-    print(options)
-    exit()
 
 tdm, dm = DM([options["folder"]])
 
@@ -45,19 +46,86 @@ ti    = tdm[0] + 0.0
 dmi   = dm[0].copy()
 tout  = [ti]
 dmout = [dmi]
+inds  = []
 nt    = len(tdm)
 tol   = float(options["tol"])
-for i in range(1,nt):
-    if np.abs(dmi-dm[i]).max()>tol:
-        ti  = tdm[i] + 0.0
-        dmi =  dm[i].copy()
-        tout.append(ti)
-        dmout.append(dmi)
-tout  = np.array(tout)
+
+if options["interp"]=="step":
+    for i in range(1,nt):
+        if np.abs(dmi-dm[i]).max()>tol:
+            ti  = tdm[i] + 0.0
+            dmi =  dm[i].copy()
+            tout.append(ti)
+            dmout.append(dmi)
+    tout  = np.array(tout)
+    dmout = np.array(dmout)
+    
+elif options["interp"]=="linear":
+    from numba import njit
+    @njit
+    def absmax(A, tv, idx):
+        M     = 0.0
+        i0    = idx[0]
+        i1    = idx[-1]
+        A0    = A[i0]
+        A1    = A[i1]
+        dAdt  = A1 - A0
+        dAdt /= (tv[i1] - tv[i0])
+        
+        for i in range(len(idx)):
+            I    = idx[i]
+            dt   = (tv[I] - tdm[i0])
+            diff = np.abs(A[I] - (A0 + dt * dAdt)).max()
+            M    = max(M, diff)
+        return M
+    i0 = 0
+    # print("len before: " + str(len(tdm)))
+    while i0 < len(tdm):
+        i1 = i0 +2
+        if i1 >= len(tdm):
+            break
+        idx = np.arange(i0,i1+1)
+        #assert np.abs(absmax(dm, tdm, idx) - np.abs(dm[i0:i1+1] - (dm[i0] + (tdm[i0:i1+1] - tdm[i0])[:, None, None, None] * (dm[i1]-dm[i0])/(tdm[i1] - tdm[i0]))
+        #             ).max()) < 1e-10
+        while absmax(dm, tdm, idx) < float(options["tol"]):
+            i1 += 1
+            idx = np.arange(i0,i1+1)
+        i0 = i1  -1
+        if i0 not in inds:
+            # Edge case with last index in the calculatiuon i think
+            inds  += [i0]
+            dmout += [dm[i0]]
+            tout  += [tdm[i0]]
+    if len(tdm)-1 not in inds:
+        dmout += [dm[len(tdm)-1]]
+        tout  += [tdm[len(tdm)-1]]
+    # print("len after: " + str(len(tout)))
+
+else:
+    # print("D")
+    assert 1 == 0, "The interp keyword was not recognized."
+
 dmout = np.array(dmout)
+tout  = np.array(tout)
+print(tout.min(), tout.max())
+print(tdm.min(), tdm.max())
+
+
 print("From "+str(nt) + " to " + str(len(tout)) + " points ")
+# import matplotlib.pyplot as plt
+#plt.plot(tout, dmout[:, 0, 25,25])
+#plt.plot(tdm, dm[:, 0, 25,25])
+# y2 = np.interp(tdm, tout, dmout[:, 0, 25,25].real)
+# plt.plot(tdm, dm[:, 0, 25,25])
+# plt.plot(tdm, dm[:, 0, 25,25].real - y2)
+# plt.show()
+# assert 1 == 0
+
+
+# Transpose of dm for better time-locality in the data, which means more similar numbers
 np.savez_compressed(options["folder"]+"/LossyDensityMatrix.npz", 
-                    tdm = tout, dm = dmout, t_orig = tdm, tol = tol)
+                    tdm = tout, dm = dmout.transpose(1,2,3,0), 
+                    t_orig = tdm, tol = tol)
 assert "LossyDensityMatrix.npz" in os.listdir(options["folder"])
 
 if "LossyDensityMatrix.npz" in os.listdir(options["folder"]):

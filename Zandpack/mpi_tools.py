@@ -79,7 +79,7 @@ def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, spli
         else:
             if lossy_dm_arc:
                 return arc
-            dm = arc["dm"]
+            dm = arc["dm"].transpose(3,0,1,2).copy()
             if insert_tril:
                 herm_insert_tril(dm)
             return arc["tdm"], dm

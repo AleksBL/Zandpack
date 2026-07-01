@@ -68,6 +68,7 @@ class TDHelper:
         # self.ipiv      = np.array([np.where(self.piv == i)[0][0] for i in range(len(self.piv))])
         # 
         self.positions = flexload(self.dir+'/Positions.npy')
+        self.species   = flexload(self.dir+'/Species.npy')
         try:
             o2a = flexload(self.dir+'/pivot_o2a.npy')
             self.orb_pos   = self.positions[o2a]

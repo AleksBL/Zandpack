@@ -752,12 +752,14 @@ class Control: # Replaces bash scripting
         cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
         self.systemcall(cmd)
         self.out_wd()
-    def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
+    def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True,lossy_dm_tol=1e-10):
         self.into_wd()
+        self.systemcall("lossydm Dir=$PWD folder="+self.input.name+"_save " +"tol="+str(lossy_dm_tol) + " > compressDM.out")
         archive_calculation(self.input.name+"_save", arc_name, 
                             keep_psi_omg_in_arc = keep_psi_omg_in_arc,
                             clean_original = clean_original)
         self.out_wd()
+
 class transiesta_hook:
     def __init__(self, indev, scheme, nsc=(1,1,1)):
         if type(indev) is str:
@@ -1096,13 +1098,13 @@ if rank == 0:
     q0   = _Q0[piv]
     try:
         print("sk calculate failed, fallback to reading previously calculated one!")
-        sk = np.load("DFTB+_SK.npy")
+        sk = np.load("DFTB+_SK.npz")["arr_0"]
     except:
         os.chdir("..")
         sk = Dev.fast_dftb_hk(k = k, label = 'overreal')
         os.chdir(wdir)
         if save_sk:
-            np.save("DFTB+_SK.npy", sk)
+            np.savez_compressed("DFTB+_SK.npz", sk)
 
     Hlp = TDHelper(name)
     _S  = Hlp.ncS
@@ -1290,7 +1292,7 @@ class DM_Lin_NO_OD:
         dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 
-def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True,):
+def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True, lossydm = False):
     import shutil
     
     os.system("cp -R "+name + " " + arc_name)
@@ -1301,6 +1303,7 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
     if clean_original:
         os.system("rm "+name+"/DM*.npy")
         os.system("rm "+name+"/DM*.npz")
+        os.system("rm "+name+"/LossyDensityMatrix.npz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
 
