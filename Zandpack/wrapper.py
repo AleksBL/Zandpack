@@ -752,7 +752,7 @@ class Control: # Replaces bash scripting
         cmd = "python -c \"from "+scr+" import "+fnc+" as F; F() \" > hook_linearize.out"
         self.systemcall(cmd)
         self.out_wd()
-    def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True,lossy_dm_tol=1e-10):
+    def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True, lossy_dm_tol=1e-8):
         self.into_wd()
         self.systemcall("lossydm Dir=$PWD folder="+self.input.name+"_save " +"tol="+str(lossy_dm_tol) + " > compressDM.out")
         archive_calculation(self.input.name+"_save", arc_name, 
@@ -1293,8 +1293,6 @@ class DM_Lin_NO_OD:
         return dH
 
 def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True, lossydm = False):
-    import shutil
-    
     os.system("cp -R "+name + " " + arc_name)
     sleep(2.0)
     if keep_psi_omg_in_arc == False:
@@ -1304,8 +1302,10 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/DM*.npy")
         os.system("rm "+name+"/DM*.npz")
         os.system("rm "+name+"/LossyDensityMatrix.npz")
+        os.system("rm "+name+"/LossyDensityMatrix.npz.xz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
+    sleep(1.0)
 
 def load_object(A):
     import pickle
