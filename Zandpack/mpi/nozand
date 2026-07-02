@@ -13,6 +13,9 @@ the number of processes are equal to or greater than the number of electrodes + 
 please see the printed text and the documentation for more information
 
 """
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"nozand", 0, 0, 0)
 import numpy as np
 from mpi4py import MPI
 import os, sys, inspect

@@ -13,7 +13,9 @@ the equilibrium density matrix. Proper use of the SCF tool
 is therefore recommended.
 
 """
-
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"psinought", 0, 0, 0)
 import sys
 import os
 import numpy as np

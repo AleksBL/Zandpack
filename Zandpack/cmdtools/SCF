@@ -14,7 +14,9 @@ the operation SIGMA[H_DM(SIGMA)] is actually stationary.
 
 do a SCF --help for some keywords
 """
-
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"SCF", 0, 0, 0)
 import sys
 import os
 import numpy as np

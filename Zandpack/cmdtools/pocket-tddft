@@ -5,7 +5,9 @@ Created on Tue May 26 10:37:30 2026
 
 @author: aleks
 """
-
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"pockettddft", 0, 0, 0)
 import numpy as np
 from scipy.special import jn
 import sys

@@ -11,7 +11,9 @@ the two positional arguments
 do a lossydm --help to see usage.
 
 """
-
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"lossydm", 0, 0, 0)
 import sys
 import os
 import numpy as np
