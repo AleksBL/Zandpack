@@ -77,6 +77,7 @@ def combine_dm(dirs, times_label = 'DMt', insert_tril= False, split = None, spli
             arc = np.load(d+"/"+"LossyDensityMatrix.npz")
         else:
             arc = None
+        f = ld(d)
         f = [v for v in f if 'DM' in v and 'DMt' not in v]
         if len(f)>0 and prefer_full:
             pass

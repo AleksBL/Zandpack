@@ -132,7 +132,7 @@ if options["usexz"] == "False":
                         t_orig = tdm, tol = tol)
 else:
     npz_path = options["folder"] + "/LossyDensityMatrix.npz"
-    np.savez(npz_path,  # uncompressed, so xz has raw bytes to work with
+    np.savez(npz_path, # uncompressed, so xz has raw bytes to work with
              tdm=tout, dm=dmout.transpose(1,2,3,0),
              t_orig=tdm, tol=tol)
     subprocess.run(["xz", "-9", "-e", "-T0", "-f", npz_path], check=True)
