@@ -1271,6 +1271,9 @@ class DM_Lin_NO:
         dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 
+
+# This function improves on the memory bottleneck that dHdQ @ dQ(t)
+# exhibits
 @njit(fastmath=True)
 def Mv_3_1(A,v):
     n1,n2,n3 = A.shape
