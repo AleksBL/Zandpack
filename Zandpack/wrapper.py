@@ -19,6 +19,14 @@ from textwrap import dedent
 from numba import njit
 from time import sleep
 glob_test = False
+# custom mv uses a replacement for dH/dQ @ dQ(t) in the linearized electron interaction.
+use_custom_mv = True
+try:
+    if os.environ["ZANDPACK_OLD_MV"].lower()=="true":
+        use_custom_mv = False
+except:
+    pass
+
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
 
@@ -1172,6 +1180,7 @@ class DFTB_Lin:
             self.S    = f["S"]
             self.FileNotFound = False
             self.S_ee = S_ee
+            self.use_custom_mv  = use_custom_mv
             assert f["dm_in_ortho_basis"] == False
         except:
             self.FileNotFound = True    
@@ -1179,8 +1188,12 @@ class DFTB_Lin:
         Q = self.S @ sigNO + sigNO @ self.S
         q = np.diag(Q[0])
         dq = q - self.q0
-        dH = self.dHdQ @ (dq * self.S_ee)
-        return dH
+        if self.use_custom_mv == False:
+            dH = self.dHdQ @ (dq * self.S_ee)
+            return dH
+        else:
+            dH = Mv_3_1(self.dHdQ, dq * self.S_ee)
+            return dH
 
 class Mull_Lin_NO:
     def __init__(self, file, rank, S_ee):
@@ -1210,7 +1223,6 @@ class Mull_Lin_NO:
         dH = self.dHdQ @ (dq * self.S_ee)
         return dH
 
-
 class DM_Lin_O:
     def __init__(self, file, rank, S_ee):
         if rank != 0:
@@ -1234,6 +1246,7 @@ class DM_Lin_O:
         dq = np.diag(sigO[0]) - self.q
         dH = self.dHdQ @ (dq * self.S_ee)
         return dH
+
 class DM_Lin_NO:
     def __init__(self, file, rank, S_ee):
         if rank != 0:
@@ -1257,6 +1270,19 @@ class DM_Lin_NO:
         dq = np.diag(sigNO[0]) - self.q
         dH = self.dHdQ @ (dq * self.S_ee)
         return dH
+
+@njit(fastmath=True)
+def Mv_3_1(A,v):
+    n1,n2,n3 = A.shape
+    out = np.zeros((n1,n2),dtype=A.dtype)
+    for i in range(n1):
+        for j in range(n2):
+            s = 0.0 + 0.0j
+            for l in range(n3):
+                s+= A[i,j,l] * v[l]
+            out[i,j] = s
+    return out
+
 @njit
 def get_elements(M, idx):
     n = out = len(idx)
