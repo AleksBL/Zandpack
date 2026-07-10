@@ -115,7 +115,10 @@ def write_to_file_compressed(A, dirname, write_ixi=True):
         
     try:
         import sisl
-        HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".TSHS").read_hamiltonian()
+        try:
+            HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".TSHS").read_hamiltonian()
+        except:
+            HS = sisl.get_sile("../../"+A.Device.dir +"/"+A.Device.sl+".hiddenTSHS{TSHS}").read_hamiltonian()
         np.save("pivot_o2a", HS.o2a(A.pivot))
     except:
         print("Failed to get o2a pivot indices....")

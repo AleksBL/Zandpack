@@ -20,12 +20,19 @@ from numba import njit
 from time import sleep
 glob_test = False
 # custom mv uses a replacement for dH/dQ @ dQ(t) in the linearized electron interaction.
-use_custom_mv = True
+use_custom_mv = False
+dH_use_c128   = True
 try:
-    if os.environ["ZANDPACK_OLD_MV"].lower()=="true":
-        use_custom_mv = False
+    if os.environ["ZANDPACK_CUSTOM_MV"].lower()=="true":
+        use_custom_mv = True
 except:
     pass
+try:
+    if os.environ["ZANDPACK_DH_C64"].lower()=="true":
+        dH_use_c128=False
+except:
+    pass
+
 
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -1054,6 +1061,11 @@ class dftb_hook:
         assert scheme in ['full', 'lin_dftb'], "The given scheme is not implemented (DFTB hook)."
     def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
                    dq=0.01, Rmax = 12.5, use_orig_S=False):
+        if self.dev.spin_pol in ["polarized", "polarised"]:
+            self.write_hook_spinpol(ArrayDir, wdir, bdir, suffix=suffix,
+                                    dq = dq, Rmax = Rmax, 
+                                    use_orig_S = use_orig_S)
+            return
         scriptname = 'dftb'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -1162,6 +1174,126 @@ if rank == 0:
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)
+    def write_hook_spinpol(self,ArrayDir, wdir, bdir,  suffix ='', 
+                           dq=0.01, Rmax = 12.5, use_orig_S=False):
+        scriptname = 'dftb_spinpol'
+        if len(suffix)>0:
+            scriptname += '_'+suffix
+        scriptname+= '.py'
+        gnsc = list(self.devg.nsc)
+        gnsc = [int(v) for v in gnsc]
+        self.scriptname = scriptname
+        self.dev.pickle(wdir+"/"+"namethatwillnotbeused")
+        code = (f"""\
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+save_sk = True
+getH, q0, Rmp = None, None, None
+dq = {dq}
+def H_from_DFT(A):
+    assert 1 == 0, "ERROR: H_from_DFT in dftb.py script called with rank != 0!!! "
+if rank == 0:
+    import sisl
+    from Zandpack.Help import TDHelper
+    from pickle import load
+    import numpy as np
+    from Initial import name
+    from time import time
+    import os
+    Dev  = load(open('namethatwillnotbeused.SiP','rb'))
+    mu   = Dev.read_fermi_level_from_out()
+    k    = np.array((.0, .0, .0))
+    wdir = os.getcwd()
+    def updateH():
+        os.chdir("..")
+        Dev.run_dftb_in_dir(silent= True, subprocess=True, wait=True)
+        os.chdir(wdir)
+    def evaluateHk():
+        os.chdir("..")
+        out = np.zeros((2, no_full, no_full),dtype=complex)
+        out[0] = Dev.fast_dftb_hk(k = k, gamma_only = True, label="hamreal1")
+        out[1] = Dev.fast_dftb_hk(k = k, gamma_only = True, label="hamreal2")
+        os.chdir(wdir)
+        return out
+    def q2Q(q):
+        Qv[:,piv] = q[:]
+        return Qv
+    def updateQ(Qv):
+        os.chdir("..")
+        Q.set_Q_spinpol(Qv)
+        os.chdir(wdir)
+    piv   = np.load(name+'/Arrays/pivot.npy')
+    Q    = Dev.dic['dftb_charge']
+    _Q0  = Q.dic['init_Q'].copy()
+    Qv   = _Q0.copy()
+    q0   = _Q0[:,piv]
+    try:
+        print("sk calculate failed, fallback to reading previously calculated one!")
+        sk = np.load("DFTB+_SK.npz")["arr_0"]
+    except:
+        os.chdir("..")
+        sk = Dev.fast_dftb_hk(k = k, label = 'overreal')
+        os.chdir(wdir)
+        if save_sk:
+            np.savez_compressed("DFTB+_SK.npz", sk)
+    no_full = sk.shape[-1]
+    
+    Hlp = TDHelper(name)
+    _S  = Hlp.ncS
+    _L  = Hlp.Lowdin
+    def sigO2NO(DMlike): return _L  @ DMlike @ _L
+    def sig2mul(dm_no):
+        f1,f2 = 0.5, 0.5
+        no  = dm_no.shape[-1]
+        out = np.zeros((2, no),dtype=np.float64)
+        P   = np.diagonal((dm_no @ _S + _S @ dm_no ),axis1=1, axis2=2).real
+        out[0] = (P[0] + P[1])*f1
+        out[1] = (P[0] - P[1])*f2
+        return out
+    def H_from_DFT(DMNO):
+        qv = sig2mul(DMNO)
+        return getH(qv)
+    def getH(qv):
+        updateQ(q2Q(qv))
+        updateH()
+        hk  = evaluateHk()
+        hk -= mu*sk
+        return hk[:,piv,:][:,:,piv]
+    def linearize_dftb():
+        dm0  = np.load(name+"/Arrays/DM_Ortho.npy")
+        dm0  = sigO2NO(dm0)
+        try:
+            other_dm = np.load('Lin_DFTB.npz')["DM0"]
+            other_dq = np.load('Lin_DFTB.npz')["dq"]
+            if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
+                print("Found Lin_DFTB.npz with matching DM!")
+                return 
+            else:
+                pass
+        except:
+            pass
+        Q0, H0 = sig2mul(dm0), H_from_DFT(dm0)
+        no     = dm0.shape[-1]
+        dHdQ   = np.zeros((no, no, no),dtype=np.complex64)
+        for i in range(no):
+            Qv = Q0.copy()
+            if Qv[i]+dq > 1.0:
+                sgn=-1.
+            else:
+                sgn= 1.
+            Qv[i] += dq * sgn
+            res = (getH(Qv) - H0)/(dq * sgn)
+            dHdQ[i,:,:] = res
+        np.savez_compressed("Lin_DFTB.npz", 
+                            dHdQ=dHdQ, DM0=dm0, 
+                            H0=H0,  Q0=Q0, 
+                            dq=dq, S=_S,
+                            dm_in_ortho_basis=False)
+
+""")
+        with open(wdir+'/'+scriptname, "w") as f:
+            f.write(code)
         
 
 class DFTB_Lin:
@@ -1172,7 +1304,12 @@ class DFTB_Lin:
             print("S_ee = " +str(S_ee))
             f = np.load(file)
             self._f = f
-            self.dHdQ = f["dHdQ"].transpose(1,2,0).copy()
+            if dH_use_c128:
+                self.dHdQ = f["dHdQ"].transpose(1,2,0).copy().astype(np.complex128)
+                self.dH_dtype = np.complex128
+            else:
+                self.dHdQ = f["dHdQ"].transpose(1,2,0).copy().astype(np.complex64)
+                self.dH_dtype = np.complex64
             self.dm0  = f["DM0"]
             self.H0   = f["H0"]
             self.q0   = f["Q0"]
@@ -1189,10 +1326,10 @@ class DFTB_Lin:
         q = np.diag(Q[0])
         dq = q - self.q0
         if self.use_custom_mv == False:
-            dH = self.dHdQ @ (dq * self.S_ee)
+            dH =       self.dHdQ @ ((dq * self.S_ee).astype(self.dH_dtype) )
             return dH
         else:
-            dH = Mv_3_1(self.dHdQ, dq * self.S_ee)
+            dH = Mv_3_1(self.dHdQ, (dq * self.S_ee).astype(self.dH_dtype))
             return dH
 
 class Mull_Lin_NO:
@@ -1272,7 +1409,7 @@ class DM_Lin_NO:
         return dH
 
 
-# This function improves on the memory bottleneck that dHdQ @ dQ(t)
+# This function improves on the memory bottleneck that dHdQ @ dQ(t)
 # exhibits
 @njit(fastmath=True)
 def Mv_3_1(A,v):
