@@ -834,16 +834,26 @@ def Worker(role_info):
         lrzlim_0 = _min_x_lrz
         lrzlim_1 = _max_x_lrz + 1
         assert _nlrz_loc == lrzlim_1 - lrzlim_0
-        
+    
+    ## BUG FIX 14.07.2026
+    ## ravelled_lrz_idx_loc = []
+    ## ko_it = 0
+    ## for ko_i in range(nk):
+    ##     for ko_a in range(nl):
+    ##         for ko_x in range(nx):
+    ##             for ko_c in range(neig):
+    ##                 if _is_fpole_loc[ko_x]==False:
+    ##                     ravelled_lrz_idx_loc += [ko_it]
+    ##                 ko_it += 1
+    ## ravelled_lrz_idx_loc = np.array(ravelled_lrz_idx_loc)
     ravelled_lrz_idx_loc = []
     ko_it = 0
-    for ko_i in range(nk):
-        for ko_a in range(nl):
-            for ko_x in range(nx):
-                for ko_c in range(neig):
-                    if _is_fpole_loc[ko_x]==False:
-                        ravelled_lrz_idx_loc += [ko_it]
-                    ko_it += 1
+    for ko_a in range(nl):
+        for ko_x in range(nx):
+            for ko_c in range(neig):
+                if _is_fpole_loc[ko_x]==False:
+                    ravelled_lrz_idx_loc += [ko_it]
+                ko_it += 1
     ravelled_lrz_idx_loc = np.array(ravelled_lrz_idx_loc)
     # CHANGE 28.04.2026, neig can vary across worker nodes, depending on the eigtol cutoff.
     # The elements are however put into the right places when local psis are assigned
@@ -853,16 +863,30 @@ def Worker(role_info):
     # in the size of the small eigenvalues. 
     ## assert global_psi.shape[3] == neig # REMOVED AS OF 28.04.2026
     #
+    
+    ## BUG FIX 14.07.2026
+    ## ravelled_lrz_idx_all = []
+    ## ko_it = 0
+    ## for ko_i in range(NK):
+    ##     for ko_x in range(NX):
+    ##         for ko_c in range(NOT):
+    ##             if _is_fpole_all[ko_x]==False:
+    ##                 ravelled_lrz_idx_all += [ko_it]
+    ##             ko_it += 1
+    ## ravelled_lrz_idx_all = np.array(ravelled_lrz_idx_all)
+    
+    # 14.07 removed loop over NK, gives out of bounds error later.
     ravelled_lrz_idx_all = []
     ko_it = 0
-    for ko_i in range(NK):
-        for ko_x in range(NX):
-            for ko_c in range(NOT):
-                if _is_fpole_all[ko_x]==False:
-                    ravelled_lrz_idx_all += [ko_it]
-                ko_it += 1
+    for ko_x in range(NX):
+        for ko_c in range(NOT):
+            if _is_fpole_all[ko_x]==False:
+                ravelled_lrz_idx_all += [ko_it]
+            ko_it += 1
     ravelled_lrz_idx_all = np.array(ravelled_lrz_idx_all)
-    del ko_it, ko_i, ko_a, ko_x, ko_c
+    ## BUG FIX 14.07.2026
+    # del ko_it, ko_i, ko_a, ko_x, ko_c
+    del ko_it, ko_a, ko_x, ko_c
     _null_idx = np.where(_is_fpole_loc==False)[0]
     
     assert _is_fpole_all.ndim == 1
@@ -1100,7 +1124,7 @@ def Worker(role_info):
                 np.conj(tmp_psi, # write to tmp_psi_conj
                         out=tmp_psi_conj )
                 global_psi[
-                       k_idx[None, :, None, None],
+                       k_idx   [:, None, None, None],
                        lead_idx[None, :, None, None],
                        pole_idx[None, None, :, None],
                        eig_idx [None, None, None, :],

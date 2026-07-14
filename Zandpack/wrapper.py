@@ -278,6 +278,20 @@ class Input:   # Handles the Initial.py file
                 text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
                 text+="    else:\n"
                 text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
+            elif hook.scheme == 'lin_dftb_spinpol':
+                text+="from Zandpack.wrapper import DFTB_Lin_spinpol as Linear\n"
+                text+="lin_dh = Linear(\"Lin_DFTB_spinpol.npz\", rank, S_ee)\n"
+                text+="if rank == 0:\n"
+                text+="    assert lin_dh.FileNotFound == False\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
+                text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
+                text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
+                text+="ldH = lin_dh.linearized_H\n"
+                text+="def kohn_sham(sig, orthogonal=True):\n"
+                text+="    if orthogonal:\n"
+                text+="        return HamNO2O( lin_dh.H0 + ldH(sigO2NO(sig))) - bareH0\n"
+                text+="    else:\n"
+                text+="        return lin_dh.H0 + ldH(sig) - bareH0\n"
             if check_H_hermitian:
                 text += "if rank == 0:\n"
                 text += "    from Zandpack.Help import check_H_herm\n"
@@ -761,6 +775,8 @@ class Control: # Replaces bash scripting
             fnc = 'linearize_nodm_offdiag'
         elif self.hook.scheme == 'lin_dftb':
             fnc = "linearize_dftb"
+        elif self.hook.scheme == 'lin_dftb_spinpol':
+            fnc = "linearize_dftb"
         elif self.hook.scheme == 'full':
             print('Dont use hook_linearize when the hook scheme is \"full\"!')
             fnc = "empty"
@@ -1061,11 +1077,18 @@ class dftb_hook:
         assert scheme in ['full', 'lin_dftb'], "The given scheme is not implemented (DFTB hook)."
     def write_hook(self,ArrayDir, wdir, bdir,  suffix ='', 
                    dq=0.01, Rmax = 12.5, use_orig_S=False):
-        if self.dev.spin_pol in ["polarized", "polarised"]:
+        if (self.scheme=="lin_dftb_spinpol" or 
+            (self.scheme == "full" and self.dev.spin_pol in ["polarized", "polarised"] )):
+            
             self.write_hook_spinpol(ArrayDir, wdir, bdir, suffix=suffix,
                                     dq = dq, Rmax = Rmax, 
                                     use_orig_S = use_orig_S)
             return
+        if self.dev.spin_pol in ["polarized", "polarised"] and self.scheme != "full":
+            print(self.scheme)
+            print("Your device is spin-polarized, but you dont use the spin-polarized scheme. Why?")
+            assert 1 == 0, "spin polarized device detected, but the hook is not lin_dftb_spinpol"
+        
         scriptname = 'dftb'
         if len(suffix)>0:
             scriptname += '_'+suffix
@@ -1264,10 +1287,10 @@ if rank == 0:
         dm0  = np.load(name+"/Arrays/DM_Ortho.npy")
         dm0  = sigO2NO(dm0)
         try:
-            other_dm = np.load('Lin_DFTB.npz')["DM0"]
-            other_dq = np.load('Lin_DFTB.npz')["dq"]
+            other_dm = np.load('Lin_DFTB_spinpol.npz')["DM0"]
+            other_dq = np.load('Lin_DFTB_spinpol.npz')["dq"]
             if np.allclose(dm0, other_dm) and np.allclose(dq, other_dq):
-                print("Found Lin_DFTB.npz with matching DM!")
+                print("Found Lin_DFTB_spinpol.npz with matching DM!")
                 return 
             else:
                 pass
@@ -1275,26 +1298,82 @@ if rank == 0:
             pass
         Q0, H0 = sig2mul(dm0), H_from_DFT(dm0)
         no     = dm0.shape[-1]
-        dHdQ   = np.zeros((no, no, no),dtype=np.complex64)
+        dHdQ   = np.zeros((2, no, 2, no, no),dtype=np.complex64)
         for i in range(no):
             Qv = Q0.copy()
-            if Qv[i]+dq > 1.0:
+            if Qv[0,i]+dq > 1.0:
                 sgn=-1.
             else:
                 sgn= 1.
-            Qv[i] += dq * sgn
+            Qv[0,i] += dq * sgn
             res = (getH(Qv) - H0)/(dq * sgn)
-            dHdQ[i,:,:] = res
-        np.savez_compressed("Lin_DFTB.npz", 
-                            dHdQ=dHdQ, DM0=dm0, 
-                            H0=H0,  Q0=Q0, 
-                            dq=dq, S=_S,
-                            dm_in_ortho_basis=False)
-
+            dHdQ[0,i,:,:,:] = res
+        for i in range(no):
+            Qv = Q0.copy()
+            if Qv[1,i]+dq > 0.0:
+                sgn=-1.
+            else:
+                sgn= 1.
+            Qv[1,i] += dq * sgn
+            res = (getH(Qv) - H0)/(dq * sgn)
+            dHdQ[1,i,:,:,:] = res
+        
+        np.savez_compressed("Lin_DFTB_spinpol.npz", 
+                             dHdQ=dHdQ, DM0=dm0, 
+                             H0=H0,      Q0=Q0, 
+                             dq=dq,       S=_S,
+                             dm_in_ortho_basis=False)
 """)
         with open(wdir+'/'+scriptname, "w") as f:
             f.write(code)
-        
+
+class DFTB_Lin_spinpol:
+    def __init__(self, file, rank, S_ee):
+        if rank != 0:
+            return
+        try:
+            print("S_ee = " +str(S_ee))
+            f = np.load(file)
+            self._f = f
+            # dHdQ in: (dH_{spin2, jo,ko} / dQ_{spin1, io} = M_{spin1 , i, spin2, jo, ko})
+            if dH_use_c128:
+                self.dHdQ = f["dHdQ"].transpose(2,3,4,0,1).copy().astype(np.complex128)
+                self.dH_dtype = np.complex128
+            else:
+                self.dHdQ = f["dHdQ"].transpose(2,3,4,0,1).copy().astype(np.complex64)
+                self.dH_dtype = np.complex64
+            self.dm0  = f["DM0"]
+            self.H0   = f["H0"]
+            self.q0   = f["Q0"]
+            self.dq   = f["dq"]
+            self.S    = f["S"]
+            self.FileNotFound = False
+            self.S_ee = S_ee
+            self.use_custom_mv  = use_custom_mv
+            assert f["dm_in_ortho_basis"] == False
+        except:
+            self.FileNotFound = True    
+    def linearized_H(self, sigNO):
+        f1,f2 = 0.5, 0.5
+        no    = sigNO.shape[-1]
+        q  = np.zeros((2, no),dtype=np.float64)
+        P0 = (np.einsum("ij,ji -> i", sigNO[0], self.S[0]) + np.einsum("ij,ji -> i", sigNO[0], self.S[0])).real
+        P1 = (np.einsum("ij,ji -> i", sigNO[1], self.S[1]) + np.einsum("ij,ji -> i", sigNO[1], self.S[1])).real
+        q[0] = (P0 + P1)*f1
+        q[1] = (P0 - P1)*f2
+        dq = q - self.q0
+        dH = np.zeros((2, no, no), dtype=self.dH_dtype)
+        if self.use_custom_mv == False:
+            _q  = (dq * self.S_ee).astype(self.dH_dtype).reshape(2 * no)
+            # np.matvec(self.dHdQ[0], _q[0], out = dH[0])
+            # np.matvec(self.dHdQ[1], _q[1], out = dH[1])
+            np.matvec(self.dHdQ.reshape(2, no,no, 2 * no), _q, out = dH)
+            return dH
+        else:
+            assert 1 == 0, "This mode is not supported right now"
+            #dH[0] = Mv_3_1(self.dHdQ[0], (dq[0] * self.S_ee).astype(self.dH_dtype))
+            #dH[1] = Mv_3_1(self.dHdQ[1], (dq[1] * self.S_ee).astype(self.dH_dtype))
+            return dH
 
 class DFTB_Lin:
     def __init__(self, file, rank, S_ee):

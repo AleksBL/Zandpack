@@ -54,10 +54,10 @@ class TDHelper:
         self.Sig0_NO = np.array(A3)
         self.Sig1_NO = np.array(A4)
         self.Hcorr   = A5
-        self.H0        = flexload(self.dir+'/H_Ortho.npy')
-        self.DM0       = flexload(self.dir+'/DM_Ortho.npy')
-        self.no        = self.H0.shape[-1]
-        self.orthog    = orthogonal
+        self.H0      = flexload(self.dir+'/H_Ortho.npy')
+        self.DM0     = flexload(self.dir+'/DM_Ortho.npy')
+        self.no      = self.H0.shape[-1]
+        self.orthog  = orthogonal
         self.num_leads = len(self.Sig0_O)
         self.Lowdin    = flexload(self.dir+'/S^(-0.5).npy')
         self.invLowdin = np.linalg.inv(self.Lowdin)
@@ -71,6 +71,7 @@ class TDHelper:
         self.species   = flexload(self.dir+'/Species.npy')
         try:
             o2a = flexload(self.dir+'/pivot_o2a.npy')
+            self._o2a      = o2a
             self.orb_pos   = self.positions[o2a]
             self.orb_elecs = [np.where(((np.abs(self.Sig0_NO[ia])
                                        + np.abs(self.Sig1_NO[ia])
