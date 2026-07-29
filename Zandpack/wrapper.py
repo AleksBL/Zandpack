@@ -22,6 +22,7 @@ glob_test = False
 # custom mv uses a replacement for dH/dQ @ dQ(t) in the linearized electron interaction.
 use_custom_mv = False
 dH_use_c128   = True
+sparse_dH     = True
 try:
     if os.environ["ZANDPACK_CUSTOM_MV"].lower()=="true":
         use_custom_mv = True
@@ -1397,20 +1398,41 @@ class DFTB_Lin:
             self.FileNotFound = False
             self.S_ee = S_ee
             self.use_custom_mv  = use_custom_mv
+            if sparse_dH: # global flag in top of file, probably true
+                self.sparseH()
             assert f["dm_in_ortho_basis"] == False
         except:
-            self.FileNotFound = True    
+            self.FileNotFound = True
+    def sparseH(self):
+        no           = self.dHdQ.shape[0]
+        idx_i, idx_j = np.where((np.abs(self.dHdQ)>1e-10).all(axis=2))
+        self._idx_i  = idx_i
+        self._idx_j  = idx_j
+        self.dHdQ    = self.dHdQ[idx_i, idx_j, :].copy()
+        self.outdH   = np.zeros((no, no), dtype=self.dH_dtype)
+        print("Threw away the zeros of dHdQ!")
     def linearized_H(self, sigNO):
         Q = self.S @ sigNO + sigNO @ self.S
         q = np.diag(Q[0])
         dq = q - self.q0
         if self.use_custom_mv == False:
             dH =       self.dHdQ @ ((dq * self.S_ee).astype(self.dH_dtype) )
+            if sparse_dH:
+                sparse_insert(self._idx_i, self._idx_j, dH, self.outdH)
+                return self.outdH
             return dH
         else:
+            assert sparse_dH==False
             dH = Mv_3_1(self.dHdQ, (dq * self.S_ee).astype(self.dH_dtype))
             return dH
+@njit
+def sparse_insert(idxi, idxj, vals, out):
+    n = len(idxi)
+    for I in range(n):
+        i, j = idxi[I], idxj[I]
+        out[i,j] = vals[I]
 
+    
 class Mull_Lin_NO:
     def __init__(self, file, rank, S_ee):
         if rank != 0:

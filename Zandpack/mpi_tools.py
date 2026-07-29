@@ -4,6 +4,7 @@ import re
 import numba as nb
 from tqdm import tqdm
 from Zandpack.Loader import flexload
+from Zandpack.td_constants import hbar
 from scipy.interpolate import interp1d
 from scipy.integrate import cumulative_simpson
 import lzma, io
@@ -298,7 +299,7 @@ def rolling_minmax(x,y,W):
         res[i,:] = Ymin, Ymax
     return res
 
-def interp_and_fft(x,y,N, x0= None, x1 = None, fact= None):
+def interp_and_fft(x,y,N, x0= None, x1 = None, fact= None, eV=False):
     if x0 is not None and x1 is not None and fact is not None:
         idx = np.where((x>x0)*(x<x1))[0]
         N =  fact * len(idx)
@@ -313,15 +314,61 @@ def interp_and_fft(x,y,N, x0= None, x1 = None, fact= None):
         yy = f(xx)
         yy = np.pad(yy,(N//2, N//2))
         dx = xx[1] - xx[0]
-    return np.fft.rfft(yy), np.fft.rfftfreq(2*N, dx)
-def interp_and_fft_complex(x,y,N):
+    if eV:
+        S = 2 * np.pi * hbar
+    else:
+        S = 1.0
+    return np.fft.rfft(yy), S*np.fft.rfftfreq(2*N, dx)
+def interp_and_fft_complex(x,y,N, eV = False):
+    if eV:
+        S = 2 * np.pi * hbar
+    else:
+        S = 1.0
     xx = np.linspace(x.min(), x.max(), N)
     fr  = interp1d(x,y.real)
     fi  = interp1d(x,y.imag)
     yy = fr(xx) + 1j * fi(xx)
     yy = np.pad(yy,(N//2, N//2))
     dx = xx[1] - xx[0]
-    return np.fft.fft(yy), np.fft.fftfreq(2 * N, dx)
+    return np.fft.fft(yy), S*np.fft.fftfreq(2 * N, dx)
+
+def get_J_fft(Dir, w, t0=-10, t1=50,fact=4,n_elec = 2, signal = None):
+    """ w: 1D or 2D array, matching n_elec and nk,
+        signal: tuple (t, sig) to override the reading of the current.
+    """
+    t,j = combine_currents([Dir], n=n_elec)
+    W = np.array(w)
+    if signal is None:
+        if W.ndim == 1:
+            J = np.array(j)
+            S = (J.transpose(1,2,0)@W).sum(axis=1)
+        if W.ndim == 2:
+            S = np.zeros(len(t), dtype=complex)
+            for i in range(W.shape[0]):
+                for j in range(W.shape[1]):
+                    S += j[i][:,j]*W[i,j]
+    else:
+        t,S = signal
+    return interp_and_fft(t, S, -1, x0=t0, x1=t1, fact=fact)
+
+def spectr_gaussian(t, tc, s, A, t0=-10.0, t1 = 50.0, fact=4, eV= False):
+    y = A*np.array([np.exp(-((t[i] - tc)/s)**2) for i in range(len(t))] )
+    idx = np.where((t>t0)*(t<t1))[0]
+    N =  fact * len(idx)
+    xx = np.linspace(t[idx].min(), t[idx].max(),N)
+    f  = interp1d(t,y)
+    yy = f(xx)
+    yy = np.pad(yy,(N//2, N//2))
+    dx = xx[1] - xx[0]
+    if eV:
+        S = 2 * np.pi * hbar
+    else:
+        S = 1.0
+
+    return np.fft.rfft(yy), S*np.fft.rfftfreq(2*N, dx)
+
+    
+
 
 #def compute_neumann_entropy(dirs,times_label = 'DMt'):
 #    S = []

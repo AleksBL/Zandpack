@@ -39,18 +39,24 @@ na = len(ampl)
 res= np.zeros((nw, na))
 N  = int(options["Nmax"])
 mu = float(options["mu"])
+def fermifunc(E):
+    return 1/(1 + np.exp(E / 0.025))
 for iw in range(nw):
     hw = hwv[iw]
     for ia in range(na):
         ai = ampl[ia]
         for iN in range(-N, N+1):
-            Ei = mu + iN * hw
+            Ei  = mu + iN * hw
+            Eim = mu - iN * hw
+
             if (Ei > Emax) or Ei < Emin:
                 print("Energy outside of range from the "+options["file"])
                 print("Inserting NaN")
                 res[iw, ia]  = np.nan
             else:
-                res[iw, ia] += jn(iN, ai/hw)**2 * np.interp(Ei, E, T)
+                res[iw, ia] += jn(iN, ai/hw)**2 * np.interp(Ei, E, T) # *# (fermifunc(Ei) - fermifunc(mu))
+                # res[iw, ia] += jn(iN, ai/hw)*jn(iN, -ai/hw) * np.interp(Ei, E, T) * (fermifunc(Ei) - fermifunc(Eim))
+
 
 np.savez_compressed(options["outfile"], conductance = res)
 if options["show"] == 'True':

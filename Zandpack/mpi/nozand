@@ -613,11 +613,11 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
             def repl_flstr(s):
                 return s.replace("e-0","e-").replace("e+0","e+")
             CHUNK_STRING =(_uno
-                + "|    |\033[4m ϵ= " 
-                + repl_flstr(str(format(TE, ".2e"))) +"\033[0m "
+                + "|    |\033[4m ϵ=" 
+                + repl_flstr(str(format(TE, ".1e"))) +"\033[0m "
                 + "|\033[4m #stp "
                 + str(step_count)+ " "*(5-len(str(step_count)))+"\033[0m" 
-                + (" |Tr(S*σ)="+str(np.round(_N_last.real, 3)).replace("[","").replace("]","") + " "*20)[0:16]
+                + (" |Tr(S*σ)="+str(np.round(_N_last.real, 3)).replace("[","").replace("]","") + " "*20)[0:24]
                 + " |\n" )
             if _FIRST_POST:
                 _FIRST_POST = False

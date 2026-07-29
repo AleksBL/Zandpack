@@ -37,7 +37,8 @@ options = {"proj_inds":"projs.npy",
            "NI":"False",
            'ylabel':r"$\mu_x / E_x$",
            'xlabel':r"$\hbar\omega$",
-           "gauss_spread":"None"
+           "gauss_spread":"None",
+           "dataname":"None",
            }
 
 for a in args:
@@ -227,3 +228,7 @@ if options["obs"] != "None":
     plt.xlabel( r"" + options['xlabel'])
     plt.ylabel( r"" + options['ylabel'])
     plt.savefig(options["fig"])
+    if options["dataname"] != "None":
+        np.savez_compressed(options["dataname"] + ".npz",
+                            x = 2 * np.pi * hbar * w[ii],
+                            y = fs[ii]/fb[ii], )
