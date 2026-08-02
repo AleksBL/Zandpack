@@ -41,10 +41,10 @@ with open(IL, "a") as f:
 from setuptools import setup
 setup(name='Zandpack',
       version='1.0',
-      description='Module for calculating timedependent Charge transport in open quantum systems using LCAO models from DFT or tight-binding.',
+      description='Package that merges TD-DFT and open system charge transport using SIESTA, DFTB+ or your own custom model',
       url='',
       author='Aleksander Bach Lorentzen',
-      author_email='aleksander.bl.mail@gmail.com',
+      author_email='aleksander.bl@proton.me',
       license='MPL-2.0',
       packages=['Zandpack'],
       zip_safe=False,

@@ -100,7 +100,8 @@ def const_bias_and_sine(ControlInstance,
                         nozand = True, mpi = 'mpirun ', 
                         lines_inside_bias  = None,
                         lines_outside_bias = None,
-                        Contour=None, label = ""):
+                        Contour=None, label = "",
+                        zero_amp_skip=True):
     """
     Function for running a series of calculations with a bias function as
     V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
@@ -138,8 +139,14 @@ def const_bias_and_sine(ControlInstance,
         DMSTART = SSDM[idx]
         np.save(C.working_dir + "/UseThisDM.npy", DMSTART)
         first_step = True
+        first_zero_amp = True
         for ai in Ampl:
             for wi in w:
+                if np.abs(ai)<1e-10 and zero_amp_skip: 
+                    if first_zero_amp == False:
+                        continue
+                    first_zero_amp = False
+                
                 def bias(t,a):
                     env = 1-1/(np.exp((t-tstart)/s) + 1.0)
                     V = vi + env * ai * np.sin(wi * t)

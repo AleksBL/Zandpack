@@ -4,7 +4,7 @@ sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//t
 
 Keywords and default values. Assign with "keyword=value" argument after Adiabatic command (no spaces!)
 dt : 0.1
-file : SaveFile
+file : None
 savefile : None
 plot : 0
 plotcurrent : 0
@@ -27,6 +27,7 @@ orbvac2 : 3.0,3.0,3.0
 orbdir : Device
 gridfolder : gridfolder
 regularmpl : 0
+use_asciiplotpy : 0
 toqr : 0
 qr_n : 10
 sourcefiles : None

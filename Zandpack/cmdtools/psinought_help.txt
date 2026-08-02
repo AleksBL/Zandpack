@@ -1,7 +1,33 @@
+
+    
+    ▂▃▄▅▆▇█▓▒░psinought (v. 1.0)░▒▓█▇▆▅▄▃▂
+    
+    Author: Aleksander Bach Lorentzen, DTU ( abalo@dtu.dk / aleksander.bl@proton.me )
+    Supervisor: Mads Brandbyge, DTU.
+      - Nick Papior from DTU compute has constributed with performance tips.
+      - Alexander Croy from Friedrich Schiller University has contributed 
+        with methods for consistency checks and steadystate solution. 
+
+
+    Please cite this article:
+       @article{zandpackref,
+         title={Zandpack: A General Tool for Time-dependent 
+                Transport Simulation of Nanoelectronics},
+         author={Lorentzen, Aleksander Bach and Croy, Alexander and 
+                 Jauho, Antti-Pekka and Brandbyge, Mads},
+         journal={Computer Physics Communications},
+         pages={110087},
+         year={2026},
+         publisher={Elsevier}  }  
+
+
+    
 psinought program start
 
 sys.argv: ['/home/aleks/Desktop/Code/PythonModules/Zandpack/Zandpack/cmdtools//psinought', '--help']
 OMP threading is recommended for this program! (set OMP_NUM_THREADS=#cores or MKL....)
+Current envvars:
+OMP_NUM_THREADS=1
 
 Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)
 file : SaveFile
@@ -10,7 +36,7 @@ checkderivative : True
 dl : 1.0
 steptol : 1e-8
 add_random : False
-random_weight : 0.0001
+random_weight : 0.0
 L_info : False
 Axb_solver : cgs
 start_psi : None
@@ -22,3 +48,4 @@ Woodbury-inv : True
 prec_to_disk : False
 outer_einsum : True
 use_preconditioner : True
+reuse_psi : True

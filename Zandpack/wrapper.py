@@ -28,9 +28,18 @@ try:
         use_custom_mv = True
 except:
     pass
+
 try:
     if os.environ["ZANDPACK_DH_C64"].lower()=="true":
         dH_use_c128=False
+except:
+    pass
+
+try:
+    if os.environ["ZANDPACK_SPARSE_LIN_DH"].lower()=="true":
+        sparse_dH=True
+    elif os.environ["ZANDPACK_SPARSE_LIN_DH"].lower()=="false":
+        sparse_dH=False
 except:
     pass
 
@@ -284,7 +293,7 @@ class Input:   # Handles the Initial.py file
                 text+="lin_dh = Linear(\"Lin_DFTB_spinpol.npz\", rank, S_ee)\n"
                 text+="if rank == 0:\n"
                 text+="    assert lin_dh.FileNotFound == False\n"
-                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+"\n"
+                text+="    assert np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() < "+str(dm_diff_tol)+", \"Error: \" +str(np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max())\n"
                 text+="    if np.abs(lin_dh.dm0-sigO2NO(Hlp.DM0)).max() > 1e-7:\n"
                 text+="        print(\"It seems the DM changed since you linearized the Hamiltonian?\")\n"
                 text+="ldH = lin_dh.linearized_H\n"
@@ -1351,9 +1360,21 @@ class DFTB_Lin_spinpol:
             self.FileNotFound = False
             self.S_ee = S_ee
             self.use_custom_mv  = use_custom_mv
+            if sparse_dH: # global flag in top of file, probably true
+                self.sparseH()
             assert f["dm_in_ortho_basis"] == False
         except:
-            self.FileNotFound = True    
+            self.FileNotFound = True
+    def sparseH(self):
+        no           = self.dHdQ.shape[-1]
+        idx_i, idx_j = np.where((np.abs(self.dHdQ)>1e-10).any(axis=(0,3,4)))
+        self._idx_i  = idx_i
+        self._idx_j  = idx_j
+        size_before  = self.dHdQ.size + 0
+        self.dHdQ    = self.dHdQ[:,idx_i, idx_j, :, :].reshape(2, len(self._idx_i), 2 * no).copy()
+        self.outdH   = np.zeros((2, no, no), dtype=self.dH_dtype)
+        print("Threw away the zeros of dHdQ! (sparsity: "+str(np.round(self.dHdQ.size / size_before, 5))+") ")
+    
     def linearized_H(self, sigNO):
         f1,f2 = 0.5, 0.5
         no    = sigNO.shape[-1]
@@ -1363,11 +1384,13 @@ class DFTB_Lin_spinpol:
         q[0] = (P0 + P1)*f1
         q[1] = (P0 - P1)*f2
         dq = q - self.q0
-        dH = np.zeros((2, no, no), dtype=self.dH_dtype)
         if self.use_custom_mv == False:
             _q  = (dq * self.S_ee).astype(self.dH_dtype).reshape(2 * no)
-            # np.matvec(self.dHdQ[0], _q[0], out = dH[0])
-            # np.matvec(self.dHdQ[1], _q[1], out = dH[1])
+            if sparse_dH:
+                dH = np.matvec(self.dHdQ, _q) # reshape the last two indices to match _q
+                sparse_insert_spinpol(self._idx_i, self._idx_j, dH, self.outdH)
+                return self.outdH
+            dH = np.zeros((2, no, no), dtype=self.dH_dtype)
             np.matvec(self.dHdQ.reshape(2, no,no, 2 * no), _q, out = dH)
             return dH
         else:
@@ -1405,12 +1428,13 @@ class DFTB_Lin:
             self.FileNotFound = True
     def sparseH(self):
         no           = self.dHdQ.shape[0]
-        idx_i, idx_j = np.where((np.abs(self.dHdQ)>1e-10).all(axis=2))
+        # bugfix, all -> any
+        idx_i, idx_j = np.where((np.abs(self.dHdQ)>1e-10).any(axis=2))
         self._idx_i  = idx_i
         self._idx_j  = idx_j
         self.dHdQ    = self.dHdQ[idx_i, idx_j, :].copy()
         self.outdH   = np.zeros((no, no), dtype=self.dH_dtype)
-        print("Threw away the zeros of dHdQ!")
+        print("Threw away the zeros of dHdQ! (sparsity: "+str(np.round(self.dHdQ.size / no**3, 5))+") ")
     def linearized_H(self, sigNO):
         Q = self.S @ sigNO + sigNO @ self.S
         q = np.diag(Q[0])
@@ -1431,6 +1455,14 @@ def sparse_insert(idxi, idxj, vals, out):
     for I in range(n):
         i, j = idxi[I], idxj[I]
         out[i,j] = vals[I]
+
+@njit
+def sparse_insert_spinpol(idxi, idxj, vals, out):
+    n = len(idxi)
+    for js in range(2):
+        for I in range(n):
+            i, j = idxi[I], idxj[I]
+            out[js,i,j] = vals[js, I]
 
     
 class Mull_Lin_NO:

@@ -24,25 +24,18 @@ and allows for numerically exact open-system dynamics at the mean-field level. Y
        - Currently support for SIESTA and DFTB+ for use in open system TD-DFT. 
 
 ## Installation (see dependencies also)
-### Untested way 
-You may be able to download the code directly like this
-
-```console
-    pip install git+https://github.com/AleksBL/Zandpack.git
-```
-But this is untested for the moment. 
-### Tested way
 To install Zandpack, download the code as a zip file, unpack it and navigate to the Zandpack folder containing the setup.py file in a terminal. Now execute
 ```console
     python3 -m pip install -e .
 ```
-and you will have an editable install of the code.
+and you will have an editable install of the code. Zandpack is currently not available on pip.
 ### Add to PATH
 Additionally, add the these two folders to your PATH environment variable: 
 ```console
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/cmdtools:$PATH"
    export PATH="/YOUR/PATH/TO/Zandpack/Zandpack/mpi:$PATH"
 ```
+Put these exports in your .bashrc or .zshrc file.
 ### Dependencies
 Zandpack depends on the following packages: 
 - numpy
@@ -57,23 +50,17 @@ Zandpack depends on the following packages:
 - Gf_Module
 
 The [Block matrices](https://github.com/AleksBL/Block_TD_block_sparse), [Gf_Module](https://github.com/AleksBL/gfunc_Module) and [siesta_python](https://github.com/AleksBL/siesta_python) codes can be found on GitHub https://github.com/AleksBL and are installed analogously to this code (download and pip install...).
-
-
 ## Documentation
 A html file can be found (after you build it) in the docs/_build/html directory. This containes additional information about the code usage and structure. 
-
 ## Demonstration of use
 You can find a demonstration of the use of Zandpack in video form
 - [C60 static calculation](https://makertube.net/w/g9S9iA2tnZHwM9iyfZTxwV) 
 - [ZGNR TB + Hubbard calculation](https://makertube.net/w/sNQenJFFFAfFowNeYuVcYM) 
 - [DFTB+ used to model ZGNR /w density dependence](https://makertube.net/w/cWnZofN5T7fdHSdWy8tbTx)
-
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
-
 ## Examples
 Python scripts of several example calculations can be found in the examples folder. These are less structured, but they are understandable after doing the tutorials. 
-
 ## Contact 
 Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me or the signal chat.
 ## Licence

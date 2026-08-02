@@ -21,20 +21,26 @@ from Zandpack.plot import DM
 from time import sleep
 import subprocess
 args = sys.argv[1:]
-path       = args[0].replace(' ', '').split('=')[1]
-os.chdir(path)
-new_folder = os.getcwd()
-sys.path.append(new_folder)
 options = {'folder':'ABC_save',
            "tol":"0.5e-7",
            "delete":"True",
            "interp":"linear",
-           "usexz":"True"
+           "usexz":"True",
+           "extremexz":"False",
+           "xzlevel":"7",
            }
 if '--help' in args:
-    print("Args: ")
-    print(options)
+    print("This tool takes the chunks the timedependent density matrix produced by zand / nozand and puts it into one file and then compresses it using the built-in numpy savez_compressed, or using the xz tool.")
+    print('Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
     exit()
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
 
 for a in args:
     if 'command' not in a:
@@ -93,7 +99,8 @@ elif options["interp"]=="linear":
         idx = np.arange(i0,i1+1)
         #assert np.abs(absmax(dm, tdm, idx) - np.abs(dm[i0:i1+1] - (dm[i0] + (tdm[i0:i1+1] - tdm[i0])[:, None, None, None] * (dm[i1]-dm[i0])/(tdm[i1] - tdm[i0]))
         #             ).max()) < 1e-10
-        while absmax(dm, tdm, idx) < float(options["tol"]):
+        n = len(tdm)
+        while i1 < n-1 and absmax(dm, tdm, idx) < float(options["tol"]):
             i1 += 1
             idx = np.arange(i0,i1+1)
         i0 = i1  -1
@@ -137,7 +144,12 @@ else:
     np.savez(npz_path, # uncompressed, so xz has raw bytes to work with
              tdm=tout, dm=dmout.transpose(1,2,3,0),
              t_orig=tdm, tol=tol)
-    subprocess.run(["xz", "-9", "-e", "-T0", "-f", npz_path], check=True)
+    xzlevel = options["xzlevel"]
+    if options["extremexz"]=="True":
+        subprocess.run(["xz", "-"+xzlevel, "-e", "-T0", "-f", npz_path], check=True)
+    else:
+        subprocess.run(["xz", "-"+xzlevel,       "-T0", "-f", npz_path], check=True)
+
 assert ("LossyDensityMatrix.npz.xz" in os.listdir(options["folder"]) ) or ("LossyDensityMatrix.npz" in os.listdir(options["folder"]))
 
 if options["usexz"]=="True":

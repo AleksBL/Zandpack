@@ -1,0 +1,9 @@
+This tool takes the chunks the timedependent density matrix produced by zand / nozand and puts it into one file and then compresses it using the built-in numpy savez_compressed, or using the xz tool.
+Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)
+folder : ABC_save
+tol : 0.5e-7
+delete : True
+interp : linear
+usexz : True
+extremexz : False
+xzlevel : 7
