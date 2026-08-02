@@ -62,7 +62,10 @@ Tutorials are available as introductory notebooks. Navigate to into the second Z
 ## Examples
 Python scripts of several example calculations can be found in the examples folder. These are less structured, but they are understandable after doing the tutorials. 
 ## Contact 
-Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me or the signal chat.
+Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me or the signal chat (scan QR Below). The signal chat has a bot inside that has access to the Zandpack documentation. 
+
+<img src="./Zandpack/svg/GroupChat.png" width="100">
+
 ## Licence
 Zandpack is released under the Mozilla Public License v2.0. See the LICENCE file in the Zandpack directory.
 
