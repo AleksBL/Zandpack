@@ -9,14 +9,9 @@ import ctypes
 _me = ctypes.CDLL(None)
 _me.prctl(15, b"pockettddft", 0, 0, 0)
 import numpy as np
-from scipy.special import jn
-import sys
-import os
+import sys, os, sisl, numba, time
 from scipy.integrate import solve_ivp
-import sisl
-from time import time
 from Zandpack.td_constants import hbar
-from numba import njit
 
 args    = sys.argv[1:]
 options = {"proj_inds":"projs.npy",
@@ -58,30 +53,16 @@ dm0 = np.load(init.name + '/Arrays/DM_Ortho.npy')[:, idx][:,:,idx].copy()
 h0  = np.load(init.name + '/Arrays/H_Ortho.npy' )[:, idx][:,:,idx].copy()
 kT  = float(options["kT"])
 mu  = float(options["mu"])
-#if options[""]
 t0  = float(options["t0"])
 t1  = float(options["t1"])
 DM_full = np.load(init.name + '/Arrays/DM_Ortho.npy')
-def dm2DM(dm):
-    ic = 0
-    for i in idx:
-        jc = 0
-        for j in idx:
-            DM_full[:,i,j] = dm[:, ic, jc]
-            jc += 1
-        ic += 1
-@njit
+@numba.njit
 def dm2DM_fast(dm, DM):
-    ic = 0
-    for i in idx:
-        jc = 0
-        for j in idx:
+    for ic,i in enumerate(idx):
+        for jc,j in enumerate(idx):
             DM[:,i,j] = dm[:, ic, jc]
-            jc += 1
-        ic += 1
 
-def f(E):
-    return 1/(1 + np.exp((E - mu)/kT))
+def f(E): return 1/(1 + np.exp((E - mu)/kT))
 
 def undiag(f,v):
     F = np.zeros(v.shape,dtype=complex)
@@ -90,17 +71,16 @@ def undiag(f,v):
     return v @ F @ np.conj(v.transpose(0,2,1))
 
 def h2dm(h):
+    """ 
+        DM = f(h) = v*f( eig(h) )*v^T (because of unitary eigenvectors)
+    """
     e,v = np.linalg.eigh(h)
-    fe  = f(e)
-    dm  = undiag(fe, v)
+    dm  = undiag(f(e), v)
     return dm
 def proj2inds(M):
-    if M.ndim==2:
-        return M[idx[:, None], idx[None,:]]
-    elif M.ndim == 3:
-        return M[:, idx[:, None], idx[None,:]]
-    else:
-        assert 1 == 0, "Dim error in proj2inds"
+    if M.ndim==2:     return M[idx[:, None], idx[None,:]]
+    elif M.ndim == 3: return M[:, idx[:, None], idx[None,:]]
+    else: assert 1 == 0, "Dim error in proj2inds"
 def dm2h(t, dm):
     # dm2DM(dm)
     dm2DM_fast(dm, DM_full)
@@ -120,7 +100,7 @@ def ravel(s):
 rhoi    = dm0.copy()
 Shape   = rhoi.shape
 counter = 0
-_t1     = time()
+_t1     = time.time()
 maxit   = int(options['max_iter'])
 success = True
 delta   = np.random.random((100))
@@ -135,7 +115,8 @@ while np.abs(delta).max()>float(options['drho_tol']) or counter == 0:
     counter += 1
 dm0 = rhoi
 print("Tr(rho) = "+str(np.trace(dm0,axis1=1,axis2=2)))
-@njit
+# JDOS stuff
+@numba.njit
 def calcJDOS(E, e, fe, eta):
     out = 0.0 + 0.0j
     n   = len(e)
@@ -146,8 +127,7 @@ def calcJDOS(E, e, fe, eta):
             ed  = e[j]  - e[i]
             out+= fd * np.exp(-(((E - ed)*(ieta))**2))
     return out
-
-@njit
+@numba.njit
 def calc_whole_jdos(hw_v, e, fe, eta):
     nk = e.shape[0]
     res = np.zeros((nk, hw_v.shape[0]),dtype=np.complex128)
@@ -155,7 +135,6 @@ def calc_whole_jdos(hw_v, e, fe, eta):
         for i in range(len(hw_v)):
             res[ik, i] = calcJDOS(hw_v[i], e[ik], fe[ik], eta)
     return res
-
 if options["jdos"] == 'True':
     e   = np.linalg.eigvalsh(dm2h(t0, dm0))
     hwl = np.linspace(float(options["hw_min"]),
@@ -168,6 +147,7 @@ if options["jdos"] == 'True':
     JDOS = calc_whole_jdos(hwl, e, fe, eta)
     print("JDOS done")
     JDOS = JDOS.sum(axis=0)*(1/np.pi)
+
 if options["NI"] == "False":
     NI = False
 else:
@@ -176,12 +156,11 @@ else:
 C = -1j / hbar
 def heis(t, y):
     dm   = y.reshape(nk, no, no)
-    if NI:
-        Hdm  = dm2h(t, dm0)
-    else:
-        Hdm  = dm2h(t, dm)
+    if NI: Hdm  = dm2h(t, dm0) # H without density dependence
+    else:  Hdm  = dm2h(t, dm)  # H with density dependence
     res  = Hdm @ dm
-    res -= res.conj().transpose(0,2,1)
+    res -= res.conj().transpose(0,2,1) # H & DM are hermitian
+    # Sanity check
     assert np.abs(dm  -  dm.conj().transpose(0,2,1)).max()<1e-7, "ERROR : " +str(np.abs(dm- dm.conj().transpose(0,2,1)).max()) + " at t="+str(t)
     assert np.abs(Hdm - Hdm.conj().transpose(0,2,1)).max()<1e-7, "ERROR : " +str(np.abs(Hdm- Hdm.conj().transpose(0,2,1)).max()) + " at t="+str(t)
     res *= C
@@ -189,14 +168,26 @@ def heis(t, y):
 
 Nt    = 4000
 teval = np.linspace(t0, t1, Nt)
-_T1   = time()
+_T1   = time.time()
 out   = solve_ivp(heis, (t0, t1), dm0.ravel(), 
                   method='DOP853', t_eval=teval,
-                  rtol=1e-10, atol=1e-10, )
-_T2 = time()
+                  rtol=1e-10, atol=1e-10,)
+_T2 = time.time()
 print("TDDFT took : " + str(np.round(_T2 - _T1, 2)) +"secs")
 print(out.y.shape)
 DMf = out.y.T.reshape(len(teval), nk, no,no)
+
+
+
+
+
+
+
+
+
+# PLOTTING
+
+
 if options["obs"] != "None":
     import matplotlib.pyplot as plt
     from Zandpack.plot import interp_and_fft
@@ -232,3 +223,25 @@ if options["obs"] != "None":
         np.savez_compressed(options["dataname"] + ".npz",
                             x = 2 * np.pi * hbar * w[ii],
                             y = fs[ii]/fb[ii], )
+
+sys.exit()
+########DEPRECATED
+def dm2DM(dm):
+    ic = 0
+    for i in idx:
+        jc = 0
+        for j in idx:
+            DM_full[:,i,j] = dm[:, ic, jc]
+            jc += 1
+        ic += 1
+
+@numba.njit
+def dm2DM_fast(dm, DM):
+    ic = 0
+    for i in idx:
+        jc = 0
+        for j in idx:
+            DM[:,i,j] = dm[:, ic, jc]
+            jc += 1
+        ic += 1
+

@@ -55,7 +55,8 @@ options = {'dt': '0.1',          # fs
            'qr_n':'10',
            'sourcefiles':'None', # Seperate files by ","
            'qr_nocompression':'0',
-           'onlysource':'0'
+           'onlysource':'0',
+           "legendlabels":"None",
            }
 
 if '--help' in args:
@@ -117,9 +118,21 @@ if options['plotcurrent']=='1':
     from Zandpack.mpi_tools import combine_currents as CC
     t,J = CC([options['savefile']], n=num_elecs)
     _idx = (t>tmin)*(t<tmax)
+    if options["legendlabels"]!="None":
+        _labs =options["legendlabels"].split(",")
+        uselabels = True
+        print(_labs)
+    else:
+        uselabels = False
+    itc = 0
     for i in range(num_elecs):
         for ik in kidx:
-            plt.plot(t[_idx],J[i][_idx,ik], label = r'$J_'+str(i)+'$, ik='+str(ik))
+            if uselabels:
+                plt.plot(t[_idx],J[i][_idx,ik], label = r"$"+_labs[itc]+"$")
+            else:
+                plt.plot(t[_idx],J[i][_idx,ik], label = r'$J_'+str(i)+'$, ik='+str(ik))
+            itc+=1
+
     plt.legend()
     plt.xlabel(r'$\mathrm{Time}$ $t$ $[\mathrm{fs}]$',size = 16)
     plt.ylabel(r'$\mathrm{Current}$ $[\frac{\mathrm{e}}{\mathrm{fs}}]$',size = 16)

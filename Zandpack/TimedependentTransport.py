@@ -2092,7 +2092,11 @@ class TD_Transport:
         Tij = (_Tij * self.tbtwkpt[:,None]).sum(axis = 0)
         
         if return_result:
-            return Eg, Tij 
+            if kpnt is None:
+                return Eg, Tij
+            else:
+                return Eg, _Tij[kpnt]
+            
         sidx = self.sampling_idx[lead]
         if hasattr(self, '_old_sampling_idx'):
             sidx = self._old_sampling_idx[lead]

@@ -635,6 +635,7 @@ class Control: # Replaces bash scripting
                       memory_conserve= None, fact_kT= None, tolerance  = None,
                       quadvec_workers= None, Bias   = None, save_last_H= None, 
                       write_dm_every=None, write_progress=None, adaptive_mixer = False,
+                      max_iter=None,
                       custom_exec = None):
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
