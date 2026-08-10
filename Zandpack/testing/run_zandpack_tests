@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 14 14:50:44 2022
+
+@author: aleksander
+
+Tool for printing and plotting information from a TD calculation.
+
+"""
+
+import sys, os
+
+args = sys.argv[1:]
+print('Running Zandpack tests')
+print('')
+print('sys.argv:', sys.argv)
+print('')
+orig_dir = __file__[:-19]
+
+path = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+Tests = [#"Croy2009",
+         "PopescuCroy2016",
+         ]
+
+if len(os.listdir())>0:
+    print("Your testing directory is not empty, please make an empty folder for the testing.")
+    sys.exit()
+
+print("Copying pseudo-potentials from "+args[1])
+os.system("cp -R "+args[1] + " .")
+for tst in Tests:
+    print("Copying test "+tst)
+    os.system("cp -R "+orig_dir + tst+" .")
+    os.chdir(tst)
+    os.system("sh run.sh")
+    os.chdir("../")
+
+
+
+
+
+
+
