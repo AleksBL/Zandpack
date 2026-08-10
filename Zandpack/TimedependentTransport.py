@@ -2284,8 +2284,7 @@ class TD_Transport:
         print('------------\n')
         print('Zandpack version: ' + __version__)
         print(CiteString)
-        print('Code can be obtained from ' + WebPage)
-    
+
     def make_f_general(self, parallel = False, fastmath = False, nogil = False):
         """
         DEPRECATED 
