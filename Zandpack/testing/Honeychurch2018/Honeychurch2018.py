@@ -44,7 +44,7 @@ elec = sisl.Hamiltonian(sisl.geom.sc(lat_const, sisl.Atom(1, R= 3.0)).add_vacuum
 elec.construct([[0.1, lat_const * 1.1], 
                 [0  , t_elec             ]])
 
-Test.run_electrodes(fois_gras_H = [elec, elec])
+Test.run_electrodes(manual_H = [elec, elec])
 
 dev_H = sisl.Hamiltonian(sisl.geom.sc(lat_const, sisl.Atom(1, R= 3.0)).tile(tx+2,0).add_vacuum(10,1).add_vacuum(10,2).add_vacuum(10,0))
 dev_H.construct([[0.1, lat_const * 1.1], 
@@ -68,8 +68,7 @@ dev_H[tx-1, tx+1]  =  5**0.5
 #dev_H[tx, tx+1]  =  5**0.5
 
 
-Test.run_device(fois_gras_H = dev_H, 
-                )
+Test.run_device(manual_H = dev_H, )
 Test.read_data()
 
 # In[read stuff]
@@ -151,6 +150,17 @@ plt.xlim([0.0, 1*Tp])
 plt.plot(t, d['current_left'])
 plt.savefig("HoneyChurch2018_Jl.svg")
 plt.close()
-# Test.write_to_file(name = 'TDT_Honeychurch2018')
 np.save('Timearray.npy',t)
 np.save('Jlarray.npy',d['current_left'])
+Test.tofile(name = 'TDT')
+
+
+np.savez_compressed("honeychurch2018_results.npz",
+                    #scipy_t  = t1,
+                    #scipy_dm = dm,
+                    #scipy_jl = jl,
+                    rk4_jl   = d['current_left'],
+                    rk4_jr   = d['current_right'],
+                    rk4_t    = t
+                    )
+

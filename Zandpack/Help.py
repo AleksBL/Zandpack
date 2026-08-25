@@ -80,7 +80,6 @@ class TDHelper:
                                       )[0]
                               for ia in range(self.num_leads)]
             self.pos_elecorbs = [self.orb_pos[idx] for idx in self.orb_elecs]
-            
         except:
             self.orb_pos = None
             try:
@@ -184,6 +183,10 @@ class TDHelper:
             for j in idx2:
                 S[:,i,j] = 0.0
         return S
+    def geom_ascii_string(self):
+        return gpaw_plot(self)
+    
+        
     
 
     
@@ -314,3 +317,27 @@ def check_H_herm(dm, H0, t0, dH, n = 10, tol = 1e-6, rweight=0.0125, hard_fail =
     if all_passed:
         print("H passed the test for hermiticity.")
         
+def gpaw_plot(Helper):
+    try:
+        from gpaw import output
+        from ase import Atoms
+    except:
+        return "GPAW import did not succeed, skipping geometry plot."
+    R,idx = np.unique(Helper.orb_pos,axis=0, return_index=True)
+    S = Helper.species[Helper._o2a][idx]
+    
+    cell = np.diag([R[:,0].max() - R[:,0].min() + 4.0, 
+                    R[:,1].max() - R[:,1].min() + 4.0, 
+                    R[:,2].max() - R[:,2].min() + 4.0])
+    Rc = np.average(R, axis=0)
+    R -= Rc
+    R+= cell.sum(axis=0) / 2
+    A  = Atoms(positions =R,
+               numbers = S, 
+               cell = cell)
+    P = output.plot(A)
+    return P
+
+    
+    
+    

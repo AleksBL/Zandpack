@@ -59,6 +59,8 @@ You can find a demonstration of the use of Zandpack in video form
 - [DFTB+ used to model ZGNR /w density dependence](https://makertube.net/w/cWnZofN5T7fdHSdWy8tbTx)
 ## Tutorials
 Tutorials are available as introductory notebooks. Navigate to into the second Zandpack folder and copy the notebooks from there into a directory where you wish to run your calculations (Desktop or other). Other example calculations will also be made public here at some point. 
+
+Reading the tests might also give a better overview of the flow of a calculation, but the amount of comments in the tests are sparse.
 ## Examples
 Python scripts of several example calculations can be found in the examples folder. These are less structured, but they are understandable after doing the tutorials. 
 ## Contact 

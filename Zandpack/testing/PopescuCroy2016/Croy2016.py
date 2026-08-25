@@ -40,7 +40,7 @@ C.make_device(elec_inds = [[0],  [tx+1]] )
 
 plt.show()
 C.Device.Visualise()
-plt.show()
+# plt.show()
 # Create the electronic structures. These are sisl shorthands for creating the Hamiltonians of the leads and device
 elec = sisl.Hamiltonian(sisl.geom.sc(lat_const, sisl.Atom(1, R= 3.0)).add_vacuum(10,1).add_vacuum(10,2))
 elec.set_nsc((3,1,1))
@@ -121,7 +121,7 @@ C.tofile('TDT_Croy2016')
 #np.save('Jlarray.npy',ds['current_left'])
 
 np.savez_compressed("croy2016_results.npz",
-                    scipy_t  = ts,
+                    scipy_t  = t1,
                     scipy_dm = dm,
                     scipy_jl = jl,
                     rk4_jl   = ds['current_left'],

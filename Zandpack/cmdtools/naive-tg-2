@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue May 26 10:37:30 2026
+
+@author: aleks
+"""
+
+import numpy as np
+from scipy.special import jn
+import sys,os
+from scipy.integrate import simpson as simp
+args    = sys.argv[1:]
+options = {"hw":"None",
+           "ampl":"None",
+           "dhw":"0.05",
+           "dA":"0.05",
+           "file":"SteadyStateFile.npz",
+           'i':"0", 
+           'j':"1",
+           "Nmax":"2",
+           "mu":"0.0",
+           "outfile":"tgnaivecond.npz",
+           "show":"False",
+           }
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+f = np.load(options["file"])
+T = f["Transmission"][0,int(options["i"]),int(options["j"])]
+E = f["Eg_DOS"]
+Emin, Emax = E.min(), E.max()
+
+_hw0, _hw1 = options["hw"].split(",")[0],   options["hw"].split(",")[1]
+_hw0, _hw1 = float(_hw0), float(_hw1)
+dhw        = float(options["dhw"])
+_A0, _A1   = options["ampl"].split(",")[0], options["ampl"].split(",")[1]
+_A0, _A1   = float(_A0), float(_A1)
+dA         = float(options["dA"])
+
+
+
+hwv   = np.arange(_hw0, _hw1, dhw)#np.load(options["hw_v"])
+ampl  = np.arange(_A0,   _A1, dA)#np.load(options["hw_v"])
+nw = len(hwv)
+na = len(ampl)
+res= np.zeros((nw, na))
+N  = int(options["Nmax"])
+mu = float(options["mu"])
+kT = 0.025
+def fermifunc(E):
+    return 1/(1 + np.exp(E / kT))
+f0 = fermifunc(E)
+for iw in range(nw):
+    hw = hwv[iw]
+    for ia in range(len(ampl)):
+        ai = ampl[ia]
+        for iN in range(-N, N+1):
+            Ei  = mu + iN * hw
+            fn  = fermifunc(E+Ei)*np.abs(jn(iN, ai/hw))**2
+            #idx = np.where()
+            #TT  = np.interp1d(Ei+E, )
+            res[iw,ia] += simp((fn - f0)*T, x=E)
+
+np.savez_compressed(options["outfile"], I = res, hw=hwv)
+if options["show"] == 'True':
+    import matplotlib.pyplot as plt
+    plt.matshow(res)
+    plt.show()
+    plt.plot(hwv, res)
+    plt.xlabel(r"$\hbar \omega$ [eV]")
+    plt.show()
+    plt.plot(ampl, res.T)
+    plt.xlabel(r"Amplitude")
+    plt.show()
+    

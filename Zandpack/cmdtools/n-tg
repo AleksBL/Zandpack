@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""
+Minimal floquet photo-assisted current from Viljas and Cuevas, 2007.
+
+    I = (e/h) int_0^{hw} de  sum_{k,l} Tr[Gr Gam_R^(k) Ga Gam_L^(l)] (f_L^(l) - f_R^(k))
+
+    [Gam_W^(l)]_{m,n} = J_{m+l}(a_W) J_{n+l}(a_W) Gam_W(e - udc_W - l hw)
+    [Sig_W]_{m,n}     = sum_l J_{m+l}(a_W) J_{n+l}(a_W) Sig_W(e - udc_W - l hw)
+
+Lead quantities sig_L/sig_R/gam_L/gam_R are supplied should be given as
+callables  e -> (norb, norb) array.  Energies in eV, current in amperes.
+
+"""
+
+import numpy as np
+from scipy.integrate import quad, quad_vec
+from scipy.special import jv
+import matplotlib.pyplot as plt
+from time import time,sleep
+from Zandpack.FittedSelfEnergy import from_saved_file
+import sys, os, tqdm
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+args    = sys.argv[1:]
+options = {"device":"ABC",
+           "spinfactor":"1.0",
+           "hw":"hw.npy",
+           "ampl":"ampl.npy",
+           "voltage":"0.0",
+           "NPHOT":"3",
+           "outfile":"tg_ext.npz",
+           "kT":"0.025",
+           "epsrel":"1e-7",
+           "epsabs":"1e-7",
+           "limit":"800"
+           }
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+path = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+mode  = 'fitted'
+name  = options["device"]
+H0    = np.load(name+ "/Arrays/SCF_Hlast_Ortho.npy")
+_SE   = from_saved_file(name+"/Arrays")
+class dummy_se:
+    def __init__(self, fitSE, kidx):
+        self.SE   = fitSE
+        self.kidx = kidx
+        self.no   = fitSE.Coeffs.shape[-1]
+    def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
+        _E = np.array([E])
+        return self.SE.evaluate(_E, noopt=False)[self.kidx, 0]
+kidx  = 0
+SE    = [dummy_se(se, kidx) for se in _SE]
+E2_OVER_H = 3.874045865e-5
+G0    = float(options["spinfactor"]) * E2_OVER_H
+hw    = options["hw"].split(",")
+hw1, hw2, hwN = [float(hwi) for hwi in hw]
+hwN = int(hwN)
+hw   = np.linspace(hw1, hw2, hwN)
+ampl = options["ampl"].split(",")
+ampl1, ampl2, amplN = [float(ai) for ai in ampl]
+amplN = int(amplN)
+ampl = np.linspace(ampl1, ampl2, amplN)
+
+def fermi(e, mu, kT):
+    return 1.0 / (1.0 + np.exp(np.clip((e - mu) / kT, -400.0, 400.0)))
+def integrand(e, V, H0, sig_L, sig_R, hw,
+              aL=0.0, aR=0.0, nflq=5, nphot=14, eF=0.0, kT=5e-3, eta=0.5):
+    """sum_{k,l} Tr[Gr Gam_R^(k) Ga Gam_L^(l)] (f_L^(l) - f_R^(k)) at energy e."""
+    ms = np.arange(-nflq,  nflq +1)
+    ls = np.arange(-nphot, nphot+1)
+    nb, D = H0.shape[0], len(ms)
+
+    muL, muR = eF + eta * V, eF - (1.0 - eta) * V
+    uL, uR = muL - eF, muR - eF
+    # --- retarded Green function ---
+    sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+    sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+    vL_v = np.zeros((len(ls), len(ms)))
+    vR_v = np.zeros((len(ls), len(ms)))
+    for il,l in enumerate(ls):
+        vL  = np.array([jv(m + l, aL) for m in ms])
+        vR  = np.array([jv(m + l, aR) for m in ms])
+        vL_v[il], vR_v[il] = vL, vR
+        sigL[il], sigR[il] = sig_L(e-uL-l*hw), sig_R(e-uR-l*hw)
+    sig =np.einsum("lm,ln,lij->minj",vL_v,vL_v,sigL,optimize=True)
+    sig+=np.einsum("lm,ln,lij->minj",vR_v,vR_v,sigR,optimize=True)
+    # Overwrite sigma with gamma
+    for il,l in enumerate(ls):
+        sigL[il] -= sigL[il].T.conj()
+        sigL[il] *= 1j
+        sigR[il] -= sigR[il].T.conj()
+        sigR[il] *= 1j
+    gr  = np.kron(np.diag(e + 0.0j + ms * hw), np.eye(nb))
+    # gr -= np.kron(np.eye(D), H0)
+    for i in range(D):
+        gr[i*nb:(i+1)*nb, i*nb:(i+1)*nb] -= H0
+    gr -= sig.reshape(len(ms)*nb, len(ms)*nb)
+    gr = np.linalg.inv(gr)
+    ga = gr.T.conj()
+    total = 0.0
+    for ik, k in enumerate(ls):
+        vR = np.array([jv(m + k, aR) for m in ms])
+        gR = sigR[ik]
+        fR = fermi(e - k * hw, muR, kT)
+        W4 = np.einsum("minj,n,b,jl,blcv -> micv",
+                       gr.reshape((nflq*2+1), nb, (nflq*2+1), nb),
+                       vR, vR, gR,
+                       ga.reshape((nflq*2+1), nb, (nflq*2+1), nb),
+                       optimize=True)
+        occ_v,occ_i = [],[]
+        for ic, l in enumerate(ls):
+            occ = fermi(e - l * hw, muL, kT) - fR
+            if abs(occ) < 1e-14:
+                continue
+            occ_v.append(occ)
+            occ_i.append(ic)
+        if len(occ_v)<1:
+            continue
+        occ_v = np.array(occ_v); occ_i = np.array(occ_i)
+        vL_ml = np.array([[jv(m + l, aL) for m in ms] for l in ls[occ_i]]).T.copy()
+        total+= np.einsum("minj,nl,ml,l,lji->", W4, vL_ml, vL_ml, occ_v, sigL[occ_i], optimize=True).real
+    return total
+def current(V, **kw):
+    val,err = quad(lambda e: integrand(e, V, **kw), 0.0, kw["hw"], 
+                   epsabs=float(options["epsabs"]), 
+                   epsrel=float(options["epsrel"]), 
+                   limit=int(options["limit"]))
+    val *= G0
+    err *= G0
+    return val,err
+# def conductance(dV=1e-4, **kw):
+#     i, _ = current([dV, -dV], **kw)
+#     return (i[0] - i[1]) / (2.0 * dV)
+if __name__ == "__main__":
+    cur   = np.zeros((hwN, amplN))
+    err   = np.zeros((hwN, amplN))
+    IJ    = [(i,j) for i in range(hwN) for j in range(amplN)]
+    IJ    = np.array(IJ)
+    idx   = np.arange(len(IJ))
+    np.random.seed(42)
+    np.random.shuffle(idx)
+    IJ    = IJ[idx].copy()
+    batch = np.array_split(IJ, size)[rank]
+    it = 0 
+    for i,j in batch:
+        par = dict(H0=H0[kidx],
+                   sig_L=lambda e: SE[0].self_energy(e),
+                   sig_R=lambda e: SE[1].self_energy(e),
+                   hw=hw[i], kT=float(options["kT"]), 
+                   aL =  ampl[j]/hw[i], aR = -ampl[j]/hw[i],
+                   nflq=int(options["NPHOT"]), nphot=int(options["NPHOT"]),
+                  )
+        cur[i,j],err[i,j] = current(float(options["voltage"]), **par)
+        it+=1
+        print("rank "+ str(rank)+": "+str(it) +" / "+str(len(batch)))
+        
+    np.savez_compressed("_rank_"+str(rank)+options["outfile"], cur=cur, err=err)
+    comm.Barrier()
+    sleep(1.0)
+    if rank == 0:
+        cur = np.zeros((hwN, amplN))
+        err = np.zeros((hwN, amplN))
+        for i in range(size):
+            file = "_rank_"+str(i)+options["outfile"]
+            if ".npz" not in file:
+                file = file+".npz"
+            f = np.load(file)
+            cur += f["cur"]
+            err += f["err"]
+        np.savez_compressed(options["outfile"], cur=cur,err=err)
+        for i in range(size):
+            file = "_rank_"+str(i)+options["outfile"]
+            if ".npz" not in file:
+                file = file+".npz"
+            os.system("rm "+file)
+            
+            
+            

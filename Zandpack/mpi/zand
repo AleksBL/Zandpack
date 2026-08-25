@@ -424,7 +424,12 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
         step_fourth_sig(SIGS, CH)
         _Timer.time(["Update Sigma"])
         _Timer.time(["Intermediate Save"])
-        t0 += h
+        ### MISTAKE FIX 25.08.2026
+        ### t0 gets updated by new h instead of old h. This is not correct.
+        ##### OLD CODE:
+        ##### t0 += h
+        ### new: update by old_h
+        t0 += old_h
         DM += [SIGS[-1].copy()]
         times += [t0 + 0.0]
         step_count += 1
