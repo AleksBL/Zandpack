@@ -1,5 +1,5 @@
 from Zandpack import __version__
-latest_update = "(26.02.2026)"
+latest_update = "(25.08.2026)"
 MPI_ProgramName = """▂▃▄▅▆▇█▓▒░zand (v. """+str(__version__)+""")░▒▓█▇▆▅▄▃▂"""
 MPI_ProgramNameNO = """▂▃▄▅▆▇█▓▒░nozand (v. """+str(__version__)+""")░▒▓█▇▆▅▄▃▂"""
 psi0_name ="""▂▃▄▅▆▇█▓▒░psinought (v. """+str(__version__)+""")░▒▓█▇▆▅▄▃▂"""

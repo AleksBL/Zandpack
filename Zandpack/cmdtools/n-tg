@@ -8,26 +8,26 @@ Minimal floquet photo-assisted current from Viljas and Cuevas, 2007.
     [Sig_W]_{m,n}     = sum_l J_{m+l}(a_W) J_{n+l}(a_W) Sig_W(e - udc_W - l hw)
 
 Lead quantities sig_L/sig_R/gam_L/gam_R are supplied should be given as
-callables  e -> (norb, norb) array.  Energies in eV, current in amperes.
+callables  e -> (norb, norb) array.  Energies in eV, current in e/fs.
 
 """
 
 import numpy as np
-from scipy.integrate import quad, quad_vec
+from scipy.integrate import quad
 from scipy.special import jv
-import matplotlib.pyplot as plt
-from time import time,sleep
 from Zandpack.FittedSelfEnergy import from_saved_file
-import sys, os, tqdm
+from Zandpack.Help import TDHelper
+import sys, os
 from mpi4py import MPI
+from Zandpack.td_constants import hbar
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-
+if rank == 0:
+    print("Returning current in units of e/fs")
 args    = sys.argv[1:]
 options = {"device":"ABC",
-           "spinfactor":"1.0",
            "hw":"hw.npy",
            "ampl":"ampl.npy",
            "voltage":"0.0",
@@ -36,8 +36,16 @@ options = {"device":"ABC",
            "kT":"0.025",
            "epsrel":"1e-7",
            "epsabs":"1e-7",
-           "limit":"800"
+           "limit":"800",
+           "Wmat":"None",
+           "Wmat_fact":'1.0',
+           "Wideband":"False",
+           "Wideband_fact":"1.0",
            }
+if "--help" in args:
+    for i in range(len(args)):
+        print(options)
+    sys.exit()
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
@@ -49,18 +57,43 @@ mode  = 'fitted'
 name  = options["device"]
 H0    = np.load(name+ "/Arrays/SCF_Hlast_Ortho.npy")
 _SE   = from_saved_file(name+"/Arrays")
-class dummy_se:
-    def __init__(self, fitSE, kidx):
-        self.SE   = fitSE
-        self.kidx = kidx
-        self.no   = fitSE.Coeffs.shape[-1]
-    def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
-        _E = np.array([E])
-        return self.SE.evaluate(_E, noopt=False)[self.kidx, 0]
+Hlp   = TDHelper(name, valid_ranks = [i for i in range(size)])
+if options["Wideband"]!="True":
+    class dummy_se:
+        def __init__(self, fitSE, kidx):
+            self.SE   = fitSE
+            self.kidx = kidx
+            self.no   = fitSE.Coeffs.shape[-1]
+        def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
+            _E = np.array([E])
+            return self.SE.evaluate(_E, noopt=False)[self.kidx, 0]
+else:
+    class dummy_se:
+        def __init__(self, fitSE, kidx):
+            self.SE   = fitSE
+            self.kidx = kidx
+            self.no   = fitSE.Coeffs.shape[-1]
+            self.make_gamma()
+        def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
+            G = self.gamma
+            return (-1j/2) * G
+        def make_gamma(self):
+            Emin, Emax, N = -5.0, 5.0, 252
+            Eg = np.linspace(Emin, Emax,N)
+            dE = Eg[1] - Eg[0]
+            Eg = Eg[1:]*0.5 + Eg[:-1]*0.5
+            G  = np.zeros((self.no, self.no),dtype=complex)
+            for i in range(N-1):
+                _Ei = np.array([Eg[i]])
+                SE = self.SE.evaluate(_Ei, noopt=False)[self.kidx, 0]
+                g  = 1j*(SE - SE.conj().T)
+                G += g
+            G*=(dE * float(options["Wideband_fact"]))
+            G*=(1/(Emax-Emin))
+            self.gamma = G
+
 kidx  = 0
 SE    = [dummy_se(se, kidx) for se in _SE]
-E2_OVER_H = 3.874045865e-5
-G0    = float(options["spinfactor"]) * E2_OVER_H
 hw    = options["hw"].split(",")
 hw1, hw2, hwN = [float(hwi) for hwi in hw]
 hwN = int(hwN)
@@ -69,11 +102,26 @@ ampl = options["ampl"].split(",")
 ampl1, ampl2, amplN = [float(ai) for ai in ampl]
 amplN = int(amplN)
 ampl = np.linspace(ampl1, ampl2, amplN)
-
+Wmat = None
+if options["Wmat"]!="None":
+    P1 = np.average(Hlp.pos_elecorbs[0],axis=0)
+    P2 = np.average(Hlp.pos_elecorbs[1],axis=0)
+    drc= P2 - P1; drc *= 1/np.linalg.norm(drc)
+    Po = (Hlp.orb_pos - P1).dot(drc) 
+    X0 = Po.min(); X1 = Po.max()
+    def ramp_field(r,t):
+        _b1 =  1.0
+        _b2 = -1.0
+        X = (r - P1).dot(drc); F = _b1 + (_b2 - _b1) *(X - X0)/(X1 - X0)
+        return F
+    _no  = H0.shape[-1]
+    Wmat = Hlp.approxfield2mat(0.0, ramp_field, orthogonal=True).reshape(_no, _no).copy()
+    Wmat*= 0.5
 def fermi(e, mu, kT):
     return 1.0 / (1.0 + np.exp(np.clip((e - mu) / kT, -400.0, 400.0)))
 def integrand(e, V, H0, sig_L, sig_R, hw,
-              aL=0.0, aR=0.0, nflq=5, nphot=14, eF=0.0, kT=5e-3, eta=0.5):
+              aL=0.0, aR=0.0, nflq=5, nphot=14, 
+              eF=0.0, kT=5e-3, eta=0.5):
     """sum_{k,l} Tr[Gr Gam_R^(k) Ga Gam_L^(l)] (f_L^(l) - f_R^(k)) at energy e."""
     ms = np.arange(-nflq,  nflq +1)
     ls = np.arange(-nphot, nphot+1)
@@ -100,9 +148,17 @@ def integrand(e, V, H0, sig_L, sig_R, hw,
         sigR[il] -= sigR[il].T.conj()
         sigR[il] *= 1j
     gr  = np.kron(np.diag(e + 0.0j + ms * hw), np.eye(nb))
-    # gr -= np.kron(np.eye(D), H0)
     for i in range(D):
         gr[i*nb:(i+1)*nb, i*nb:(i+1)*nb] -= H0
+    if Wmat is not None:
+        _w = Wmat*((aL-aR)*hw*0.5)
+        _wc = _w.T.conj()
+        # Factor of 2 depends on the definition
+        for i in range(0, D-1):
+            b1 = slice( i*nb,    (i+1)*nb)
+            b2 = slice((i+1)*nb, (i+2)*nb)
+            gr[b1,b2] -= _w  
+            gr[b2,b1] -= _wc
     gr -= sig.reshape(len(ms)*nb, len(ms)*nb)
     gr = np.linalg.inv(gr)
     ga = gr.T.conj()
@@ -134,54 +190,53 @@ def current(V, **kw):
                    epsabs=float(options["epsabs"]), 
                    epsrel=float(options["epsrel"]), 
                    limit=int(options["limit"]))
-    val *= G0
-    err *= G0
+    val *= 1 / (hbar*2*np.pi)
+    err *= 1 / (hbar*2*np.pi)
     return val,err
-# def conductance(dV=1e-4, **kw):
-#     i, _ = current([dV, -dV], **kw)
-#     return (i[0] - i[1]) / (2.0 * dV)
 if __name__ == "__main__":
-    cur   = np.zeros((hwN, amplN))
-    err   = np.zeros((hwN, amplN))
-    IJ    = [(i,j) for i in range(hwN) for j in range(amplN)]
-    IJ    = np.array(IJ)
-    idx   = np.arange(len(IJ))
-    np.random.seed(42)
-    np.random.shuffle(idx)
-    IJ    = IJ[idx].copy()
-    batch = np.array_split(IJ, size)[rank]
-    it = 0 
-    for i,j in batch:
+    IJ = np.array([(i, j) for i in range(hwN) for j in range(amplN)])
+    ntasks = len(IJ)
+    # --- shared task counter on rank 0 -------------------------------------
+    if rank == 0:
+        counter = np.zeros(1, dtype=np.int64)
+        win = MPI.Win.Create(counter, disp_unit=8, comm=comm)
+    else:
+        win = MPI.Win.Create(None, comm=comm)
+    _one, _got = np.ones(1, dtype=np.int64), np.zeros(1, dtype=np.int64)
+    def next_task():
+        """Atomically claim the next index. Returns ntasks when exhausted."""
+        win.Lock(0, MPI.LOCK_SHARED)
+        win.Fetch_and_op(_one, _got, 0, 0, op=MPI.SUM)
+        win.Unlock(0)
+        return int(_got[0])
+    # --- work loop ---------------------------------------------------------
+    cur = np.zeros((hwN, amplN))
+    err = np.zeros((hwN, amplN))
+    ndone = 0
+    while True:
+        t = next_task()
+        if t >= ntasks:
+            break
+        i, j = IJ[t]
         par = dict(H0=H0[kidx],
                    sig_L=lambda e: SE[0].self_energy(e),
                    sig_R=lambda e: SE[1].self_energy(e),
-                   hw=hw[i], kT=float(options["kT"]), 
-                   aL =  ampl[j]/hw[i], aR = -ampl[j]/hw[i],
-                   nflq=int(options["NPHOT"]), nphot=int(options["NPHOT"]),
-                  )
-        cur[i,j],err[i,j] = current(float(options["voltage"]), **par)
-        it+=1
-        print("rank "+ str(rank)+": "+str(it) +" / "+str(len(batch)))
-        
-    np.savez_compressed("_rank_"+str(rank)+options["outfile"], cur=cur, err=err)
-    comm.Barrier()
-    sleep(1.0)
+                   hw=hw[i], kT=float(options["kT"]),
+                   aL=ampl[j] / hw[i], aR=-ampl[j] / hw[i],
+                   nflq=int(options["NPHOT"]), nphot=int(options["NPHOT"]))
+        cur[i, j], err[i, j] = current(float(options["voltage"]), **par)
+        ndone += 1
+        print(f"rank {rank}: local {ndone}, global {t+1}/{ntasks}", flush=True)
+    win.Free()
+    # --- collect: one call, no files, no sleep ------------------------------
+    tot_cur = np.zeros_like(cur) if rank == 0 else None
+    tot_err = np.zeros_like(err) if rank == 0 else None
+    comm.Reduce(cur, tot_cur, op=MPI.SUM, root=0)
+    comm.Reduce(err, tot_err, op=MPI.SUM, root=0)
     if rank == 0:
-        cur = np.zeros((hwN, amplN))
-        err = np.zeros((hwN, amplN))
-        for i in range(size):
-            file = "_rank_"+str(i)+options["outfile"]
-            if ".npz" not in file:
-                file = file+".npz"
-            f = np.load(file)
-            cur += f["cur"]
-            err += f["err"]
-        np.savez_compressed(options["outfile"], cur=cur,err=err)
-        for i in range(size):
-            file = "_rank_"+str(i)+options["outfile"]
-            if ".npz" not in file:
-                file = file+".npz"
-            os.system("rm "+file)
-            
-            
-            
+        np.savez_compressed(options["outfile"],
+                            cur=tot_cur,
+                            err=tot_err,
+                            hw=hw,
+                            ampl=ampl
+                            )

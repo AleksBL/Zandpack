@@ -40,7 +40,7 @@ with open(IL, "a") as f:
 
 from setuptools import setup
 setup(name='Zandpack',
-      version='1.0',
+      version='1.1',
       description='Package that merges TD-DFT and open system charge transport using SIESTA, DFTB+ or your own custom model',
       url='',
       author='Aleksander Bach Lorentzen',
