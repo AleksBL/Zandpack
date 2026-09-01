@@ -3,3 +3,10 @@ INSTALL_LOG.txt
 Zandpack/__pycache__/
 Zandpack/docs/_build/
 Zandpack/mpitest/
+Zandpack/Padedata/
+Zandpack/_junk
+Zandpack/drivers/
+Zandpack/boilerplatecode/
+Zandpack/Plotting.py
+Zandpack/Linalg_factorisation.py
+
