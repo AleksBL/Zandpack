@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""
+print_string = """
 Minimal floquet photo-assisted current from Viljas and Cuevas, 2007.
 
-    I = (e/h) int_0^{hw} de  sum_{k,l} Tr[Gr Gam_R^(k) Ga Gam_L^(l)] (f_L^(l) - f_R^(k))
+    I = (e/h) int_0^{hw} dE  sum_{k,l} Tr[G(E) Gam_R^(k) G^+(E) Gam_L^(l)] (f_L^(l) - f_R^(k))
 
-    [Gam_W^(l)]_{m,n} = J_{m+l}(a_W) J_{n+l}(a_W) Gam_W(e - udc_W - l hw)
-    [Sig_W]_{m,n}     = sum_l J_{m+l}(a_W) J_{n+l}(a_W) Sig_W(e - udc_W - l hw)
+    [Gam^(l)]_{m,n} = J_{m+l}(a_W) J_{n+l}(a_W) Gam(E - lhw)
+    [Sig]_a{m,n}     = sum_l J_{m+l}(eVa/hw) J_{n+l}(eVa/hw) Sig(E - lhw)
 
-Lead quantities sig_L/sig_R/gam_L/gam_R are supplied should be given as
-callables  e -> (norb, norb) array.  Energies in eV, current in e/fs.
+    For use with the Zandpack files used also for the nozand/zand programs.
 
+    e -> (norb, norb) array.  Energies in eV, current in e/fs.
 """
+
+
 
 import numpy as np
 from scipy.integrate import quad
@@ -25,6 +27,7 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 if rank == 0:
+    print(print_string)
     print("Returning current in units of e/fs")
 args    = sys.argv[1:]
 options = {"device":"ABC",
@@ -43,12 +46,21 @@ options = {"device":"ABC",
            "Wideband_fact":"1.0",
            }
 if "--help" in args:
-    for i in range(len(args)):
-        print(options)
+    for kw in options.keys()():
+        print(options[kw])
     sys.exit()
+
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
+if rank == 0:
+    print("Writing results to " + options["outfile"].replace(".npz","") + ".npz")
+    print("Given parameters:")
+    for kw in options.keys():
+        print(kw, " = ", options[kw])
+    print("#processes = ", size)
+    print("Start....")
+
 path = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()

@@ -2,6 +2,7 @@ Zandpack.egg-info/
 INSTALL_LOG.txt
 Zandpack/__pycache__/
 Zandpack/docs/_build/
+Zandpack/cmdtools/_junk/
 Zandpack/mpitest/
 Zandpack/Padedata/
 Zandpack/_junk
