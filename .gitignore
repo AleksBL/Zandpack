@@ -13,4 +13,4 @@ Zandpack/Plotting.py
 Zandpack/Linalg_factorisation.py
 Zandpack/LanczosAlg.py
 Zandpack/LDA.py
-
+Zandpack/HartreeFromDensity.py
