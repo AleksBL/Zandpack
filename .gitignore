@@ -1,5 +1,6 @@
 Zandpack.egg-info/
 INSTALL_LOG.txt
+Zandpack/examples/nb_tutorial_old/
 Zandpack/__pycache__/
 Zandpack/docs/_build/
 Zandpack/cmdtools/_junk/
@@ -10,4 +11,6 @@ Zandpack/drivers/
 Zandpack/boilerplatecode/
 Zandpack/Plotting.py
 Zandpack/Linalg_factorisation.py
+Zandpack/LanczosAlg.py
+Zandpack/LDA.py
 
