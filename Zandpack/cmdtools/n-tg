@@ -46,7 +46,7 @@ options = {"device":"ABC",
            "Wideband_fact":"1.0",
            }
 if "--help" in args:
-    for kw in options.keys()():
+    for kw in options.keys():
         print(options[kw])
     sys.exit()
 
