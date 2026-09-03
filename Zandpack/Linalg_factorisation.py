@@ -170,12 +170,12 @@ def EIG(M, Hermitian = False, equality_check=True):
         assert np.allclose(acc,M)
     return vecf1, s, ivecf1
 
-M  = np.random.random((20,50,50))  + 1j * np.random.random((20,50,50))
-M += M.transpose(0,2,1)
+# M  = np.random.random((20,50,50))  + 1j * np.random.random((20,50,50))
+# M += M.transpose(0,2,1)
 # TAKAGI(M)
-#LDL(M)
+# LDL(M)
 # QR(M)
-EIG(M)
+# EIG(M)
 
 
         
