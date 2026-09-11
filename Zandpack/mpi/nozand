@@ -268,7 +268,10 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     ####
     H0  = S05 @ D["H_Ortho"].astype(np.complex128) @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
-    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
+    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-13:
+        print("Master: Hamiltonian Hermitian within 1e-13 tolerance")
+        pass
+    elif np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
         print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
         print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
         print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
@@ -780,10 +783,14 @@ def Worker(role_info):
     ####
     H0  = S05 @ D["H_Ortho"].astype(np.complex128) @ S05  # NEW
     H0[np.abs(H0)<1e-13] = 0.0
-    print("Worker Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
-    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
+    if np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-13:
+        if rank == 1:
+            print("Worker 1: Hamiltonian Hermitian within 1e-13 tolerance")
+        pass
+    elif np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
         print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
-        print("Nonhermitian error: " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
         H0 = 0.5 * (H0 + H0.conj().transpose(0,2,1))
     H0_BW_L,H0_BW_U = bandwidth(H0)
     H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()

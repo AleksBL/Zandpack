@@ -118,13 +118,40 @@ class Input:   # Handles the Initial.py file
             print("Wrote Initial.py file")
     def write_bias(self, prefix, more_imports = None, mpi4py=True,
                    os_envvar=[], bias=None, dH=None, 
-                   hook = None, use_lin=False, dm_diff_tol = 1e-4, 
+                   hook = None, use_lin=False, dm_diff_tol = None, 
                    lines_inside_bias= None,
                    lines_outside_bias=None, put_lob_last=False, 
                    check_H_hermitian=False):
+        if dm_diff_tol is None:
+            try:
+                dm_diff_tol = float(os.environ["ZP_DMDIFFTOL"])
+            except:
+                dm_diff_tol = 1e-4
+        
         """
         Writes the Bias.py file, where the timedependent bias functions are defined, together with the dH function, which specifies
         how the Hamiltonian depends on time, spatial coordinates and density. The dissipator function is also defined here. 
+        
+        Arguments:
+            prefix: Directory in which the calculation is taking place (Is supplied by the Control class by default)
+            more_imports: string or list of strings. If lines_inside_bias and / or lines_outside_bias depends on other libraries,
+                          import them here by writing out the import command (import otherlib..... )
+            mpi4py: whenever to import mpi4py, unless doing non-standard things, keep True.
+            os_envvar: import environment variables using os.environ. They are imported as  "_envvar_name" 
+                      (Eg. export VAR1=1.0 will be imported as _VAR1=os.environ["VAR1"] in the script.)
+            bias: string or python function. See examples, they are given by the Control class, which in turn gets it from the user-defined 
+                  bias function. 
+            dH  : Custom suplied dH function, not needed unless doing non-standard things. (Recommend dont touch)
+            hook: The hook to whatever DFT-code is used. Supplied by the Control class usually. (Recommend dont touch)
+            use_lin:  Looks like a dead variable?
+            dm_diff_tol: When checking if the DM that was linearized around is close to the DM now present in the given input files,
+                         this is the required tolerance. (set the ZP_DMDIFFTOL variable if you think your DM is fine, but you get trouble during this check.)
+            lines_inside_bias: list of code-lines to add to the bias function inside Bias.py.
+            lines_outside_bias: list of code-lines to add outside the bias function inside Bias.py.
+            put_lob_last: If sometimes if there are some cross-dependencies, it can be useful to set this to true, 
+                          which will put the lines from lines_outside_bias further down the Bias.py input script.
+            check_H_hermitian: Runs some checks if the H(sigma) produced by the dH function is hermitian. Use for debugging. 
+            
         """
         text = "import numpy as np\n"
         text+= "import sisl, os\n"
@@ -353,6 +380,9 @@ class Control: # Replaces bash scripting
         self._first_logwrite = True
     @property
     def scf_status(self):
+        """
+        Return whenever the SCF code has successfully run.
+        """
         self.into_wd()
         try:
             msg = open("SCF_MESSAGE.txt",'r').read()
@@ -368,6 +398,9 @@ class Control: # Replaces bash scripting
     
     @property
     def psinought_status(self):
+        """
+        Return whenever the psinought code has successfully run.
+        """
         self.into_wd()
         try:
             msg = open("psinought_dpsi_MESSAGE.txt",'r').read()
@@ -409,6 +442,9 @@ class Control: # Replaces bash scripting
         if os.path.isdir(self.working_dir) == False:
             self.systemcall('mkdir ' + self.working_dir)
     def init(self, overwrite=True):
+        """
+        Initializes the calculation directory using the files from the source input files.
+        """
         self.create_wd()
         if os.path.isdir(self.working_dir+"/"+self.input.name+'_SRC'):
             if overwrite:
@@ -424,26 +460,38 @@ class Control: # Replaces bash scripting
             cmd = "cp -R "+self.srcf + " "+self.working_dir+"/"+self.input.name+'_SRC'
             self.systemcall(cmd)
     def write_bias(self, prefix=None, **kwargs):
+        """
+        Calls the write_bias function of the Input class to write the Bias.py script. 
+        Parses kwargs to Input.write_bias.
+        """
         if prefix is None:
             _prefix = self.working_dir
         else:
             _prefix = prefix
         self.input.write_bias(_prefix, **kwargs)
     def write_initial(self, prefix=None, **kwargs):
+        """
+        Calls the write_initial function of the Input class to write the Initial.py script. 
+        Parses kwargs to Input.write_initial.
+        """
         if prefix is None:
             _prefix = self.working_dir
         else:
             _prefix = prefix
         self.input.write_initial(_prefix, **kwargs)
     def set_hook(self, hook, write = True, **kwargs):
+        """
+        Sets the hook which is to be used to interface with the external DFT-code.
+        hook: Instance of one either dftb_hook, transiesta_hook or a custom hook. 
+        write: Bool, whenever to write the hook script using kwargs
+        
+        """
         self.hook = hook
         if write:
             self.write_hook(**kwargs)
     def write_hook(self, **kwargs):
         self.hook.write_hook(self.input.name, self.working_dir, self.basedir,  
                              **kwargs)
-    #def noneq_run(self, V):
-    #    
     def init_from_other(self, file_or_dir, newname):
         """
         This function is useful if you have a working directory and you want to reuse
@@ -469,6 +517,10 @@ class Control: # Replaces bash scripting
         self._rawlog+=['mkdir '+name+'\n']
         self.out_wd()
     def systemcall(self, cmd):
+        """
+        Wrapper that uses os.system to execute bash commands.
+        Also logs the command and times it.
+        """
         now = time.ctime()
         t1 = time.time()
         if glob_test==False:
@@ -495,6 +547,9 @@ class Control: # Replaces bash scripting
         self._rawlog += [s]
     @property
     def sigma(self):
+        """Returns: 
+            Device density matrix, (nk, no, no) numpy array.
+        """
         dmpath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/DM_Ortho.npy'
         try:
             return np.load(dmpath)
@@ -503,6 +558,9 @@ class Control: # Replaces bash scripting
     
     @property
     def psi0(self):
+        """Returns: 
+            Auxilliary mode wavevectors (nk, n_elec, n_poles, neig, no) numpy array.
+        """
         psipath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'_save/last_psi.npy'
         try:
             return np.load(psipath)
@@ -510,12 +568,22 @@ class Control: # Replaces bash scripting
             print("failed to load from "+psipath)
     @property
     def scf_H(self):
+        """Returns: 
+            The Hamiltonian of the device region with the self-consistent density matrix. (nk,no,no) numpy array.
+            In the orthogonal basis.
+        """
         Hpath = self.basedir+"/"+self.working_dir+'/'+self.input.name+'/Arrays/SCF_Hlast_Ortho.npy'
         try:
             return np.load(Hpath)
         except:
             print("Failed to load H from "+Hpath+". Did you run SCF first?")
     def check(self, filename = None):
+        """
+        Sanity check on the tails of the pole-expanded Fermi-function.
+        The pole-expanded fermi-function is here compared to the exact fermi-function
+        in all the eigenvalues of the Hamiltonian. 
+        """
+        
         HO = self.scf_H
         Hdevi=np.abs(HO - HO.conj().transpose(0,2,1)).max()
         if Hdevi>1e-5:
@@ -690,6 +758,7 @@ class Control: # Replaces bash scripting
                        bias=[0.0, 0.0], kT = [0.025, 0.025], kidx=0, outfile='tgout.npz', 
                        wtol=1e-5, int_epsrel=1e-3, int_epsabs=1e-4, w_zero=False, read_hw_ampl=True,
                        ):
+        """Needs updating to the new tien-gordon code. """
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
