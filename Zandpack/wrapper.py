@@ -125,7 +125,7 @@ class Input:   # Handles the Initial.py file
         if dm_diff_tol is None:
             try:
                 dm_diff_tol = float(os.environ["ZP_DMDIFFTOL"])
-            except:
+            except (KeyError, ValueError):
                 dm_diff_tol = 1e-4
         
         """
@@ -754,42 +754,56 @@ class Control: # Replaces bash scripting
             self.run_cmd_standard(exc," > psi0.out", **kwargs)
         else:
             self.run_cmd_standard(custom_exec, " > psi0.out", **kwargs)
-    def run_tiengordon(self, hwv, amplv, mpi="mpirun ", eta=0.01, 
-                       bias=[0.0, 0.0], kT = [0.025, 0.025], kidx=0, outfile='tgout.npz', 
-                       wtol=1e-5, int_epsrel=1e-3, int_epsabs=1e-4, w_zero=False, read_hw_ampl=True,
-                       ):
-        """Needs updating to the new tien-gordon code. """
+    def run_vc(self, hw, ampl, mpi="mpirun ", 
+               voltage=0.0, NPHOT=3, outfile="vc_out.npz",
+               kT=0.025, epsrel=1e-7, epsabs=1e-7, limit=800,
+               Wmat=False, Wmat_fact=1.0, Wideband=False, 
+               Wideband_fact = 1.0,
+               ):
+        """
+        Arguments:
+            hw:   [hw0, hw1, Nhw], list of two floats and an integer.
+            ampl: [ampl0, ampl1, Nampl], list of two floats and an integer.
+            mpirun: How mpirun should be called ("mpirun, mpirun -np X, etc.")
+            voltage: float, steady state symmetric bias (V_L=-V_R).
+            NPHOT: int >= 0, Cutoff for the number of Floquet blocks in the supermatrix structure.
+            outfile: str, where the is result saved to.
+            kT: float, thermal temperature, same for all electrodes.
+            epsrel: float, relative integration tolerance, see scipy.integrate for more info.
+            epsabs: float, absolute integration tolerance, see scipy.integrate for more info.
+            limit: upper limit for number of function evaluations, see scipy.integrate for more info.
+            Wmat: bool, (set =Yes or something) the local field is included as a linear ramp.
+            Wmat_fact: float,  scaling of the local field (keep 1.0 unless you have a good reason)
+            Wideband: bool, If the wideband approximation should be used.
+            Wideband_fact: float, scaling of the wideband self energies.
+        """
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
         kwargs = {}
-        kwargs["device"]         = self.input.name
-        kwargs["read_hw_ampl"] = "True"
-        kwargs["manual_hw"]    = "tg_manual_hw.npy"
-        kwargs["manual_ampl"]  = "tg_manual_ampl.npy"
-        kwargs["hw_min"]  = "0.0"
-        kwargs["hw_max"]  = "0.0"
-        kwargs["ampl_min"]= "0.0"
-        kwargs["ampl_max"]= "0.0"
-        
-        self.into_wd()
-        np.save("tg_manual_hw.npy",   hwv )
-        np.save("tg_manual_ampl.npy", amplv)
-        self.out_wd()
+        kwargs["device"]  = self.input.name
+        kwargs["hw"]      = ",".join([str(s) for s in hw])
+        kwargs["ampl"]    = ",".join([str(s) for s in ampl])
+        ### The Wmat and Wideband keywords are a bit clumsy to set
+        kwargs["Wmat"]    = "Yes" if Wmat else "None"
+        kwargs["Wideband"]= "True" if Wideband else "False"
         for k in arg_values.args:
             if k=='self':
                 continue
-            elif k == 'hwv':
+            elif k == 'hw':
                 continue
-            elif k =='amplv':
+            elif k =='ampl':
+                continue
+            elif k == "Wmat":
+                continue
+            elif k == "Wideband":
                 continue
             else:
                 kwargs[k] = arg_values.locals[k]
-        exc = " ".join(self.prepend_env_vars + [mpi, "tien-gordon"])
-        print('Running tien-gordon')
+        exc = " ".join(self.prepend_env_vars + [mpi, "viljas-cuevas"])
+        print('Running Viljas-Cuevas code. ')
         self.run_cmd_standard(exc," > tg.out", **kwargs)
         res   = np.load(self.working_dir + "/"+outfile)
-        Jrect = res["Jrect"]
-        Err   = res["err"]
+        Jrect, Err = res["Jrect"],res["err"]
         return Jrect, Err
     
     def run_cmd_standard(self, CMD, out, **kwargs):

@@ -217,11 +217,15 @@ def occupation_number(dirs, times_label = "DMt", insert_tril = False, S = None, 
     if splitN is None:
         t,dm = combine_dm(dirs, times_label = times_label, insert_tril = insert_tril)
         if X is not None:
-            dm = dm @ X
+            for i in range(dm.shape[0]):
+                dm[i] = dm[i] @ X
         if S is None:
             return t, np.trace(dm, axis1=2, axis2=3)
         else:
-            return t, np.sum(dm * S[None, :,:,:],axis=(2,3))
+            for i in range(dm.shape[0]):
+                dm[i] = dm[i] * S
+            return t, np.sum(dm, axis=(2,3))
+            #return t, np.sum(dm * S[None, :,:,:],axis=(2,3))
     else:
         ct = []
         cN = []
