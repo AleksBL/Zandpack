@@ -374,6 +374,11 @@ class Input:   # Handles the Initial.py file
     def copy(self):
         out = deepcopy(self)
         return out
+    def filenames(self):
+        out = {"bias_file":"Bias.py", "initial_file":"Initial.py"}
+        if hasattr(self, "initial_file") and hasattr(self, "bias_file"):
+            out =  {"bias_file":self.bias_file, "initial_file":self.initial_file}
+        return out
 
 def fmt_str_cmd(s):
     if isinstance(s, np.ndarray):
@@ -738,6 +743,7 @@ class Control: # Replaces bash scripting
             if k=='custom_exec':
                 continue
             kwargs[k] = arg_values.locals[k]
+        kwargs.update(self.input.filenames())
         print('Running SCF')
         exc = " ".join(self.prepend_env_vars + ["SCF"])
         if custom_exec is None:
@@ -773,6 +779,7 @@ class Control: # Replaces bash scripting
                 kwargs[k2] = arg_values.locals[k]
             else:
                 kwargs[k] = arg_values.locals[k]
+        kwargs.update( self.input.filenames())
         exc = " ".join(self.prepend_env_vars + ["psinought"])
         print('Running psinought')
         if custom_exec is None:
@@ -879,6 +886,7 @@ class Control: # Replaces bash scripting
                 self._latest_nozand_calc = self.input.name + "_save"
             else:
                 self._latest_nozand_calc = out_dir
+        kwargs.update( self.input.filenames())
         self.textlog += ['Executing nozand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
         print('Running nozand')
@@ -1263,7 +1271,7 @@ if rank == 0:
     from Zandpack.Help import TDHelper
     from pickle import load
     import numpy as np
-    from Initial import name
+    name = "{ArrayDir}"
     from time import time
     import os
     Dev = load(open('namethatwillnotbeused.SiP','rb'))
@@ -1373,7 +1381,7 @@ if rank == 0:
     from Zandpack.Help import TDHelper
     from pickle import load
     import numpy as np
-    from Initial import name
+    name = "{ArrayDir}"
     from time import time
     import os
     Dev  = load(open('namethatwillnotbeused.SiP','rb'))
