@@ -64,6 +64,8 @@ class Input:   # Handles the Initial.py file
                  compress_mat=True,
                  dm_triu_only=True,
                  dm_occ_only=False,
+                 initial_file="Initial.py",
+                 bias_file="Bias.py",
                  ):
         """Initialize the Input class. This class will specify the contents of the Initial.py and Bias.py files."""
         self.name = name
@@ -86,6 +88,9 @@ class Input:   # Handles the Initial.py file
         self.compress_mat=compress_mat
         self.dm_triu_only=dm_triu_only
         self.dm_occ_only=dm_occ_only
+        self.initial_file=initial_file
+        self.bias_file=bias_file
+    
     def write_initial(self, prefix):
         """
         Write the Initial.py file using the parameters defined in the initialization, or has been set manually after initialization.
@@ -112,10 +117,18 @@ class Input:   # Handles the Initial.py file
         text+="compress_mat="+str(self.compress_mat)+"\n"
         text+="dm_triu_only="+str(self.dm_triu_only)+"\n"
         text+="dm_occ_only="+str(self.dm_occ_only)+"\n"
-        with open(prefix + "/Initial.py", "w") as f:
-            f.write(text)
-        if self.verbose:
-            print("Wrote Initial.py file")
+        # Fallback for older versions:
+        if hasattr(self, "initial_file"):
+            with open(prefix + "/"+self.initial_file, "w") as f:
+                f.write(text)
+            if self.verbose:
+                print("Wrote "+self.initial_file+" file")
+        else:
+            with open(prefix + "/Initial.py", "w") as f:
+                f.write(text)
+            if self.verbose:
+                print("Wrote Initial.py file")
+        
     def write_bias(self, prefix, more_imports = None, mpi4py=True,
                    os_envvar=[], bias=None, dH=None, 
                    hook = None, use_lin=False, dm_diff_tol = None, 
@@ -340,10 +353,18 @@ class Input:   # Handles the Initial.py file
         if lines_outside_bias is not None and put_lob_last:
             for l in lines_outside_bias:
                 text += l +"\n"
-        with open(prefix + "/Bias.py", "w") as f:
-            f.write(text)
-        if self.verbose:
-            print("Wrote Bias.py file")
+        if hasattr(self, "bias_file"):
+            with open(prefix + "/"+self.bias_file, "w") as f:
+                f.write(text)
+            if self.verbose:
+                print("Wrote "+self.bias_file+" file")
+        else:
+            with open(prefix + "/Bias.py", "w") as f:
+                f.write(text)
+            if self.verbose:
+                print("Wrote Bias.py file")
+            
+            
     def pickle(self, filename):
         """Saves input class to file"""
         import pickle as pkl
@@ -369,15 +390,16 @@ class Control: # Replaces bash scripting
         self.input = input_class
         # source files is the folder written by TD_Transport 
         # when using "tofile"
-        self.srcf    = source_files
+        self.srcf        = source_files
         self.working_dir = None
-        self.textlog = []
-        self._rawlog = []
-        self.basedir = os.getcwd()
-        self.txtlogfile = logfile
-        self.livelog = livelog
-        self.prepend_env_vars = prepend_env_vars
-        self._first_logwrite = True
+        self.textlog     = []
+        self._rawlog     = []
+        self.basedir     = os.getcwd()
+        self.txtlogfile  = logfile
+        self.livelog     = livelog
+        self.prepend_env_vars  = prepend_env_vars
+        self._first_logwrite   = True
+        self.default_td_folder = None
     @property
     def scf_status(self):
         """
@@ -421,7 +443,8 @@ class Control: # Replaces bash scripting
             dsig=False
         self.out_wd()
         return {'dpsi_conv': dpsi, 'dsig_conv':dsig}
-    
+    def set_default_folder(self, folder):
+        self.default_td_folder = folder
     def set_direc(self, folder):
         self.working_dir = folder
         self.wdir_abspath = os.getcwd() + folder
@@ -727,7 +750,9 @@ class Control: # Replaces bash scripting
                            memory_save = None, Xpp_optim = None,  printfile=None,
                            extreme_memory_save = None, Woodbury_inv =None,
                            prec_to_disk=None, outer_einsum=None,
-                           use_preconditioner = None, custom_exec = None):
+                           use_preconditioner = None, custom_exec = None,
+                           collect_steady_state=False,
+                           ):
         """
         Please note the argument "Woodbury_inv" is a slightly different name
         compared to the actual psinought tool. This is because one cannot write the 
@@ -825,14 +850,43 @@ class Control: # Replaces bash scripting
             self.run_cmd_standard(exc, " > zand.out",)
         else:
             self.run_cmd_standard(custom_exec, " > zand.out",)
-    def run_nozand(self, mpi="mpirun ", custom_exec = None):
+    def run_nozand(self, mpi="mpirun ", custom_exec = None, 
+                   init_sig = None,
+                   init_psi = None,
+                   init_omg = None,
+                   out_dir  = None,
+                   ):
+        this_frame = inspect.currentframe()
+        arg_values = inspect.getargvalues(this_frame)
+        kwargs = {}
+        for k in arg_values.args:
+            if arg_values.locals[k] is None or k in ["self", "mpi", "custom_exec"]:
+                pass
+            else:
+                kwargs[k] = arg_values.locals[k]
+        if not hasattr(self, "default_td_folder"):
+            # Fallback for any older instances saved to disk:
+            if out_dir is None:
+                self._latest_nozand_calc = self.input.name + "_save"
+            else:
+                self._latest_nozand_calc = out_dir
+        else:
+            # New behavior
+            if out_dir is None and isinstance(self.default_td_folder, str):
+                self._latest_nozand_calc = self.default_td_folder
+                kwargs["out_dir"] = self.default_td_folder
+            elif out_dir is None:
+                self._latest_nozand_calc = self.input.name + "_save"
+            else:
+                self._latest_nozand_calc = out_dir
         self.textlog += ['Executing nozand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
         print('Running nozand')
         if custom_exec is None:
-            self.run_cmd_standard(exc, " > nozand.out")
+            self.run_cmd_standard(exc, " > nozand.out", **kwargs)
         else:
-            self.run_cmd_standard(custom_exec, " > nozand.out")
+            self.run_cmd_standard(custom_exec, " > nozand.out", **kwargs)
+        
     def write_log(self,ftxt):
         with open(ftxt, "w") as f:
             for l in self.textlog:
@@ -879,8 +933,12 @@ class Control: # Replaces bash scripting
         self.out_wd()
     def archive_calculation(self, arc_name, keep_psi_omg_in_arc = False, clean_original = True, lossy_dm_tol=1e-8):
         self.into_wd()
-        self.systemcall("lossydm Dir=$PWD folder="+self.input.name+"_save " +"tol="+str(lossy_dm_tol) + " > compressDM.out")
-        archive_calculation(self.input.name+"_save", arc_name, 
+        try:
+            folder = self._latest_nozand_calc
+        except:
+            folder = self.input.name+"_save"
+        self.systemcall("lossydm Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > compressDM.out")
+        archive_calculation(folder, arc_name, 
                             keep_psi_omg_in_arc = keep_psi_omg_in_arc,
                             clean_original = clean_original)
         self.out_wd()

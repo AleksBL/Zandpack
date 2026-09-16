@@ -5,9 +5,10 @@ Created on Thu Aug 17 14:42:18 2023
 
 @author: aleksander
 """
-import os
+import os, sys
 import numpy as np
 from time import time
+import importlib.util
 
 def flexload(filepath, force_array = True,return_arc = False):
     # First, try the actual file name
@@ -41,3 +42,14 @@ class load_dictionary:
         return flexload(self.dir+x+'.npy')
     def __str__(self):
         return "load_dictionary class instance, using "+str(self.dir)
+
+def fleximport(module_name, filepath):
+    # This function is generated from mistral chat....
+    """Execute a python file and register it under module_name.
+    Afterwards 'from module_name import x' resolves to this file."""
+    filepath = os.path.abspath(filepath)
+    spec = importlib.util.spec_from_file_location(module_name, filepath)
+    mod  = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = mod      # register BEFORE exec_module
+    spec.loader.exec_module(mod)
+    return mod

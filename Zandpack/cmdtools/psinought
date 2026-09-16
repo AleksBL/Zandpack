@@ -16,19 +16,19 @@ is therefore recommended.
 import ctypes
 _me = ctypes.CDLL(None)
 _me.prctl(15, b"psinought", 0, 0, 0)
-import sys
-import os
+import sys, os
 import numpy as np
-from numba import njit, prange
+from numba import njit
 import scipy.sparse.linalg as LSA
 import scipy.sparse as sp
 from Zandpack.TimedependentTransport import Q_nb
 from Zandpack.Louivillian import Louivillian
-from Zandpack.Loader import flexload
-from Zandpack.docstrings import psi0_docstring, CoolLine
-from time import time, perf_counter
+from Zandpack.Loader import flexload, fleximport
+from Zandpack.docstrings import psi0_docstring
+from Zandpack.mpi_splitter import find_max_orbital_idx_per_lead
+from time import time
 from tqdm import tqdm
-import gc
+
 LinearOperator = LSA.LinearOperator
 args           = sys.argv[1:]
 print(psi0_docstring)
@@ -52,12 +52,10 @@ _check = True
 options = {'file': 'SaveFile',   # directory
            'maxiter':'10000',    # Iterations for Ax=b solver
            'checkderivative':'True', # Print additional information related to ODE
-           #'numba_parallel':'0',
            'dl':'1.0', # dep.
            'steptol':'1e-8',#tolerance
            'add_random':'False',     # initial guess
            'random_weight':'0.0', # initial guess
-           #'use_csr':'False',
            'L_info':'False',         # additional information related to ODE.
            'Axb_solver':'cgs',       # scipy solver, cgs, minres, gmres
            'start_psi':'None',       # If you have an initial guess
@@ -69,13 +67,13 @@ options = {'file': 'SaveFile',   # directory
            'prec_to_disk':'False',
            'outer_einsum':'True',
            'use_preconditioner':'True',
-           # 'start_psi':'None'
            "reuse_psi":"True",
+           'initial_file': "Initial.py",
+           'bias_file'   : "Bias.py",
+           "collect_steady_state":"False",
            }
 
-
 pref = 'psinought: '
-
 if '--help' in args:
     print('Keywords and default values. Assign with "keyword=value" argument after psinought command (no spaces!)')
     for keys,values in options.items():
@@ -85,7 +83,10 @@ if '--help' in args:
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
-print(options)
+
+for _kw in options.keys():
+    print(_kw, ": ", options[_kw])
+
 good_solvers = ['cgs', 'tfqmr', 'gcrotmk', 'lgmres', 'gmres']
 if options['Axb_solver'] not in good_solvers:
     print('--->WARNING<----:') 
@@ -96,9 +97,14 @@ path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
+
 from Initial import t0, hbar
 from Bias    import bias, dH
-from Zandpack.mpi_splitter import find_max_orbital_idx_per_lead
 
 print(pref + 'Reading arrays.....')
 print('DM input from ', options['file']+'/Arrays/DM_Ortho.npy')
@@ -165,7 +171,11 @@ def SM(iA, u, v, out):
 
 PSI = np.zeros((nk,na,nx, noT,no),dtype=complex)
 OMG = np.zeros((nk,na,nx, noT,na,nx, noT),dtype=complex)
-savedir=options['file']+'_save'
+if options["collect_steady_state"]=="False":
+    savedir=options['file']+'_save'
+else:
+    savedir=options["file"]+"_steady_state"
+
 
 print(pref + 'Converging steady-state with DM from     '+options['file']+'/Arrays/   folder.')
 print(pref + 'Particle number: ', np.trace(DM0,axis1=1,axis2=2))
@@ -481,14 +491,19 @@ for IK in range(nk):
             print(np.diag(np.abs(L0.proj_null(Q, 0))))
             print('         DM projection onto |psi^i><psi_i| of the Hamiltonian: ')
             print(np.diag(np.abs(L0.proj_null(dm0, 0))))
-        
         print(pref +'----------------------')
-        
+
 files = os.listdir()
 if savedir not in files:
     os.mkdir(savedir)
-np.save(savedir+'/last_psi.npy',PSI)
-np.save(savedir+'/last_omg.npy',OMG)
+if options["collect_steady_state"]=="False":
+    np.save(savedir+'/last_psi.npy',PSI)
+    np.save(savedir+'/last_omg.npy',OMG)
+else:
+    np.savez_compressed(savedir+'/last_psi.npz', PSI)
+    np.savez_compressed(savedir+'/last_omg.npz', OMG)
+    np.savez_compressed(savedir+"/last_sig.npz", DM0)
+
 if (np.array(sum_psi_vec) < 1e-5).all():
     success_psi = True
 else:
@@ -507,33 +522,3 @@ with open("psinought_dsig_MESSAGE.txt","w") as f:
         f.write("Success")
     else:
         f.write("Failure")    
-
-
-
-# @njit(fastmath=True)
-# def addperturbationterm(v, delta, OPSI, alloc_psi, psic):
-#     alloc_psi[:,:,:,:]  =     v[ 0  :   npsi].reshape(na, nx, noT, no)
-#     alloc_psi[:,:,:,:] +=  1j*v[npsi: 2*npsi].reshape(na, nx, noT, no)
-    
-#     psic     [:,:,:,:]  =      alloc_psi[:,:,:,:].real
-#     psic     [:,:,:,:] += - 1j*alloc_psi[:,:,:,:].imag
-    
-#     X_sum               = xi.reshape(compound,no).T
-    
-#     for a in range(na):
-#         for x in range(nx):
-#             gaxc = np.linalg.inv(h0 - I * xpp[a,x,0])
-#             FRAC =  (1j/(  xpm
-#                          - xpp[a, x, 0])).reshape(compound,1)
-#             #MINUS!!!!
-#             ARR2 = - FRAC.reshape(compound,1) * psic.reshape(compound,no)
-#             for c in range(noT):
-#                 OPSI[a,x,c] = gaxc.dot(delta*np.dot(X_sum, np.dot(ARR2, deltaP[a,x,c]*xi[a,x,c])))
-#     v[0:npsi]     += OPSI.reshape(na*nx*noT*no).real
-#     v[npsi:2*npsi]+= OPSI.reshape(na*nx*noT*no).imag
-
-# @njit
-# def iterate(its,step,v,OPSI, alloc_psi, psic):
-#     pstep = step/its
-#     for i in range(its):
-#         addperturbationterm(v, pstep, OPSI, alloc_psi, psic)

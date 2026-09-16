@@ -22,10 +22,8 @@ from Zandpack.Help import TDHelper
 import sys, os
 from mpi4py import MPI
 from Zandpack.td_constants import hbar
-
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+comm       = MPI.COMM_WORLD
+rank, size = comm.Get_rank(), comm.Get_size()
 if rank == 0:
     print(print_string)
     print("Returning current in units of e/fs")
@@ -53,6 +51,7 @@ if "--help" in args:
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
+
 if rank == 0:
     print("Writing results to " + options["outfile"].replace(".npz","") + ".npz")
     print("Given parameters:")

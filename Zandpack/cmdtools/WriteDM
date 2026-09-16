@@ -10,10 +10,6 @@ Created on Thu Jul 21 08:58:39 2022
 import sys
 import os
 import numpy as np
-import joblib as jl
-from scipy.integrate import simpson
-from tqdm import tqdm
-from numba import njit
 from Zandpack.mpi_tools import combine_dm
 
 args = sys.argv[1:]

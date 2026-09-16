@@ -17,17 +17,15 @@ do a SCF --help for some keywords
 import ctypes
 _me = ctypes.CDLL(None)
 _me.prctl(15, b"SCF", 0, 0, 0)
-import sys
-import os
+import sys, os, sisl
 import numpy as np
 from Zandpack.FittedSelfEnergy import from_saved_file
-import sisl
 import joblib as Jl
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
-from Zandpack.Loader import flexload
+from Zandpack.Loader import flexload, fleximport
 from scipy.integrate import quad_vec
 from time import time
-from Zandpack.docstrings import scf_docstring, CoolLine
+from Zandpack.docstrings import scf_docstring
 
 args = sys.argv[1:]
 print(scf_docstring)
@@ -67,25 +65,32 @@ options = {'Contour':'None',
            'write_dm_every':'-1',
            'write_progress':'False',
            'adaptive_mixer':'False',
+           'initial_file': "Initial.py",
+           'bias_file'   : "Bias.py",
            }
 
 SCF_place = __file__[:-3]
-
 if '--help' in args:
     print('Keywords and default values. Assign with "keyword=value" argument after SCF command (no spaces!)')
     for keys,values in options.items():
         print(keys, ':', values)
     exit()
-
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
-print(options)
+
+for _kw in options.keys():
+    print(_kw, ": ", options[_kw])
 
 path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
 
 from Bias    import dH, bias
 from Initial import t0
@@ -162,7 +167,6 @@ if options['UfUd']=='True':
     print('Device Charge', np.round(np.trace(rhof,axis1=1,axis2=2), 6))
     exit()
 
-
 delta   = rhoi.ravel()
 Shape   = rhoi.shape
 I       = np.eye(no)
@@ -176,7 +180,6 @@ def unravel(s):
     a[:,:,:] +=    s[0:n  ].reshape(Shape)
     a[:,:,:] += 1j*s[n:2*n].reshape(Shape)
     return a
-
 
 if options['real_line_integral']!='True':
     print('Evaluating SEs')
@@ -342,20 +345,3 @@ else:
     np.save(options['DM_out_file'], rhof)
 if options['save_last_H'] == 'True':
     np.save(options['file']+'/Arrays/SCF_Hlast_Ortho.npy', H)
-
-
-# npieces= int(options['nprocs'])*4 +1
-# Cntr_BW = np.linspace(lims[0], lims[1], npieces)
-# Cntr_BW = Cntr_BW[0:-1]+1j*Cntr_BW[1:]
-# def funci_noneq(islice):
-#     rhof = np.zeros((nk, no, no), dtype=np.complex128)
-#     for i in islice:
-#         E0,E1  = Cntr_BW[i].real, Cntr_BW[i].imag
-#         r,e = quad_vec(G_l, E0,E1,epsabs=1e-6,epsrel=1e-6,
-#                        full_output=False, quadrature='gk21')
-#         #print(op.neval, op.success, op.status,E0,E1)
-#         rhof += r
-#     return rhof
-        #rhof += sum(Jl.Parallel(n_jobs = nprocs, backend=options['backend'],verbose=False)
-        #             (Jl.delayed(funci_noneq)(islice) for islice in np.array_split(np.arange(len(Cntr_BW)), npieces))
-        #           )

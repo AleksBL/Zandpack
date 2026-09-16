@@ -13,10 +13,7 @@ or the specific file specified by DM_start_file keyword.
 import sys
 import os
 import numpy as np
-from Zandpack.FittedSelfEnergy import from_saved_file
 from Zandpack.Loader import flexload
-import sisl
-import joblib as Jl
 
 args = sys.argv[1:]
 print('PSD_DM Program Start')

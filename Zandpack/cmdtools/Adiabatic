@@ -16,13 +16,12 @@ write --help and get a list of things you can specify.
 
 """
 
-import sys
-import os
+import sys, os
 import numpy as np
 import joblib as jl
 from Zandpack.FittedSelfEnergy import from_saved_file
 from Zandpack.Quasiparticle    import SteadyState
-from Zandpack.Loader import flexload
+from Zandpack.Loader import flexload, fleximport
 from scipy.integrate import simpson
 from tqdm import tqdm
 
@@ -67,6 +66,8 @@ options = {'dt': '0.5',          # fs
            'phase_convention_eigvecsumisreal':'1',
            'Skip_section':'None',
            'start_only':'False',
+           'initial_file': "Initial.py",
+           'bias_file'   : "Bias.py",
            }
 
 
@@ -89,8 +90,15 @@ path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
+
 from Bias    import dH, bias
-from Initial import t0, t1, hbar#, Arrs
+from Initial import t0, t1, hbar
 
 def dH_k(t,sigma):
     return dH(t,sigma)[int(options['ik'])]

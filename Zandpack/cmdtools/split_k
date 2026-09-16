@@ -12,8 +12,7 @@ E.g. run them in a trivially parallel way.
 
 """
 
-import sys
-import os
+import sys, os
 import numpy as np
 from Zandpack.Loader import flexload
 pref = 'split_k:  '

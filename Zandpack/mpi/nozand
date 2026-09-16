@@ -19,6 +19,8 @@ _me.prctl(15, b"nozand", 0, 0, 0)
 import numpy as np
 from mpi4py import MPI
 import os, sys, inspect
+from time import time
+from scipy.linalg import bandwidth
 import Zandpack.k0nfig as config
 from Zandpack.mpi_RK4pars_dev import A, B, CT, CH, RK_N, idxholder, hnew_func
 from Zandpack.mpi_RK4pars_dev import RK_Method as _rkmethod
@@ -46,16 +48,30 @@ from Zandpack.mpi_funcs import (_multiply,
                                 nullify_omg_part, DM_other_mat_analysis)
 from Zandpack.docstrings import DocString_MPI_implementationNO as docstring
 from Zandpack.mpi_timer import TimeBot
-from time import time #, sleep
-from Zandpack.banded_matrix_funcs import bandedmatmat# , bandedmatvec
-from scipy.linalg import bandwidth
+from Zandpack.banded_matrix_funcs import bandedmatmat
+from Zandpack.Loader import fleximport, flexload
+options = {"initial_file": "Initial.py",
+           "bias_file"   : "Bias.py",
+           "out_dir"     : "None",
+           "sigma_start" : "None",
+           "psi_start"   : "None",
+           "omg_start"   : "None",
+          }
 
 SourceCode = inspect.getsource
 # Initial Navigation to directory given
 args = sys.argv[1:]
+if "--help" in args:
+    print("nozand keywords:")
+    for _kw in options.keys():
+        print(_kw, ": ", options[_kw])
+    del _kw
+    sys.exit()
+
 original_folder = os.getcwd()
 ChDir = False
 Check = ["Dir" in v for v in args]
+
 if sum(Check) > 1:
     print("Dont specify several directories. Stopping processes")
     print("\n\n\n")
@@ -64,7 +80,7 @@ if True in Check:
     i = Check.index(True)
     if "=" not in args[i]:
         print("Specify path like this: ")
-        print("Dir = /path/to/somewhere/ ")
+        print("Dir=/path/to/somewhere/ ")
         print("Stopping processes")
         print("\n\n\n")
         assert 1 == 0
@@ -72,6 +88,19 @@ if True in Check:
     os.chdir(path)
     new_folder = os.getcwd()
     sys.path.append(new_folder)
+else:
+    print("Error: Specify the absolute path to the working directory (Dir=$PWD is the easiest way)")
+
+
+for a in args:
+    split = a.replace(' ', '').split('=')
+    options.update({split[0]:split[1]})
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
+
 
 # Initial Handling of keywords given
 from Initial import Arrs as D
@@ -93,20 +122,27 @@ if hasattr(_initp, "dm_triu_only"):
     dm_triu_only = _initp.dm_triu_only
 if hasattr(_initp, "dm_occ_only"):
     dm_occ_only = _initp.dm_occ_only
-               
+
 checkpoints = np.array(checkpoints)
 checkpoints = checkpoints[checkpoints > t0]
 checkpoints = checkpoints[checkpoints < t1]
 checkpoint_bookkeeper = np.zeros(len(checkpoints), dtype=int)
 from Bias import dH, bias, dissipator
+# Get folder to where files should be saved. 
+if options["out_dir"]!="None":
+    SaveDir = options["out_dir"]
+    _FB_SaveDir = name + "_save/"
+else:
+    SaveDir = name + "_save"
+SaveDir += "/"
+
 
 # MPI stardard import
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+comm       = MPI.COMM_WORLD
+rank, size = comm.Get_rank(), comm.Get_size()
 # Shorthands
 nax = np.newaxis
-DT = np.complex128
+DT  = np.complex128
 mpi_dtype_size = MPI.DOUBLE_COMPLEX.Get_size() # complex128 datatype
 
 def CZ(s):
@@ -228,8 +264,6 @@ def transform_vec_Tv(vec, T):
             for i3 in range(vec.shape[2]):
                 for i4 in range(vec.shape[3]):
                     vec[i1, i2, i3, i4, :] = T[i1] @ vec[i1, i2, i3, i4, :]
-
-
 def transform_vec_vT(vec, T):
     for i1 in range(vec.shape[0]):
         for i2 in range(vec.shape[1]):
@@ -244,12 +278,16 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
         dot_prod_zero_tol = float(os.environ["dot_prod_zero_tol"])
     except:
         pass
-
-    start_print()
-    filename = name + ".MASTER"
+    # Create save directory
+    try:
+        os.mkdir(SaveDir)
+    except:
+        pass
+    comm.Barrier()
+    filename = SaveDir + name + ".MASTER"
     with open(filename, "w") as file:
         file.write("\nfile for Master node\n\n")
-
+    start_print()
     # Stepsize updater, hnew(eps, TE)
     # eps: error-tolerance
     # TE : calculated error
@@ -310,17 +348,23 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
         t0 = T0
         h = stepsize
     else:
-        try:
-            sig0 = np.load(name + "_save/" + "last_sig.npy")
-        except:
-            print("Using /Arrays/DM_Ortho.npy!")
-            sig0 = Sm05 @ D["DM_Ortho"] @ Sm05  # NEW
-        try:
-            t0 = float(np.load(name + "_save/" + "last_time.npy"))
-            h = float(np.load(name + "_save/" + "last_stepsize.npy"))
-        except:
-            t0 = 0.0 + T0
-            h = 0.0 + stepsize
+        if options["sigma_start"]=="None":
+            try:
+                sig0 = np.load(SaveDir + "last_sig.npy")
+            except:
+                print("Using /Arrays/DM_Ortho.npy!")
+                sig0 = Sm05 @ D["DM_Ortho"] @ Sm05  # NEW
+            try:
+                t0 = float(np.load(SaveDir + "last_time.npy"))
+                h  = float(np.load(SaveDir + "last_stepsize.npy"))
+            except:
+                t0 = 0.0 + T0
+                h = 0.0 + stepsize
+        else:
+            print("Using DM from "+options["sigma_start"])
+            sig0 = Sm05 @ flexload(options["sigma_start"]) @ Sm05
+            t0   = 0.0 + T0
+            h    = 0.0 + stepsize
     # Arrays to place values of various intermediate samplings in the Runge-Kutta-method
     tmp_sig = CZ((NK,     NO, NO))  # D["DM_Ortho"].copy() ## NEW
     tmp_PI  = CZ((NK, NL, NO, NO))
@@ -359,15 +403,10 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     for v in Worker_idx:
         #             local nk     # local na  local nx     orb  orb
         PSI_buff += [CZ((len(v[0]), len(v[1]), len(v[2]), len(v[3]), NO))]
-    # Create save directory
-    try:
-        os.mkdir(name + "_save")
-    except:
-        pass
-    files = os.listdir(name + "_save")
+    files = os.listdir(SaveDir)
     for f in files:
         if f[0:2] == "DM":
-            os.remove(name + "_save/" + f)
+            os.remove(SaveDir + f)
     TIME_START = time()
     step_count = 0
     currents = [[] for i in range(NL)]
@@ -529,9 +568,9 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
             checkpoint_bookkeeper == 0
         )
         if save_checkpoints and pass_checkpoint_and_not_saved.any():
-            np.save(name + "_save/" + "last_sig", SIGS[-1])
-            np.save(name + "_save/" + "last_time", t0)
-            np.save(name + "_save/" + "last_stepsize", old_h)
+            np.save(SaveDir + "last_sig", SIGS[-1])
+            np.save(SaveDir + "last_time", t0)
+            np.save(SaveDir + "last_stepsize", old_h)
             idx = np.where(pass_checkpoint_and_not_saved)[0][0]
             checkpoint_bookkeeper[idx] = 1
 
@@ -558,37 +597,36 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 _savedm_arr = _savedm_arr *_overlap_nonzero
             if compress_mat==False:
                 np.save(
-                    name + "_save/DM" + str(step_count),
+                    SaveDir + "DM" + str(step_count),
                     _savedm_arr,
                 )
             else:
                 if dm_triu_only:
                     make_tril_zero(_savedm_arr)
-                np.savez_compressed(name + "_save/DM" + str(step_count), _savedm_arr)
+                np.savez_compressed(SaveDir + "DM" + str(step_count), _savedm_arr)
             del _savedm_arr
             dm_times = np.array(times[-len(DM):])
             if len(dm_times) > len(DM):
                 dm_times = dm_times[1:]
             np.save(
-                name + "_save/DMt" + str(step_count), dm_times[::n_dm_compress]
+                SaveDir+ "DMt" + str(step_count), dm_times[::n_dm_compress]
             )
             if save_PI:
                 if compress_mat==False:
                     np.save(
-                        name + "_save/PIa" + str(step_count),
+                        SaveDir+"PIa" + str(step_count),
                         np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
                     )
                 else:
                     np.savez_compressed(
-                        name + "_save/PIa" + str(step_count),
+                        SaveDir+"PIa" + str(step_count),
                         np.array(PI_holder[::n_dm_compress]).astype(np.complex64),
                     )
 
-            np.save(name + "_save/times" + str(step_count), times[-len(DM):])
+            np.save(SaveDir + "times" + str(step_count), times[-len(DM):])
             for k, c in enumerate(currents):
                 np.save(
-                    name
-                    + "_save/"
+                    SaveDir
                     + "current_"
                     + str(k)
                     + "_"
@@ -685,7 +723,8 @@ def Worker(role_info):
     except:
         pass
 
-    filename = name + "." + role_info[0]
+    filename = SaveDir + name + "." + role_info[0]
+    comm.Barrier()
     with open(filename, "w") as file:
         file.write("\nfile for " + role_info[0] + " node\n\n")
         file.write("\ndot-product zero tol:" + str(dot_prod_zero_tol))
@@ -722,26 +761,39 @@ def Worker(role_info):
         )
 
     number = int(role_info[0].replace("Worker", ""))
-    if usesave == False:
-        psi0 = pickout(CZ(D["psi_shape"]))
-        omg0 = pickout(CZ((NK, NL, NX, neig, NL, NX, NOT)))
-    elif usesave and LoadFromFull:
-        psi0 = pickout(np.load(name + "_save/last_psi.npy"))
+    if options["psi_start"]=="None" or options["omg_start"]=="None":
+        if usesave == False:
+            psi0 = pickout(CZ(D["psi_shape"]))
+            omg0 = pickout(CZ((NK, NL, NX, neig, NL, NX, NOT)))
+        elif usesave and LoadFromFull:
+            try:
+                psi0 = pickout(np.load(SaveDir + "last_psi.npy"))
+                transform_vec_Tv(psi0, Sm05)  # NEW
+                omg0 = pickout(np.load(SaveDir + "last_omg.npy"))
+            except:
+                print("(Worker" +str(rank)+ ") FALLBACK: No psi and/or omega in "+SaveDir)
+                print("(Worker" +str(rank)+ ") Trying Fallback directory: " + _FB_SaveDir)
+                psi0 = pickout(np.load(_FB_SaveDir + "last_psi.npy"))
+                transform_vec_Tv(psi0, Sm05)  # NEW
+                omg0 = pickout(np.load(_FB_SaveDir + "last_omg.npy"))
+                print("(Worker" +str(rank)+ ") Fallback Success")
+                
+        elif usesave and LoadFromFull == False:
+            psi0 = np.load(SaveDir + "last_Psi_" + role_info[0] + ".npy")
+            omg0 = np.load(SaveDir + "last_Omg_" + role_info[0] + ".npy")
+            assert psi0.shape[0] == len(k_idx)
+            assert psi0.shape[1] == len(lead_idx)
+            assert psi0.shape[2] == len(pole_idx)
+            assert omg0.shape[0] == len(k_idx)
+            assert omg0.shape[1] == len(lead_idx)
+            assert omg0.shape[2] == len(pole_idx)
+    else:
+        if rank ==1:
+            print("Worker 1: Using psi from "+options["psi_start"])
+            print("Worker 1: Using omg from "+options["omg_start"])
+        psi0 = pickout(flexload(options["psi_start"]))
         transform_vec_Tv(psi0, Sm05)  # NEW
-        omg0 = pickout(np.load(name + "_save/last_omg.npy"))
-    elif usesave and LoadFromFull == False:
-        psi0 = np.load(name + "_save/last_Psi_" + role_info[0] + ".npy")
-        omg0 = np.load(name + "_save/last_Omg_" + role_info[0] + ".npy")
-        assert psi0.shape[0] == len(k_idx)
-        assert psi0.shape[1] == len(lead_idx)
-        assert psi0.shape[2] == len(pole_idx)
-        assert omg0.shape[0] == len(k_idx)
-        assert omg0.shape[1] == len(lead_idx)
-        assert omg0.shape[2] == len(pole_idx)
-
-    # # global_psi = CZ((NK, NL, NX, NOT, NO))
-    # # psi_tilde  = CZ((nk, NL, NX, NOT, NO))
-    
+        omg0 = pickout(flexload(options["omg_start"]))
     # Shared memory array for global_psi
     gpsi_shape   = (NK, NL, NX, NOT, NO)
     gpsi_size    = np.prod(gpsi_shape)
@@ -790,7 +842,8 @@ def Worker(role_info):
     elif np.abs(H0 - H0.transpose(0,2,1).conj()).max() < 1e-6:
         print("Hamiltonian was not completely hermitian, corrected it by H0 = 0.5(H0 + H0*)")
         print("Nonhermitian error (Ham):     " + str(np.abs(H0 - H0.transpose(0,2,1).conj()).max()))
-        print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
+        ## print("Nonhermitian error (Overlap): " + str(np.abs(_overlap - _overlap.transpose(0,2,1).conj()).max()))
+        print("Nonhermitian error (S05): " + str(np.abs(S05 - S05.transpose(0,2,1).conj()).max()))
         H0 = 0.5 * (H0 + H0.conj().transpose(0,2,1))
     H0_BW_L,H0_BW_U = bandwidth(H0)
     H0_BW_L,H0_BW_U = H0_BW_L.max(), H0_BW_U.max()
@@ -1048,8 +1101,6 @@ def Worker(role_info):
         calc_what_deriv_list = [0,1]
     else:
         calc_what_deriv_list = [1,0]
-    
-    
     
     h_ts = (0.0, 0.0)
     while True:
@@ -1324,16 +1375,16 @@ def Worker(role_info):
         )
         if save_checkpoints and pass_checkpoint_and_not_saved.any():
             np.save(
-                name + "_save/" + "last_Psi_" + role_info[0] + ".npy", PSIS[-1]
+                SaveDir + "last_Psi_" + role_info[0] + ".npy", PSIS[-1]
             )
             np.save(
-                name + "_save/" + "last_Omg_" + role_info[0] + ".npy", OMGS[-1]
+                SaveDir + "last_Omg_" + role_info[0] + ".npy", OMGS[-1]
             )
             np.save(
-                name + "_save/" + "last_time_" + role_info[0] + ".npy", _t0_
+                SaveDir + "last_time_" + role_info[0] + ".npy", _t0_
             )
             np.save(
-                name + "_save/" + "last_stepsize_" + role_info[0] + ".npy", h
+                SaveDir + "last_stepsize_" + role_info[0] + ".npy", h
             )
             idx = np.where(pass_checkpoint_and_not_saved)[0][0]
             checkpoint_bookkeeper[idx] = 1

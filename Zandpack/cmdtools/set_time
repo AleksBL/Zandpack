@@ -12,8 +12,7 @@ do a set_time --help to see usage.
 
 """
 
-import sys
-import os
+import sys, os
 import numpy as np
 
 args = sys.argv[1:]
@@ -25,8 +24,6 @@ sys.path.append(new_folder)
 if '--help' in args:
     print('Usage: set_time Dir=$PWD "folder" "float"')
     exit()
-
-    
 
 file   = args[1].split('=')[1]
 t_new = float(args[2])

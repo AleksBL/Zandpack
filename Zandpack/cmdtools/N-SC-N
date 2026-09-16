@@ -10,10 +10,6 @@ import sys
 import os
 import numpy as np
 from Zandpack.FittedSelfEnergy import from_saved_file
-from Zandpack.PadeDecomp import FD_expanded, Pade_poles_and_coeffs, Hu_poles, FD
-from Block_matrices.Block_matrices import abssorted_eig_4inds as Sorted_eig
-from Zandpack.Linalg_factorisation import SVD, TAKAGI, QR
-from Zandpack.Loader import flexload
 
 pref = 'modify_occupations  '
 args = sys.argv[1:]

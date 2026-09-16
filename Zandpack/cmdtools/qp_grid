@@ -7,8 +7,7 @@ Created on Wed Jul 20 11:43:15 2022
 """
 
 import numpy as np
-import sys
-import os
+import sys, os
 import numba as nb
 outfile = "QuasiParticle_Solver_Input_t_and_E_pairs" # Fixed by the Adiabatic code
 args    = sys.argv[1:]
@@ -34,6 +33,7 @@ path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+print("Code only works with if the Initial.py is the Initial file. Code needs an update")
 from Initial import t0,t1
 
 times = np.arange(t0,t1, float(options['dt']))

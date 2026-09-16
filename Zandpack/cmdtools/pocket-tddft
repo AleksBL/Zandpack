@@ -13,6 +13,7 @@ import sys, os, sisl, numba, time
 from scipy.integrate import solve_ivp
 from Zandpack.td_constants import hbar
 from Zandpack.Help import TDHelper
+from Zandpack.Loader import fleximport
 from scipy.linalg import fractional_matrix_power
 args    = sys.argv[1:]
 options = {"proj_inds":"projs.npy",
@@ -38,6 +39,8 @@ options = {"proj_inds":"projs.npy",
            "use_mulliken":"False",
            "use_adaptive_mixer":"False",
            "plot_dipole_S":"False",
+           'initial_file': "Initial.py",
+           'bias_file'   : "Bias.py",
            }
 
 for a in args:
@@ -47,6 +50,11 @@ path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
 
 import Initial as init
 from Bias import dH, orth

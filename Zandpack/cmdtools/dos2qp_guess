@@ -63,7 +63,7 @@ T,E   = make_TE_grid(times, eg)
 
 dmin,dmax = float(options['DOS_min']), float(options['DOS_max']) 
 emin,emax = float(options['Emin']), float(options['Emax'])
-
+print("Code only works with if the Initial.py is the Initial file. Code needs an update")
 from Initial import t0,t1
 tmin,tmax = t0,t1#float(options['tmin']), float(options['tmax'])
 

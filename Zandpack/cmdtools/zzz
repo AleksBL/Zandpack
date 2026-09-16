@@ -6,9 +6,7 @@ Created on Tue Mar 28 10:11:19 2023
 @author: aleksander
 """
 
-import numpy as np
-import os 
-import sys
+import os, sys
 args = sys.argv[1:]
 print(args)
 #Default values
@@ -67,6 +65,3 @@ if options['mode']=='decompress':
     os.system('tar -xvf '+options['folder'])
     if options['delete']=='True':
         os.system('rm -rf  ' + options['folder'])
-    
-
-

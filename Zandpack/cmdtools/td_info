@@ -12,12 +12,10 @@ Tool for printing and plotting information from a TD calculation.
 
 """
 
-import sys
-import os
+import sys, os
 import numpy as np
-#import matplotlib.pyplot as plt
 from inspect import getsource
-from Zandpack.Loader import flexload
+from Zandpack.Loader import fleximport
 
 args = sys.argv[1:]
 print('td_info Program Start')
@@ -57,6 +55,8 @@ options = {'dt': '0.1',          # fs
            'qr_nocompression':'0',
            'onlysource':'0',
            "legendlabels":"None",
+           'initial_file': "Initial.py",
+           'bias_file'   : "Bias.py",
            }
 
 if '--help' in args:
@@ -76,6 +76,12 @@ path       = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
+
+_init_f = options.get('initial_file', 'Initial.py') 
+_bias_f = options.get('bias_file',    'Bias.py')
+fleximport('Initial', _init_f)
+fleximport('Bias',    _bias_f)
+
 from Initial import t0, t1,eps, checkpoints
 from Initial import name as _name
 from Bias    import bias, dH, dissipator
