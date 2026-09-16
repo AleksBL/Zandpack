@@ -427,7 +427,9 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
     
     orbidx_uall = np.unique(np.sort(np.hstack(orbidx_alpha)))
     assert len(orbidx_uall.shape) == 1
-    
+    # Hoist this matrix outside the loop, it is constant.
+    Sm1_sub_master_func = Sm1[:, orbidx_uall,:].copy()
+
     with open(filename, "a") as file:
         import psutil
         process = psutil.Process(os.getpid())
@@ -532,7 +534,9 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 #+#+#+#+#+#+# NEW
                 np.sum(tmp_PI, axis=1, out=Q_sum)
                 if (len(orbidx_uall) < (0.75 * NO)):
-                    Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1[:, orbidx_uall,:]
+                    #Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1[:, orbidx_uall,:]
+                    Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1_sub_master_func
+                    
                 else:
                     Q_sum = Q_sum @ Sm1
                 #+#+#+#+#+#+#
