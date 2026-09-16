@@ -90,6 +90,7 @@ if True in Check:
     sys.path.append(new_folder)
 else:
     print("Error: Specify the absolute path to the working directory (Dir=$PWD is the easiest way)")
+    assert 1 == 0, "Add Dir=$PWD " 
 
 
 for a in args:
@@ -534,9 +535,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
                 #+#+#+#+#+#+# NEW
                 np.sum(tmp_PI, axis=1, out=Q_sum)
                 if (len(orbidx_uall) < (0.75 * NO)):
-                    #Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1[:, orbidx_uall,:]
                     Q_sum = Q_sum[:, :, orbidx_uall] @  Sm1_sub_master_func
-                    
                 else:
                     Q_sum = Q_sum @ Sm1
                 #+#+#+#+#+#+#
