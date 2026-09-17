@@ -15,4 +15,6 @@ Zandpack/LDA.py
 Zandpack/HartreeFromDensity.py
 Zandpack/Linalg_factorisation.py
 Zandpack/mpi/old_versions/
+Zandpack/Optimized_RK45.py
+Zandpack/params2latex.py
 .spyproject/

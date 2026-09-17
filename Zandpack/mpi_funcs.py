@@ -10,23 +10,17 @@ import numpy as np
 import numba
 import k0nfig as config
 from scipy.linalg.blas import zgemv
-
 njit   = numba.njit
 prange = numba.prange
-
 assert config.NUMBA
-
 @numba.vectorize([numba.float64(numba.complex128),numba.float32(numba.complex64)])
 def abs2(x):
     return x.real**2 + x.imag**2
-
 # Generic operations 
-_MatMul = np.matmul
+_MatMul   = np.matmul
+_multiply = np.multiply
 def MM(A, B, OUT):
     _MatMul(A, B, out = OUT)
-
-_multiply = np.multiply
-#
 
 def step_fourth(Y1, Y2, Y3, CH):
     MM(Y1.transpose(1, 2, 3,             0), CH, Y1[-1])
@@ -42,7 +36,7 @@ def TERR(y1, y2, y3, CT):
 
 @njit
 def make_tril_zero(A):
-    n1,n2 = A.shape[-2],A.shape[-1]
+    n1 = A.shape[-2]
     for i in range(n1):
         for j in range(0,i):
             A[... , i,j] = 0.0
@@ -205,17 +199,6 @@ def OuterSubtractionAssign(A,B,C ,out):
                             for cc in range(NO):
                                 out[k,a,x,c,aa,xx,cc] = (A[k,a,x,c] - B[k,aa,xx,cc]) * C[k,a,x,c,aa,xx,cc]
 
-###################
-
-# @njit(fastmath=config.FASTMATH)
-# def idxaddpsi(psi, val, idx):
-#     count = 0
-#     for i in idx:
-#         psi[:,:,:,:,idx] += val[:,:,:,:, count]
-#         count += 1
-    
-
-##################
 
 @njit(fastmath =config.FASTMATH)
 def hermitian_kaij2ravel(mat, out):
@@ -259,18 +242,6 @@ def step_fourth_psi(Y2, CH):
 def step_fourth_omg(Y3, CH):
     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, Y3[-1])
 
-# These functions are made to avoid a silent buffering of
-# the Y1,Y2,Y3 arrays that might happen when numpy is asked
-# to write to the same array as it is multiplying. 
-# In the nozand code, tmp_psi and psi_omg will instead be passed.
-# the last function uses the zgemv blas routine to accumulate
-# into the last index, but without intermediate copying
-#def step_fourth_sig_v2(Y1, CH, out):
-#    MM(Y1.transpose(1, 2, 3,             0), CH, out)
-#def step_fourth_psi_v2(Y2, CH, out):
-#    MM(Y2.transpose(1, 2, 3, 4, 5,       0), CH, out)
-# def step_fourth_omg_v2(Y3, CH, out):
-#     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, out)
 def step_fourth_zgemv(Y, CH):
     # CH reallocation, very cheap. 
     CHc = np.ascontiguousarray(CH, dtype=np.complex128)
@@ -293,9 +264,7 @@ def DM_other_mat_analysis(dm, Lmat):
         for i in range(len(Lmat)):
             out[i][ik] = res[i]
     return out
-
-            
-            
+       
 def DM_other_mat_analysis_inner(dm, Lmat):
     e,v = np.linalg.eigh(dm)
     idx1 =  e >= 0.90
@@ -314,55 +283,3 @@ def DM_other_mat_analysis_inner(dm, Lmat):
                 out[m, n] =  np.trace(res)
         O.append(out)
     return O
-
-
-    
-    
-
-
-
-
-# @njit
-# def opt_MM_for_omg(A, B, nl,nf, out):
-#     nk = A.shape[0]
-#     n1 = A.shape[1]
-#     n2 = B.shape[2]
-#     for ik in range(nk):
-#         for i in range(n1):
-#             for j in range(n2):
-#                 out[ik,i,j] = np.dot(A[ik,i], B[ik,j])
-    
-
-
-
-
-# @njit(parallel = True)
-# def multiply_v2(A,B,C):
-#     n1 = len(A)
-#     for i in prange(n1):
-#         np.multiply( A[i] , B[i], out = C[i])
-        # C[i] = A[i] * B[i]
-# nax = np.newaxis
-# def OuterSubtraction(a,b,c,out):
-#     nk = a.shape[0]
-#     noT = out.shape[3]
-#     for k in range(nk):
-#         out[k] += np.subtract.outer(a[k,:,:,:noT], b[k]) * c[k]
-
-# def OuterSubtraction_v3(a,b,c,out):
-#     noT = out.shape[3]
-#     out += (a[:, :  , :  ,:noT,  nax, nax, nax] - b[:, nax, nax, nax,  :  , :  , :  ])*c
-
-# def CR(s):
-#     return np.random.random(s).astype(np.complex128) + 1j *np.random.random(s).astype(np.complex128)
-
-# sig  = CR((7,3,200,200))
-# psi  = CR((7,3,2,20,25,200))
-# omg  = CR((7,3,2,20,25,2,20,200))
-# Xpp  = CR((3,2,20,200))
-
-# def TERR_old(y1, y2, y3, CT):
-#     res  = np.sum(np.abs((y1.transpose(1, 2, 3,        0)@CT))**2)
-#     res += np.sum(np.abs((y2.transpose(1, 2, 3, 4, 5,    0)@CT))**2)
-#     res += np.sum(np.abs((y3.transpose(1, 2, 3, 4, 5, 6, 7, 0)@CT))**2)
-#     return np.sqrt(res)
