@@ -9,6 +9,7 @@ Created on Wed May 25 10:54:51 2022
 import numpy as np
 import numba
 import k0nfig as config
+from scipy.linalg.blas import zgemv
 
 njit   = numba.njit
 prange = numba.prange
@@ -258,9 +259,30 @@ def step_fourth_psi(Y2, CH):
 def step_fourth_omg(Y3, CH):
     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, Y3[-1])
 
-
-
-
+# These functions are made to avoid a silent buffering of
+# the Y1,Y2,Y3 arrays that might happen when numpy is asked
+# to write to the same array as it is multiplying. 
+# In the nozand code, tmp_psi and psi_omg will instead be passed.
+# the last function uses the zgemv blas routine to accumulate
+# into the last index, but without intermediate copying
+def step_fourth_sig_v2(Y1, CH, out):
+    MM(Y1.transpose(1, 2, 3,             0), CH, out)
+def step_fourth_psi_v2(Y2, CH, out):
+    MM(Y2.transpose(1, 2, 3, 4, 5,       0), CH, out)
+# def step_fourth_omg_v2(Y3, CH, out):
+#     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, out)
+def step_fourth_omg_zgemv(Y, CH):
+    # CH reallocation, very cheap. 
+    CHc = np.ascontiguousarray(CH, dtype=np.complex128)
+    # beta should take the value of CH[-1]
+    # Here this is asserted.
+    assert CH[-1] == 1.0
+    n1 = Y.shape[0] - 1                    # all, except the last index.
+    M  = int(np.prod(Y.shape[1:]))
+    Y[-1].reshape(M)[:] = \
+          zgemv(alpha=1.0, a=Y[0:n1].reshape(n1, M).T, x=CHc[:n1],
+          beta=1.0, y=Y[-1].reshape(M), trans=0, overwrite_y=1)
+    
 
 def DM_other_mat_analysis(dm, Lmat):
     out = [np.zeros((dm.shape[0], 3, 3),dtype=complex)
