@@ -265,13 +265,13 @@ def step_fourth_omg(Y3, CH):
 # In the nozand code, tmp_psi and psi_omg will instead be passed.
 # the last function uses the zgemv blas routine to accumulate
 # into the last index, but without intermediate copying
-def step_fourth_sig_v2(Y1, CH, out):
-    MM(Y1.transpose(1, 2, 3,             0), CH, out)
-def step_fourth_psi_v2(Y2, CH, out):
-    MM(Y2.transpose(1, 2, 3, 4, 5,       0), CH, out)
+#def step_fourth_sig_v2(Y1, CH, out):
+#    MM(Y1.transpose(1, 2, 3,             0), CH, out)
+#def step_fourth_psi_v2(Y2, CH, out):
+#    MM(Y2.transpose(1, 2, 3, 4, 5,       0), CH, out)
 # def step_fourth_omg_v2(Y3, CH, out):
 #     MM(Y3.transpose(1, 2, 3, 4, 5, 6, 7, 0), CH, out)
-def step_fourth_omg_zgemv(Y, CH):
+def step_fourth_zgemv(Y, CH):
     # CH reallocation, very cheap. 
     CHc = np.ascontiguousarray(CH, dtype=np.complex128)
     # beta should take the value of CH[-1]

@@ -28,17 +28,12 @@ from Zandpack.mpi_splitter import (
     partition_scheme3,
     get_sources_scheme2,
     find_max_orbital_idx_per_lead)
-# from Zandpack.mpi_funcs import MM ##, TERR2_sig, TERR2_psi, TERR2_omg
 from Zandpack.mpi_funcs import (
-   step_fourth_sig_v2,
-   step_fourth_psi_v2,
-   #step_fourth_omg_v2,
-   step_fourth_omg_zgemv,
+   step_fourth_zgemv,
    MM, make_tril_zero)
 from Zandpack.func_step_forward import (
     step_sig_forward_nb,
     step_psi_forward_nb,
-    # step_omg_forward_nb,
     step_omg_forward_nb_fermi_opti,
     TERR2_sig_nb,
     TERR2_psi_nb,
@@ -579,8 +574,7 @@ def SIGMA(stepsize=stepsize, T0=t0, T1=t1):
 
         _Timer.time(["Save State"])
         _Timer.time(["Update Sigma"])
-        step_fourth_sig_v2(SIGS, CH, tmp_sig)
-        SIGS[-1] = tmp_sig[:,:,:]
+        step_fourth_zgemv(SIGS, CH)
         _Timer.time(["Update Sigma"])
         _Timer.time(["Intermediate Save"])
         ### MISTAKE FIX 25.08.2026
@@ -1394,14 +1388,9 @@ def Worker(role_info):
             checkpoint_bookkeeper[idx] = 1
         _Timer.time(["Save State"])
         _Timer.time(["Update Psi"])
-        step_fourth_psi_v2(PSIS, CH, tmp_psi)
-        PSIS[-1] = tmp_psi[:,:,:,:,:]
+        step_fourth_zgemv(PSIS, CH)
         _Timer.time(["Update Psi", "Update Omega"])
-        ##step_fourth_omg_v2(OMGS, CH, tmp_omg)
-        ##OMGS[-1] = tmp_omg[:,:,:,:,:,:,:]
-        # In this zgemv-based function the OMGS[-1] 
-        # is directly accumulated to.
-        step_fourth_omg_zgemv(OMGS, CH)
+        step_fourth_zgemv(OMGS, CH)
         _Timer.time(["Update Omega"])
         _Timer.time(["Main Loop"])
         mystring = _Timer.generate_timings()
