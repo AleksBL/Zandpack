@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+This script is AI generated, prompted to make a current equivalent of the lossydm tool.
+
+
+Lossless sibling of lossydm, but for the currents instead of the
+density matrix: takes the chunked time-dependent currents produced
+by zand / nozand and puts them into one file, then compresses it
+using the built-in numpy savez_compressed, or using the xz tool.
+Every point of the current that the calculation saved is kept,
+nothing is interpolated or thrown away.
+
+do a compress_currents --help to see usage.
+
+"""
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"compress_currents", 0, 0, 0)
+import sys, os
+import numpy as np
+from Zandpack.plot import J
+import subprocess
+args = sys.argv[1:]
+options = {'folder':'ABC_save',
+           "n":"2",
+           "delete":"True",
+           "usexz":"True",
+           "extremexz":"False",
+           "xzlevel":"7",
+           }
+if '--help' in args:
+    print("This tool takes the chunks of the timedependent currents produced by zand / nozand and puts them into one file and then compresses it using the built-in numpy savez_compressed, or using the xz tool.")
+    print("Unlike lossydm, the currents are stored losslessly: all points of the current that the calculation saved are kept.")
+    print('Keywords and default values. Assign with "keyword=value" argument after the compress_currents command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+
+for a in args:
+    if 'command' not in a:
+        split = a.replace(' ', '').split('=')
+    else:
+        split = a.split('=')
+    options.update({split[0]:split[1]})
+
+t, JJ = J([options["folder"]], n = int(options["n"]))
+
+nt = len(t)
+print("Read " + str(nt) + " time points")
+for k in range(len(JJ)):
+    print("Lead " + str(k) + " : current array of shape " + str(JJ[k].shape))
+
+# Lossless storage: all points, original dtype, no tolerance, no interpolation.
+dic = {"t": t}
+for k in range(len(JJ)):
+    dic["J_" + str(k)] = JJ[k]
+
+npz_path = options["folder"] + "/Currents.npz"
+
+if options["usexz"] == "False":
+    np.savez_compressed(npz_path, **dic)
+else:
+    np.savez(npz_path, # uncompressed, so xz has raw bytes to work with
+             **dic)
+    xzlevel = options["xzlevel"]
+    if options["extremexz"]=="True":
+        subprocess.run(["xz", "-"+xzlevel, "-e", "-T0", "-f", npz_path], check=True)
+    else:
+        subprocess.run(["xz", "-"+xzlevel,       "-T0", "-f", npz_path], check=True)
+
+assert ("Currents.npz.xz" in os.listdir(options["folder"]) ) or ("Currents.npz" in os.listdir(options["folder"]))
+
+t_arc, J_arc = J([options["folder"]], n=int(options["n"]), prefer_full=False)
+
+assert t.shape == t_arc.shape, \
+    "Time array shapes differ: raw " + str(t.shape) \
+    + " vs archive " + str(t_arc.shape)
+assert np.array_equal(t, t_arc), "Times differ between raw and archive!"
+
+assert len(JJ) == len(J_arc) == int(options["n"]), \
+    "Number of leads differ: raw " + str(len(JJ)) \
+    + " vs archive " + str(len(J_arc))
+
+for k in range(len(JJ)):
+    assert JJ[k].shape == J_arc[k].shape, \
+        "Lead " + str(k) + " shape mismatch: raw " + str(JJ[k].shape) \
+        + " vs archive " + str(J_arc[k].shape)
+    assert JJ[k].dtype == J_arc[k].dtype, \
+        "Lead " + str(k) + " dtype mismatch (lossy storage?): " \
+        + str(JJ[k].dtype) + " vs " + str(J_arc[k].dtype)
+    assert np.array_equal(JJ[k], J_arc[k]), \
+        "Lead " + str(k) + " currents differ between raw and archive!"
+
+print("Verification passed: archive currents and times are "
+      "bit-identical to the original chunked files.")
+
+
+if options["delete"]=="True":
+    print("Deleting previous currents from "+options["folder"])
+    os.system("rm -f "+options["folder"]+"/current_*.npy")
+    os.system("rm -f "+options["folder"]+"/current_*.npz")
+    os.system("rm -f "+options["folder"]+"/times*.npy")
+    os.system("rm -f "+options["folder"]+"/times*.npz")
+    if options["usexz"]=="True":
+        os.system("rm -f "+options["folder"]+"/Currents.npz")
+    else:
+        os.system("rm -f "+options["folder"]+"/Currents.npz.xz")

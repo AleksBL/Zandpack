@@ -17,7 +17,63 @@ def atoi(text):
 def natural_keys(text):
     return [ atoi(c) for c in re.split('(\d+)',text) ]
 
-def combine_currents(dirs, n=2):
+def combine_currents(dirs, n=2, prefer_full=True, currents_arc=False):
+    """ 
+        dirs :  the *_save directory/ies where a Zand calculation has been done
+        n    : number of electrodes
+        
+        Like combine_dm, this function can read the currents from the
+        compressed Currents.npz / Currents.npz.xz archive written by the
+        compress_currents cmdtool. If the raw current_* chunk files are
+        still present they take precedence (prefer_full=True). Set
+        prefer_full=False to force reading of the archive. If
+        currents_arc=True, the raw np.load archive handle is returned
+        instead of (t, [J_0, J_1, ...]).
+    """
+    C = [[] for i in range(n)]
+    T = []
+    count = 0
+    for d in dirs:
+        f = ld(d)
+        if "Currents.npz.xz" in f:
+            with lzma.open(d+"/"+"Currents.npz.xz", "rb") as f:
+                arc = np.load(io.BytesIO(f.read()))
+        elif "Currents.npz" in f:
+            arc = np.load(d+"/"+"Currents.npz")
+        else:
+            arc = None
+        f = ld(d)
+        f = [v for v in f if 'current_' in v]
+        if len(f)>0 and prefer_full:
+            pass
+        else:
+            if currents_arc:
+                return arc
+            t  = arc["t"]
+            JJ = [arc["J_"+str(i)] for i in range(n)]
+            return t, JJ
+        
+        f.sort(key=natural_keys)
+        tf = [v for v in ld(d) if 'times' in v]
+        tf.sort(key=natural_keys)
+        for ff in f:
+            vals = ff.split('_')
+            if len(vals)==2:
+                pass
+            else:
+                L     = int(vals[1])
+                #_Jt = np.load(d+'/'+ff)
+                _Jt = flexload(d+'/'+ff)
+                C[L] += [_Jt]
+        
+        for ff in tf:
+            T+=[np.load(d+'/'+ff)]
+        count += 1
+    CC  =  [np.vstack(C[i]) for i in range(n)]
+    T   =   np.hstack(T)[:-count]
+    return T, CC
+
+def combine_currents_old(dirs, n=2):
     """ 
         dirs :  the *_save directory/ies where a Zand calculation has been done
         n    : number of electrodes

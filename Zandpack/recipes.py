@@ -5,7 +5,7 @@ Created on Thu Apr  2 10:53:07 2026
 
 @author: aleks
 """
-import inspect
+import inspect, os, time
 
 def stepwise_const_bias(ControlInstance, 
                         n_steps, step_height, step_width = 40.0, softness = 3.0, 
@@ -101,7 +101,9 @@ def const_bias_and_sine(ControlInstance,
                         lines_inside_bias  = None,
                         lines_outside_bias = None,
                         Contour=None, label = "",
-                        zero_amp_skip=True):
+                        zero_amp_skip=True,
+                        n_workers=1, i_worker =0,
+                        ):
     """
     Function for running a series of calculations with a bias function as
     V(t) = C_i + A_j*sin(w_k * t). Please note you have to give this function a 
@@ -133,20 +135,37 @@ def const_bias_and_sine(ControlInstance,
     V    = np.round(V, 4)
     Ampl = np.round(Ampl,4)
     w    = np.round(w, 4)
+    if n_workers>1:
+        assert len(V) == 1 and np.abs(V[0])<1e-8, "Parallel mode does not work with more workers \
+                                                   when looping over several steady-state biases. \
+                                                   Please use the serial mode n_workers=1."
+    _pit = 0
     for vi in V:
-        D = np.abs(np.array(SSV) - vi)
-        idx = np.where(D == D.min())[0][0]
-        DMSTART = SSDM[idx]
-        np.save(C.working_dir + "/UseThisDM.npy", DMSTART)
-        first_step = True
+        if i_worker==0:
+            D = np.abs(np.array(SSV) - vi)
+            idx = np.where(D == D.min())[0][0]
+            DMSTART = SSDM[idx]
+            np.save(C.working_dir + "/UseThisDM.npy", DMSTART)
+        else:
+            _t0 = time.time()
+            while "UseThisDM.npy" not in os.listdir(C.working_dir):
+                time.sleep(5.0)
+                if time.time() - _t0 > 3600 / 2:
+                    # If the wait time is larger than 30min, abort
+                    assert 1 == 0, "Timeout for wait for UseThisDM.npy"
+            
+        first_step     = True
         first_zero_amp = True
         for ai in Ampl:
             for wi in w:
+                if _pit % n_workers != i_worker:
+                    _pit += 1
+                    continue
+                _pit += 1
                 if np.abs(ai)<1e-10 and zero_amp_skip: 
                     if first_zero_amp == False:
                         continue
                     first_zero_amp = False
-                
                 def bias(t,a):
                     env = 1-1/(np.exp((t-tstart)/s) + 1.0)
                     V = vi + env * ai * np.sin(wi * t)
@@ -154,7 +173,7 @@ def const_bias_and_sine(ControlInstance,
                     else:      return -V
                 more_imports = ["vi="+str(vi), "ai="+str(ai), "wi="+str(wi),
                                 "tstart="+str(tstart), "s="+str(s), ]
-                if first_step:
+                if first_step and i_worker==0:
                     C.input.orthogonal=True
                     C.write_bias(bias=inspect.getsource(bias), hook=C.hook, 
                                  more_imports=more_imports, dm_diff_tol = 1.0,
@@ -174,6 +193,16 @@ def const_bias_and_sine(ControlInstance,
                     C.run_psinought()
                     if False in C.psinought_status:
                         print("Seems like psinought has problems converging")
+                    if n_workers>1:
+                        np.save("ParallelJobsSignal.npy", np.array([1]))
+                elif i_worker != 0:
+                    _t0 = time.time()
+                    while "ParallelJobsSignal.npy" not in os.listdir():
+                        time.sleep(5.0)
+                        if time.time() - _t0 > 3600/2:
+                            # Timeout after 30mins of waiting.
+                            assert 1 == 0, "Timeout waiting for ParallelJobsSignal.npy"
+
                 first_step = False
                 if nozand:
                     C.input.orthogonal=False
@@ -194,6 +223,3 @@ def const_bias_and_sine(ControlInstance,
                 outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
                 outname = label + outname
                 C.archive_calculation(outname)
-
-
-

@@ -391,7 +391,12 @@ def fmt_str_cmd(s):
 
 class Control: # Replaces bash scripting
     def __init__(self, input_class, source_files=None, logfile = 'cmds_1.txt', 
-                 livelog="cmds.txt", prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"]):
+                 livelog="cmds.txt", 
+                 prepend_env_vars = ["OMP_NUM_THREADS=1", "NUMBA_NUM_THREADS=1"],
+                 n_elec = 2,
+                 ):
+        if n_elec != 2:
+            print("You are setting a non-standard number of electrodes. This is a notice.")
         self.input = input_class
         # source files is the folder written by TD_Transport 
         # when using "tofile"
@@ -405,6 +410,7 @@ class Control: # Replaces bash scripting
         self.prepend_env_vars  = prepend_env_vars
         self._first_logwrite   = True
         self.default_td_folder = None
+        self.n_elec      = n_elec
     @property
     def scf_status(self):
         """
@@ -422,6 +428,18 @@ class Control: # Replaces bash scripting
             out =  False
         self.out_wd()
         return out
+    @property
+    def outlabel(self):
+        if not hasattr(self,"_outfilelabel"):
+            return ""
+        return self._outfilelabel
+    def set_outfilelabel(self, label):
+        """
+        Label to be appended to the outfiles produced by the instance
+        Args: 
+            label: str
+        """
+        self._outfilelabel = label
     
     @property
     def psinought_status(self):
@@ -678,10 +696,11 @@ class Control: # Replaces bash scripting
             if k=='custom_exec':
                 continue
             kwargs[k] = arg_values.locals[k]
+        outfile = "modocc"+self.outlabel+".out"
         if custom_exec is None:
-            self.run_cmd_standard("modify_occupations", " > modocc.out", **kwargs)
+            self.run_cmd_standard("modify_occupations", " > "+outfile, **kwargs)
         else:
-            self.run_cmd_standard(custom_exec, " > modocc.out", **kwargs)
+            self.run_cmd_standard(custom_exec, " > "+outfile, **kwargs)
     def make_ts_contour(self, E1   = None, N_C= None,  N_F = None, 
                                fact = None, kT = None,  name= None,
                                pp_path = None, custom_exec = None):
@@ -716,10 +735,11 @@ class Control: # Replaces bash scripting
             if k=='custom_exec':
                 continue
             kwargs[k] = arg_values.locals[k]
+        outfile = "tscont"+self.outlabel+".out"
         if custom_exec is None:
-            self.run_cmd_standard("make_ts_contour", " > tscont.out", **kwargs)
+            self.run_cmd_standard("make_ts_contour", " > "+outfile, **kwargs)
         else:
-            self.run_cmd_standard(custom_exec, " > tscont.out", **kwargs)
+            self.run_cmd_standard(custom_exec, " > "+outfile, **kwargs)
             
     def run_scf(self, Contour = None,  kT     = None, kweights = None, 
                       drho_tol= None,  history= None, weight   = None, 
@@ -746,10 +766,11 @@ class Control: # Replaces bash scripting
         kwargs.update(self.input.filenames())
         print('Running SCF')
         exc = " ".join(self.prepend_env_vars + ["SCF"])
+        outfile = "scf"+self.outlabel+".out"
         if custom_exec is None:
-            self.run_cmd_standard(exc," > scf.out", **kwargs)
+            self.run_cmd_standard(exc," > "+outfile, **kwargs)
         else:
-            self.run_cmd_standard(custom_exec," > scf.out", **kwargs)
+            self.run_cmd_standard(custom_exec," > "+outfile, **kwargs)
     def run_psinought(self,maxiter=None, checkderivative=None,dl=None,
                            steptol=None, add_random=None, random_weight=None,
                            L_info =None, Axb_solver=None, start_psi = None,
@@ -782,10 +803,11 @@ class Control: # Replaces bash scripting
         kwargs.update( self.input.filenames())
         exc = " ".join(self.prepend_env_vars + ["psinought"])
         print('Running psinought')
+        outfile = "psi0"+self.outlabel+".out"
         if custom_exec is None:
-            self.run_cmd_standard(exc," > psi0.out", **kwargs)
+            self.run_cmd_standard(exc," > "+outfile, **kwargs)
         else:
-            self.run_cmd_standard(custom_exec, " > psi0.out", **kwargs)
+            self.run_cmd_standard(custom_exec, " > "+outfile, **kwargs)
     def run_vc(self, hw, ampl, mpi="mpirun ", 
                voltage=0.0, NPHOT=3, outfile="vc_out.npz",
                kT=0.025, epsrel=1e-7, epsabs=1e-7, limit=800,
@@ -833,7 +855,8 @@ class Control: # Replaces bash scripting
                 kwargs[k] = arg_values.locals[k]
         exc = " ".join(self.prepend_env_vars + [mpi, "viljas-cuevas"])
         print('Running Viljas-Cuevas code. ')
-        self.run_cmd_standard(exc," > tg.out", **kwargs)
+        outfile = "tg"+self.outlabel+".out"
+        self.run_cmd_standard(exc," > "+outfile, **kwargs)
         res   = np.load(self.working_dir + "/"+outfile)
         Jrect, Err = res["Jrect"],res["err"]
         return Jrect, Err
@@ -890,10 +913,11 @@ class Control: # Replaces bash scripting
         self.textlog += ['Executing nozand....\n']
         exc = " ".join(self.prepend_env_vars + [mpi, "nozand"])
         print('Running nozand')
+        outfile = "nozand"+self.outlabel+".out"
         if custom_exec is None:
-            self.run_cmd_standard(exc, " > nozand.out", **kwargs)
+            self.run_cmd_standard(exc, " > "+outfile, **kwargs)
         else:
-            self.run_cmd_standard(custom_exec, " > nozand.out", **kwargs)
+            self.run_cmd_standard(custom_exec, " > "+outfile, **kwargs)
         
     def write_log(self,ftxt):
         with open(ftxt, "w") as f:
@@ -945,7 +969,10 @@ class Control: # Replaces bash scripting
             folder = self._latest_nozand_calc
         except:
             folder = self.input.name+"_save"
-        self.systemcall("lossydm Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > compressDM.out")
+        outfile = "compressDM"+self.outlabel + ".out"
+        self.systemcall("lossydm           Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > " + outfile)
+        outfile = "compressJ"+self.outlabel + ".out"
+        self.systemcall("compress_currents Dir=$PWD folder="+folder + " n="+str(self.n_elec) + " > " + outfile)
         archive_calculation(folder, arc_name, 
                             keep_psi_omg_in_arc = keep_psi_omg_in_arc,
                             clean_original = clean_original)
