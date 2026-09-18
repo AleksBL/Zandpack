@@ -8,7 +8,7 @@ Created on Fri Sep 18 12:35:34 2026
 
 import numpy as np
 from numba import njit, prange
-import k0nfig
+from Zandpack import k0nfig
 from scipy.integrate import solve_ivp as ode
 from  Zandpack.td_constants import hbar, electron_charge
 import matplotlib.pyplot as plt

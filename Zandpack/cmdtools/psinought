@@ -21,7 +21,7 @@ import numpy as np
 from numba import njit
 import scipy.sparse.linalg as LSA
 import scipy.sparse as sp
-from Zandpack.TimedependentTransport import Q_nb
+from Zandpack.decoupled_functions import Q_nb
 from Zandpack.Louivillian import Louivillian
 from Zandpack.Loader import flexload, fleximport
 from Zandpack.docstrings import psi0_docstring

@@ -6,8 +6,8 @@ Created on Wed May 18 12:06:22 2022
 @author: aleksander
 """
 import numpy as np
-from k0nfig import Check_partition_scheme as _Check
-from k0nfig import Supress_parallel_K as SupK
+from Zandpack.k0nfig import Check_partition_scheme as _Check
+from Zandpack.k0nfig import Supress_parallel_K as SupK
 
 
 def get_sources(nw):
