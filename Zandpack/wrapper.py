@@ -5,19 +5,14 @@ Created on Mon Mar 16 16:47:40 2026
 
 @author: aleks
 """
-# from Zandpack.td_constants import hbar
 import numpy as np
-import inspect
-import os, sisl
-import time
-from  Zandpack.plot import J, DM
+import os, sisl, time, inspect, datetime
+from Zandpack.plot import J, DM
 from copy import deepcopy
 from pickle import load
-import datetime
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
 from textwrap import dedent
 from numba import njit
-from time import sleep
 glob_test = False
 # custom mv uses a replacement for dH/dQ @ dQ(t) in the linearized electron interaction.
 use_custom_mv = False
@@ -28,13 +23,11 @@ try:
         use_custom_mv = True
 except:
     pass
-
 try:
     if os.environ["ZANDPACK_DH_C64"].lower()=="true":
         dH_use_c128=False
 except:
     pass
-
 try:
     if os.environ["ZANDPACK_SPARSE_LIN_DH"].lower()=="true":
         sparse_dH=True
@@ -42,7 +35,6 @@ try:
         sparse_dH=False
 except:
     pass
-
 
 # Wrapper classes for more easily control a zandpack calculation
 # directly from python.
@@ -207,12 +199,9 @@ class Input:   # Handles the Initial.py file
         text+= "        X = (r - P1).dot(drc); F = bias(t,0) + (bias(t,1) - bias(t,0)) *(X - X0)/(X1 - X0)\n"
         text+= "        return F \n"
         text+= "else: \n    def ramp_field(r,t): return 0.0\n"
-        #if dH is None:
-        text += "def Ramp(t): \n"
-        text += "    return Hlp.approxfield2mat(t, ramp_field, orthogonal=orth)\n"
-        #else:
-        #   text+= dedent(inspect.getsource(dH))
-        text += '\n'
+        text +="def Ramp(t): \n"
+        text +="    return Hlp.approxfield2mat(t, ramp_field, orthogonal=orth)\n"
+        text +="\n"
         if isinstance(hook, dftb_hook):
             text += "try:\n"
             text += "    S_ee = float(os.environ[\"S_EE\"])\n"
@@ -349,7 +338,7 @@ class Input:   # Handles the Initial.py file
                 text += "        check_H_herm(Hlp.DM0,          Hlp.H0,          "+str(self.t0)+", dH)\n"
                 text += "    else:\n"
                 text += "        check_H_herm(sigO2NO(Hlp.DM0), HamO2NO(Hlp.H0), "+str(self.t0)+", dH)\n"
-                
+        
         if lines_outside_bias is not None and put_lob_last:
             for l in lines_outside_bias:
                 text += l +"\n"
@@ -363,8 +352,7 @@ class Input:   # Handles the Initial.py file
                 f.write(text)
             if self.verbose:
                 print("Wrote Bias.py file")
-            
-            
+
     def pickle(self, filename):
         """Saves input class to file"""
         import pickle as pkl
@@ -546,7 +534,6 @@ class Control: # Replaces bash scripting
         self.create_wd()
         self.systemcall("cp -rs $PWD/"+file_or_dir
                         + " $PWD/"+self.working_dir+"/"+newname)
-        
     def copy_state(self, other_controller):
         B = other_controller
         self.create_wd()
@@ -854,9 +841,9 @@ class Control: # Replaces bash scripting
             else:
                 kwargs[k] = arg_values.locals[k]
         exc = " ".join(self.prepend_env_vars + [mpi, "viljas-cuevas"])
-        print('Running Viljas-Cuevas code. ')
-        outfile = "tg"+self.outlabel+".out"
-        self.run_cmd_standard(exc," > "+outfile, **kwargs)
+        print('Running Viljas-Cuevas code.')
+        outfile_write = "tg"+self.outlabel+".out"
+        self.run_cmd_standard(exc," > "+outfile_write, **kwargs)
         res   = np.load(self.working_dir + "/"+outfile)
         Jrect, Err = res["Jrect"],res["err"]
         return Jrect, Err
@@ -1770,7 +1757,7 @@ class DM_Lin_NO_OD:
 
 def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_original = True, lossydm = False):
     os.system("cp -R "+name + " " + arc_name)
-    sleep(2.0)
+    time.sleep(2.0)
     if keep_psi_omg_in_arc == False:
         os.system("rm "+arc_name + "/last_psi.npy")
         os.system("rm "+arc_name + "/last_omg.npy")
@@ -1781,7 +1768,7 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/LossyDensityMatrix.npz.xz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
-    sleep(1.0)
+    time.sleep(1.0)
 
 def load_object(A):
     import pickle

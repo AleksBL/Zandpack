@@ -18,10 +18,9 @@ do a compress_currents --help to see usage.
 import ctypes
 _me = ctypes.CDLL(None)
 _me.prctl(15, b"compress_currents", 0, 0, 0)
-import sys, os
+import sys, os, subprocess
 import numpy as np
 from Zandpack.plot import J
-import subprocess
 args = sys.argv[1:]
 options = {'folder':'ABC_save',
            "n":"2",

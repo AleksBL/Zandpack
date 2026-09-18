@@ -102,7 +102,9 @@ def const_bias_and_sine(ControlInstance,
                         lines_outside_bias = None,
                         Contour=None, label = "",
                         zero_amp_skip=True,
-                        n_workers=1, i_worker =0,
+                        n_workers = 1, 
+                        i_worker = 0,
+                        nozand_kwargs={},
                         ):
     """
     Function for running a series of calculations with a bias function as
@@ -162,8 +164,9 @@ def const_bias_and_sine(ControlInstance,
                     _pit += 1
                     continue
                 _pit += 1
-                if np.abs(ai)<1e-10 and zero_amp_skip: 
+                if np.abs(ai)<1e-10 and zero_amp_skip:
                     if first_zero_amp == False:
+                        # Triggers when one calculation with ai=0 has been calculated (per worker).
                         continue
                     first_zero_amp = False
                 def bias(t,a):
@@ -174,7 +177,7 @@ def const_bias_and_sine(ControlInstance,
                 more_imports = ["vi="+str(vi), "ai="+str(ai), "wi="+str(wi),
                                 "tstart="+str(tstart), "s="+str(s), ]
                 if first_step and i_worker==0:
-                    C.input.orthogonal=True
+                    C.input.orthogonal = True
                     C.write_bias(bias=inspect.getsource(bias), hook=C.hook, 
                                  more_imports=more_imports, dm_diff_tol = 1.0,
                                  lines_inside_bias = lines_inside_bias,
@@ -193,7 +196,7 @@ def const_bias_and_sine(ControlInstance,
                     C.run_psinought()
                     if False in C.psinought_status:
                         print("Seems like psinought has problems converging")
-                    if n_workers>1:
+                    if n_workers > 1:
                         np.save("ParallelJobsSignal.npy", np.array([1]))
                 elif i_worker != 0:
                     _t0 = time.time()
@@ -202,24 +205,24 @@ def const_bias_and_sine(ControlInstance,
                         if time.time() - _t0 > 3600/2:
                             # Timeout after 30mins of waiting.
                             assert 1 == 0, "Timeout waiting for ParallelJobsSignal.npy"
-
                 first_step = False
                 if nozand:
-                    C.input.orthogonal=False
+                    C.input.orthogonal = False
                     C.write_bias(bias=bias, hook=C.hook, 
                                  more_imports=more_imports, dm_diff_tol = 1.0,
                                  lines_inside_bias = lines_inside_bias,
                                  lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
-                    C.run_nozand(mpi)
+                    C.run_nozand(mpi, **nozand_kwargs)
                 else:
+                    assert 1 == 0, "Please dont use the zand mode."
                     C.input.orthogonal=True
                     C.write_bias(bias=bias, hook=C.hook, 
                                  more_imports=more_imports, dm_diff_tol = 1.0,
                                  lines_inside_bias = lines_inside_bias,
                                  lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
-                    C.run_nozand(mpi)
+                    C.run_zand(mpi)
                 outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
                 outname = label + outname
                 C.archive_calculation(outname)
