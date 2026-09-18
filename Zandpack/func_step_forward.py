@@ -8,7 +8,7 @@ Created on Mon Feb  2 12:09:35 2026
 import numpy as np
 from numba import njit, prange
 import numba
-import k0nfig as config
+from Zandpack import k0nfig as config
 
 fm       = False# config.FASTMATH
 parallel = False# config.NUMBA_PARALLEL

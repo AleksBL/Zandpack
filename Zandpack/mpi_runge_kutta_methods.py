@@ -15,27 +15,16 @@ Arr_sampling = [k1,k2,..., k_{RK_N, y0]
 
 
 """
-#
-# RK_Method = RK45, RK78, DOP54, cash-karp
-#
+
 import numpy as np
 import os
+from Zandpack.k0nfig import RK_Method
 
 try:
-    from k0nfig import RK_Method
-except:
-    # print('Warning from RK4pars: Something went wrong with loading k0nfig')
-    import sys
-    sys.path.append(__file__[:-18])
-    from k0nfig import RK_Method
-
-try:
+    # RK_Method = RK45, RK78, DOP54, cash-karp
     RK_Method = os.environ['RK_method']
 except:
     pass
-
-
-
 
 if RK_Method == 'RK45':
     # Ref: Wikipedia Runge-kutta-fehlberg
@@ -201,7 +190,6 @@ if RK_Method=='cash-karp':
 
 
 for i in range(1,RK_N):
-    #print(i)
     assert abs(B[i,idxholder[i]].sum() - B[i][np.logical_not(np.isnan(B[i]))].sum())<1e-14
     
     ### REF: Explicit Runge-Kutta Methods with Estimates of the Local Truncation Error

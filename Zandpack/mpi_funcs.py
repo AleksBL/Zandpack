@@ -8,7 +8,7 @@ Created on Wed May 25 10:54:51 2022
 
 import numpy as np
 import numba
-import k0nfig as config
+from Zandpack import k0nfig as config
 from scipy.linalg.blas import zgemv
 njit   = numba.njit
 prange = numba.prange
