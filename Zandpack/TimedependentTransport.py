@@ -1,23 +1,21 @@
-import os, sys
-sys.path.append(__file__[:-26])
+import os, sisl
 import numpy as np
 from siesta_python.siesta_python import SiP
-import sisl
 from Gf_Module.Gf import read_SE_from_tbtrans, read_overlap_data, pivot_and_sub
 from Gf_Module.Gf import Greens_function_olead as gfunc
 from Block_matrices.Block_matrices import Blocksparse2Numpy, block_sparse
 from Block_matrices.Block_matrices import multisort_eigval as Sorted_Eig
 from time import time
-import k0nfig
-from td_constants import hbar
-from PadeDecomp import Pade_poles_and_coeffs, Hu_poles, FD_expanded 
+from Zandpack import k0nfig
+from Zandpack.td_constants import hbar
+from Zandpack.PadeDecomp import Pade_poles_and_coeffs, Hu_poles, FD_expanded 
 from Block_matrices.Croy import evaluate_Lorentz_basis_matrix
 from scipy.signal import find_peaks
-from plot import plt
+from Zandpack.plot import plt
 from scipy.optimize import curve_fit
 from Block_matrices.Croy import L_sum
 from tqdm import tqdm
-from docstrings import CiteString
+from Zandpack.docstrings import CiteString
 
 if k0nfig.NUMBA:
     from numba import njit, prange
@@ -2258,7 +2256,7 @@ class TD_Transport:
         print('Zandpack version: ' + __version__)
         print(CiteString)
     ### These functions below are deprecated and should only be used for testing purposes
-    ### At some point these will be migrated to the decoupled_implementation file, somehow. 
+    ### At some point these will be migrated to the decoupled_functions file, somehow. 
     def make_f_general(self, parallel = False, fastmath = False, nogil = False):
         """
         DEPRECATED 
@@ -2329,7 +2327,7 @@ class TD_Transport:
                         O    = np.multiply.outer(vec1, vec2)
                         m   += self.Gp_eig[a,k,xf,c] * O
                     assert np.allclose(m, self._gp_matrices[a][k,xf,:,:])
-        from decoupled_implementation import PI_opti, dot_3d
+        from decoupled_functions import PI_opti, dot_3d
         @njit(parallel = parallel, fastmath = fastmath, nogil = nogil)
         def f(t, 
               old_sig, old_psi, old_omega,
@@ -2460,7 +2458,7 @@ class TD_Transport:
         
         self.xi  = xi
         self.Ixi = Ixi
-        from decoupled_implementation import PI_opti, dot_3d
+        from decoupled_functions import PI_opti, dot_3d
         @njit(parallel = parallel, fastmath = fastmath, nogil = nogil)
         def f(t, 
               old_sig, old_psi, old_omega,
@@ -2576,7 +2574,7 @@ class TD_Transport:
         
         self.xi  = xi
         self.Ixi = Ixi
-        from decoupled_implementation import PI_opti, PI, dot_3d
+        from decoupled_functions import PI_opti, PI, dot_3d
         def f(t, 
               old_sig, old_psi, old_omega,
               dH, delta_variant, dH_given = True):
@@ -2644,7 +2642,7 @@ class TD_Transport:
         if k0nfig.GPU == False:
             print('/n GPU is not enabled in config file! /n')
             assert 1 == 0
-        from decoupled_implementation import PI_opti, dot_3d
+        from decoupled_functions import PI_opti, dot_3d
         import cupy as cp
         H      = cp.array(self.Hdense[:,0,:,:]).astype(dtype)
         Xpp    = cp.array(self.Xpp).astype(dtype)
@@ -2680,7 +2678,7 @@ class TD_Transport:
         self.xi  = xi
         self.Ixi = Ixi
         MM = cp.matmul
-        from decoupled_implementation import PI_gpu
+        from decoupled_functions import PI_gpu
         def f(t, 
               old_sig, old_psi, old_omega,
               dH, delta_variant, dH_given = True):
@@ -2770,7 +2768,7 @@ class TD_Transport:
         diff_GGM_GLM = GG_M - GL_M
         self.diff_ggp_glp = diff_GGP_GLP
         self.diff_ggm_glm = diff_GGM_GLM
-        from decoupled_implementation import PI_opti, PI, dot_3d
+        from decoupled_functions import PI_opti, PI, dot_3d
         @njit(parallel = True, fastmath = True)
         def f(t, 
               old_sig, old_psi, old_omega,

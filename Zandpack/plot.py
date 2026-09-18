@@ -7,8 +7,7 @@ Created on Fri Mar 24 11:22:38 2023
 """
 
 import matplotlib.pyplot as plt
-import sys
-import os
+import sys, os
 fp = __file__[:-7]
 sys.path.append(fp)
 
