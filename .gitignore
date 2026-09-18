@@ -17,4 +17,5 @@ Zandpack/Linalg_factorisation.py
 Zandpack/mpi/old_versions/
 Zandpack/Optimized_RK45.py
 Zandpack/params2latex.py
+Zandpack/mpi_RK4pars.py
 .spyproject/

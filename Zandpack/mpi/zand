@@ -9,7 +9,7 @@ import numpy as np
 from mpi4py import MPI
 import os, sys, inspect
 import Zandpack.k0nfig as config
-from Zandpack.mpi_RK4pars_dev import A, B, CT, CH, RK_N, idxholder, hnew_func
+from Zandpack.mpi_runge_kutta_methods import A, B, CT, CH, RK_N, idxholder, hnew_func
 from Zandpack.mpi_splitter import (
     partition_scheme3,
     get_sources_scheme2,
