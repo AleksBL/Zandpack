@@ -428,6 +428,12 @@ class Control: # Replaces bash scripting
             label: str
         """
         self._outfilelabel = label
+    def get_n_elecs(self):
+        if not hasattr(self, "n_elec"):
+            print("Youre using an older version Control-instance which has no n_elec specfied, returning 2.")
+            return 2
+        else:
+            return self.n_elec
     
     @property
     def psinought_status(self):
@@ -959,7 +965,10 @@ class Control: # Replaces bash scripting
         outfile = "compressDM"+self.outlabel + ".out"
         self.systemcall("lossydm           Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > " + outfile)
         outfile = "compressJ"+self.outlabel + ".out"
-        self.systemcall("compress_currents Dir=$PWD folder="+folder + " n="+str(self.n_elec) + " > " + outfile)
+        self.systemcall("compress_currents Dir=$PWD folder="+folder + " n="+str(self.get_n_elecs()) + " > " + outfile)
+        outfile = "nozand"+self.outlabel+".out"
+        self.systemcall("xz "+outfile)
+        self.systemcall("mv "+outfile+".xz "+folder+"/")
         archive_calculation(folder, arc_name, 
                             keep_psi_omg_in_arc = keep_psi_omg_in_arc,
                             clean_original = clean_original)
@@ -1766,6 +1775,9 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/DM*.npz")
         os.system("rm "+name+"/LossyDensityMatrix.npz")
         os.system("rm "+name+"/LossyDensityMatrix.npz.xz")
+        # The current removal was not added before, but the prefer_full=True default value in mpi_tools should(?) make this inconsequencial.
+        os.system("rm "+name+"/Currents.npz")
+        os.system("rm "+name+"/Currents.npz.xz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
     time.sleep(1.0)
