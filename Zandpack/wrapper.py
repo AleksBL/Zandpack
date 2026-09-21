@@ -1782,6 +1782,9 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
     time.sleep(1.0)
+    # File write to indicate succesful archival of the calculation, LLM suggestion.  
+    with open(arc_name + "/ARCHIVE_COMPLETE.txt", "w") as f:
+        f.write(datetime.datetime.now().isoformat() + "\n")
 
 def load_object(A):
     import pickle
