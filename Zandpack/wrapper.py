@@ -851,7 +851,7 @@ class Control: # Replaces bash scripting
         outfile_write = "tg"+self.outlabel+".out"
         self.run_cmd_standard(exc," > "+outfile_write, **kwargs)
         res   = np.load(self.working_dir + "/"+outfile)
-        Jrect, Err = res["Jrect"],res["err"]
+        Jrect, Err = res["cur"], res["err"]
         return Jrect, Err
     
     def run_cmd_standard(self, CMD, out, **kwargs):
@@ -1778,6 +1778,7 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         # The current removal was not added before, but the prefer_full=True default value in mpi_tools should(?) make this inconsequencial.
         os.system("rm "+name+"/Currents.npz")
         os.system("rm "+name+"/Currents.npz.xz")
+        os.system("rm "+name+"/nozand*out.xz")
         os.system("rm "+name+"/current*.npy")
         os.system("rm "+name+"/times*.npy")
     time.sleep(1.0)

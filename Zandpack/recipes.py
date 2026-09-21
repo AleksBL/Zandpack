@@ -164,11 +164,14 @@ def const_bias_and_sine(ControlInstance,
                     _pit += 1
                     continue
                 _pit += 1
+                
+                
                 if np.abs(ai)<1e-10 and zero_amp_skip:
                     if first_zero_amp == False:
                         # Triggers when one calculation with ai=0 has been calculated (per worker).
                         continue
                     first_zero_amp = False
+                
                 def bias(t,a):
                     env = 1-1/(np.exp((t-tstart)/s) + 1.0)
                     V = vi + env * ai * np.sin(wi * t)
@@ -206,6 +209,13 @@ def const_bias_and_sine(ControlInstance,
                             # Timeout after 30mins of waiting.
                             assert 1 == 0, "Timeout waiting for ParallelJobsSignal.npy"
                 first_step = False
+                
+                # Allows to skip previous calculations
+                outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
+                outname = label + outname
+                if outname in os.listdir(C.working_dir):
+                    continue
+                
                 if nozand:
                     C.input.orthogonal = False
                     C.write_bias(bias=bias, hook=C.hook, 
@@ -223,6 +233,4 @@ def const_bias_and_sine(ControlInstance,
                                  lines_outside_bias = lines_outside_bias,)
                     C.write_initial()
                     C.run_zand(mpi)
-                outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
-                outname = label + outname
                 C.archive_calculation(outname)
