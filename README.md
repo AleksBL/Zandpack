@@ -4,7 +4,7 @@
 
 <div style="display: flex; justify-content: space-around; align-items: flex-start;">
   <img src="./Zandpack/svg/logo3.svg" width="150">
-  <img src="./Zandpack/svg/workflow.svg" width="300">
+  <img src="./Zandpack/svg/workflow.svg" width="400">
 </div>
 
 
