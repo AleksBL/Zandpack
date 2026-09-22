@@ -2,11 +2,12 @@
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 
 
-<div style="display: flex; justify-content: space-around; align-items: flex-start;">
-  <img src="./Zandpack/svg/logo3.svg" width="200">
-  <img src="./Zandpack/svg/workflow.svg" width="100">
-</div>
-
+<table>
+<tr>
+<td valign="top"><img src="./Zandpack/svg/logo3.svg" width="200"></td>
+<td valign="top"><img src="./Zandpack/svg/workflow.svg" width="100"></td>
+</tr>
+</table>
 
 # Introduction
 Zandpack is an open-source Python package for performing time-dependent quantum transport calculations using the Auxiliary Mode Expansion (AME) method. Built on Non-Equilibrium Green’s Function (NEGF) theory, Zandpack enables simulations of open quantum systems (e.g., devices coupled to electrodes) evolving under time-dependent biases and fields at the TD-DFT level. The code is designed to interface with regular tight-binding models, SIESTA, DFTB+ or any LCAO-based DFT code, allowing for dynamic electronic effects in the device region. The code propagates the driven Louiville von Neumann equation for the density matrix
