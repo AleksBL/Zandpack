@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="62.803978mm"
-   height="208.23239mm"
-   viewBox="0 0 62.803978 208.2324"
+   width="215.11565mm"
+   height="62.916447mm"
+   viewBox="0 0 215.11565 62.916449"
    version="1.1"
    id="svg1"
    inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
@@ -24,8 +24,8 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="0.71179153"
-     inkscape:cx="214.95058"
-     inkscape:cy="262.01492"
+     inkscape:cx="404.61285"
+     inkscape:cy="264.82473"
      inkscape:window-width="1920"
      inkscape:window-height="1008"
      inkscape:window-x="0"
@@ -36,11 +36,11 @@
      id="defs1">
     <marker
        style="overflow:visible"
-       id="ArrowWide"
+       id="ArrowWideRounded"
        refX="0"
        refY="0"
        orient="auto-start-reverse"
-       inkscape:stockid="Wide arrow"
+       inkscape:stockid="Wide, rounded arrow"
        markerWidth="1"
        markerHeight="1"
        viewBox="0 0 1 1"
@@ -48,19 +48,19 @@
        inkscape:collect="always"
        preserveAspectRatio="xMidYMid">
       <path
-         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:butt"
+         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:round"
          d="M 3,-3 0,0 3,3"
          transform="rotate(180,0.125,0)"
          sodipodi:nodetypes="ccc"
-         id="path6" />
+         id="path3" />
     </marker>
     <marker
        style="overflow:visible"
-       id="ArrowWide-1"
+       id="ArrowWideRounded-3"
        refX="0"
        refY="0"
        orient="auto-start-reverse"
-       inkscape:stockid="Wide arrow"
+       inkscape:stockid="Wide, rounded arrow"
        markerWidth="1"
        markerHeight="1"
        viewBox="0 0 1 1"
@@ -68,35 +68,23 @@
        inkscape:collect="always"
        preserveAspectRatio="xMidYMid">
       <path
-         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:butt"
+         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:round"
          d="M 3,-3 0,0 3,3"
          transform="rotate(180,0.125,0)"
          sodipodi:nodetypes="ccc"
-         id="path6-0" />
+         id="path3-6" />
     </marker>
   </defs>
   <g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(-72.72379,-31.09174)">
+     transform="translate(-72.72379,-31.05682)">
     <circle
        style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
        id="path1"
        cx="104.08011"
        cy="62.448059"
-       r="31.224028" />
-    <circle
-       style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
-       id="path1-3"
-       cx="104.17145"
-       cy="135.1013"
-       r="31.224028" />
-    <circle
-       style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
-       id="path1-3-3"
-       cx="104.08012"
-       cy="207.96782"
        r="31.224028" />
     <text
        xml:space="preserve"
@@ -129,67 +117,69 @@
          x="78.057045"
          y="78.704201"
          id="tspan5">        -  Custom input</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-size:5.00938px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.417446;stroke-opacity:1"
-       x="77.824364"
-       y="121.78331"
-       id="text1-6"><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
+    <g
+       id="g1"
+       transform="translate(76.358954,-72.484355)">
+      <circle
+         style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+         id="path1-3"
+         cx="104.17145"
+         cy="135.1013"
+         r="31.224028" />
+      <text
+         xml:space="preserve"
+         style="font-size:5.00938px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.417446;stroke-opacity:1"
          x="77.824364"
          y="121.78331"
-         id="tspan11">Fit level-width </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="77.824364"
-         y="128.04503"
-         id="tspan18">functions Γ  to pole-exp.</tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="77.824364"
-         y="134.30676"
-         id="tspan15"> - Γ (E) ≥ 0 </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="77.824364"
-         y="140.69427"
-         id="tspan16"> - Fitted T(E) ≈ Orig. T(E) </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="77.824364"
-         y="147.08177"
-         id="tspan17"> - Same for DOS(E)</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-size:3.49826px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.291519;stroke-opacity:1"
-       x="103.03357"
-       y="129.44511"
-       id="text1-6-4"><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.291519"
+         id="text1-6"><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="77.824364"
+           y="121.78331"
+           id="tspan11">Fit level-width </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="77.824364"
+           y="128.04503"
+           id="tspan18">functions Γ  to pole-exp.</tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="77.824364"
+           y="134.30676"
+           id="tspan15"> - Γ (E) ≥ 0 </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="77.824364"
+           y="140.69427"
+           id="tspan16"> - Fitted T(E) ≈ Orig. T(E) </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="77.824364"
+           y="147.08177"
+           id="tspan17"> - Same for DOS(E)</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-size:3.49826px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.291519;stroke-opacity:1"
          x="103.03357"
          y="129.44511"
-         id="tspan11-0">α </tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-size:3.49826px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.291519;stroke-opacity:1"
-       x="83.718712"
-       y="135.80588"
-       id="text1-6-4-9"><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.291519"
+         id="text1-6-4"><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.291519"
+           x="103.03357"
+           y="129.44511"
+           id="tspan11-0">α </tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-size:3.49826px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.291519;stroke-opacity:1"
          x="83.718712"
          y="135.80588"
-         id="tspan11-0-1">α </tspan></text>
-    <path
-       style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.865;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)"
-       d="m 104.69125,94.654943 v 8.177727"
-       id="path5" />
-    <path
-       style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.865;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide-1)"
-       d="m 104.51451,167.27099 v 8.17773"
-       id="path5-5" />
+         id="text1-6-4-9"><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.291519"
+           x="83.718712"
+           y="135.80588"
+           id="tspan11-0-1">α </tspan></text>
+    </g>
     <text
        xml:space="preserve"
        style="font-size:3.175px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.865;stroke-dasharray:none;stroke-opacity:1"
@@ -200,7 +190,7 @@
          id="tspan13"
          style="stroke-width:0.865"
          x="163.6671"
-         y="139.38261"></tspan></text>
+         y="139.38261" /></text>
     <text
        xml:space="preserve"
        style="font-size:2.11667px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.865;stroke-dasharray:none;stroke-opacity:1"
@@ -212,56 +202,74 @@
          style="font-size:2.11667px;stroke-width:0.865"
          x="149.34221"
          y="137.27989" /></text>
-    <text
-       xml:space="preserve"
-       style="font-size:5.00938px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.417446;stroke-opacity:1"
-       x="76.286774"
-       y="186.79045"
-       id="text1-6-3"><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
+    <g
+       id="g2"
+       transform="translate(152.403,-145.55468)">
+      <circle
+         style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+         id="path1-3-3"
+         cx="104.08012"
+         cy="207.96782"
+         r="31.224028" />
+      <text
+         xml:space="preserve"
+         style="font-size:5.00938px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.417446;stroke-opacity:1"
          x="76.286774"
          y="186.79045"
-         id="tspan17-2">        Using pole-exp. </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="193.05217"
-         id="tspan28">   of  electrodes, solve </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="199.3139"
-         id="tspan30">again for σ and Ψ⃗,  and </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="205.70142"
-         id="tspan39">propagate  NEGF-TDDFT </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="211.96313"
-         id="tspan41">  eqs. using the tools</tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="218.22485"
-         id="tspan32">       - SCF </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="224.48659"
-         id="tspan33">       - psinought</tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="230.74831"
-         id="tspan34">       - nozand </tspan><tspan
-         sodipodi:role="line"
-         style="stroke-width:0.417446"
-         x="76.286774"
-         y="237.01004"
-         id="tspan26" /></text>
+         id="text1-6-3"><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="186.79045"
+           id="tspan17-2">        Using pole-exp. </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="193.05217"
+           id="tspan28">   of  electrodes, solve </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="199.3139"
+           id="tspan30">again for σ and Ψ⃗,  and </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="205.70142"
+           id="tspan39">propagate  NEGF-TDDFT </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="211.96313"
+           id="tspan41">  eqs. using the tools</tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="218.22485"
+           id="tspan32">       - SCF </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="224.48659"
+           id="tspan33">       - psinought</tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="230.74831"
+           id="tspan34">       - nozand </tspan><tspan
+           sodipodi:role="line"
+           style="stroke-width:0.417446"
+           x="76.286774"
+           y="237.01004"
+           id="tspan26" /></text>
+    </g>
+    <path
+       style="fill:#ffffff;stroke:#000000;stroke-width:0.865;marker-end:url(#ArrowWideRounded)"
+       d="m 136.59438,63.123536 h 11.03936"
+       id="path2" />
+    <path
+       style="fill:#ffffff;stroke:#000000;stroke-width:0.865;marker-end:url(#ArrowWideRounded-3)"
+       d="m 212.95295,63.202416 h 11.03937"
+       id="path2-2" />
   </g>
 </svg>
