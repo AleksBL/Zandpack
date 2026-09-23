@@ -5,7 +5,6 @@ Created on Sun Jul 17 22:00:13 2022
 
 @author: aleksander
 """
-import os
 import numpy as np
 import numba as nb
 from Block_matrices.Croy import (evaluate_Lorentz_basis_matrix, 

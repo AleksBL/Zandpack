@@ -805,7 +805,7 @@ class Control: # Replaces bash scripting
                voltage=0.0, NPHOT=3, outfile="vc_out.npz",
                kT=0.025, epsrel=1e-7, epsabs=1e-7, limit=800,
                Wmat=False, Wmat_fact=1.0, Wideband=False, 
-               Wideband_fact = 1.0,
+               Wideband_fact = 1.0, use_ai_se_version=True,
                ):
         """
         Arguments:
@@ -823,6 +823,7 @@ class Control: # Replaces bash scripting
             Wmat_fact: float,  scaling of the local field (keep 1.0 unless you have a good reason)
             Wideband: bool, If the wideband approximation should be used.
             Wideband_fact: float, scaling of the wideband self energies.
+            use_ai_se_version: Used an AI optimized version of the Lorentzian_SE class from the FittedSelfEnergy module.
         """
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)

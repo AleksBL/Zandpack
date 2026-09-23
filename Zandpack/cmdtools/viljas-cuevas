@@ -12,12 +12,9 @@ Minimal floquet photo-assisted current from Viljas and Cuevas, 2007.
     e -> (norb, norb) array.  Energies in eV, current in e/fs.
 """
 
-
-
 import numpy as np
 from scipy.integrate import quad
 from scipy.special import jv
-from Zandpack.FittedSelfEnergy import from_saved_file
 from Zandpack.Help import TDHelper
 import sys, os
 from mpi4py import MPI
@@ -42,6 +39,7 @@ options = {"device":"ABC",
            "Wmat_fact":'1.0',
            "Wideband":"False",
            "Wideband_fact":"1.0",
+           "use_ai_se_version":"False",
            }
 if "--help" in args:
     for kw in options.keys():
@@ -51,6 +49,14 @@ if "--help" in args:
 for a in args:
     split = a.replace(' ', '').split('=')
     options.update({split[0]:split[1]})
+
+if options["use_ai_se_version"]=="False":
+    from Zandpack.FittedSelfEnergy import from_saved_file
+elif options["use_ai_se_version"]=="True":
+    from Zandpack.AI_code.FittedSelfEnergy import from_saved_file
+else:
+    assert 1 == 0, "keyword use_ai_se_version was not recognized..."
+    
 
 if rank == 0:
     print("Writing results to " + options["outfile"].replace(".npz","") + ".npz")
