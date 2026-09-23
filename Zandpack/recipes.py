@@ -213,9 +213,11 @@ def const_bias_and_sine(ControlInstance,
                 # Allows to skip previous calculations
                 outname = C.input.name+"_save_V_"+str(vi)+"_A_"+str(ai)+"_w_"+str(wi)
                 outname = label + outname
+                
+                # Add check for ARCHIVE_COMPLETE.txt guard here later. 
+                # os.path.exists(os.path.join(C.working_dir, outname, "ARCHIVE_COMPLETE.txt"))
                 if outname in os.listdir(C.working_dir):
                     continue
-                
                 if nozand:
                     C.input.orthogonal = False
                     C.write_bias(bias=bias, hook=C.hook, 
