@@ -18,4 +18,5 @@ Zandpack/mpi/old_versions/
 Zandpack/Optimized_RK45.py
 Zandpack/params2latex.py
 Zandpack/mpi_RK4pars.py
+Zandpack/AI_code/__pycache__/
 .spyproject/
