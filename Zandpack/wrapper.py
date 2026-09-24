@@ -851,9 +851,9 @@ class Control: # Replaces bash scripting
         print('Running Viljas-Cuevas code.')
         outfile_write = "tg"+self.outlabel+".out"
         self.run_cmd_standard(exc," > "+outfile_write, **kwargs)
-        res   = np.load(self.working_dir + "/"+outfile)
-        Jrect, Err = res["cur"], res["err"]
-        return Jrect, Err
+        #res   = np.load(self.working_dir + "/"+outfile)
+        #Jrect, Err = res["cur"], res["err"]
+        #return Jrect, Err
     
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "
