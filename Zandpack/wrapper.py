@@ -805,7 +805,7 @@ class Control: # Replaces bash scripting
                voltage=0.0, NPHOT=3, outfile="vc_out.npz",
                kT=0.025, epsrel=1e-7, epsabs=1e-7, limit=800,
                Wmat=False, Wmat_fact=1.0, Wideband=False, 
-               Wideband_fact = 1.0, use_ai_se_version=True,
+               Wideband_fact = 1.0, use_ai_se_version=True,slurm_array_rank=0,slurm_array_size=1,
                ):
         """
         Arguments:

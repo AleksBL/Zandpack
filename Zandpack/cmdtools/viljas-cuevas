@@ -40,6 +40,8 @@ options = {"device":"ABC",
            "Wideband":"False",
            "Wideband_fact":"1.0",
            "use_ai_se_version":"False",
+           "slurm_array_rank":"0",
+           "slurm_array_size":"1",
            }
 if "--help" in args:
     for kw in options.keys():
@@ -211,7 +213,11 @@ def current(V, **kw):
     err *= 1 / (hbar*2*np.pi)
     return val,err
 if __name__ == "__main__":
+    _slurm_rank, _slurm_size = int(options["slurm_array_rank"]), int(options["slurm_array_size"])
     IJ = np.array([(i, j) for i in range(hwN) for j in range(amplN)])
+    if _slurm_size > 1:
+        # Further round-robin-like distribution between the outer ranks
+        IJ = np.array_split(IJ, _slurm_size)[_slurm_rank]
     ntasks = len(IJ)
     # --- shared task counter on rank 0 -------------------------------------
     if rank == 0:
@@ -251,9 +257,19 @@ if __name__ == "__main__":
     comm.Reduce(cur, tot_cur, op=MPI.SUM, root=0)
     comm.Reduce(err, tot_err, op=MPI.SUM, root=0)
     if rank == 0:
-        np.savez_compressed(options["outfile"],
-                            cur=tot_cur,
-                            err=tot_err,
-                            hw=hw,
-                            ampl=ampl
-                            )
+        if _slurm_size==1:
+            np.savez_compressed(options["outfile"],
+                                cur=tot_cur,
+                                err=tot_err,
+                                hw=hw,
+                                ampl=ampl
+                                )
+        else:
+            np.savez_compressed("slurm_"+str(_slurm_rank)+"-"+str(_slurm_size)+"_"+options["outfile"],
+                                cur=tot_cur,
+                                err=tot_err,
+                                hw=hw,
+                                ampl=ampl
+                                )
+            
+    
