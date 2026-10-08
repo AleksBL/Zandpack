@@ -19,4 +19,6 @@ Zandpack/Optimized_RK45.py
 Zandpack/params2latex.py
 Zandpack/mpi_RK4pars.py
 Zandpack/AI_code/__pycache__/
+get_issues.sh
+issues.txt
 .spyproject/

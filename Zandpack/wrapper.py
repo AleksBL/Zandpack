@@ -849,8 +849,11 @@ class Control: # Replaces bash scripting
                 kwargs[k] = arg_values.locals[k]
         exc = " ".join(self.prepend_env_vars + [mpi, "viljas-cuevas"])
         print('Running Viljas-Cuevas code.')
-        outfile_write = "tg"+self.outlabel+".out"
-        self.run_cmd_standard(exc," > "+outfile_write, **kwargs)
+        if slurm_array_size==1:
+            outfile_write = "tg"+self.outlabel+".out"
+        else:
+            outfile_write = "tg"+self.outlabel+"_sr_"+str(slurm_array_rank)+".out"
+        self.run_cmd_standard(exc," >> "+outfile_write, **kwargs)
         #res   = np.load(self.working_dir + "/"+outfile)
         #Jrect, Err = res["cur"], res["err"]
         #return Jrect, Err

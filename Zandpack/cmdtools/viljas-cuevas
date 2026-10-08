@@ -249,7 +249,7 @@ if __name__ == "__main__":
                    nflq=int(options["NPHOT"]), nphot=int(options["NPHOT"]))
         cur[i, j], err[i, j] = current(float(options["voltage"]), **par)
         ndone += 1
-        print(f"rank {rank}: local {ndone}, global {t+1}/{ntasks}", flush=True)
+        print(f"rank {rank}, (srank {_slurm_rank}): local {ndone}, global {t+1}/{ntasks}", flush=True)
     win.Free()
     # --- collect: one call, no files, no sleep ------------------------------
     tot_cur = np.zeros_like(cur) if rank == 0 else None
