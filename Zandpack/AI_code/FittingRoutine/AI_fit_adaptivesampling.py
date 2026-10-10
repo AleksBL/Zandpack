@@ -15,9 +15,18 @@ compat alias refine_sampling.py — needed by ~90 driver/diagnostic
 scripts and by pickled fit caches, whose objects reference the
 module NAME 'refine_sampling'.
 
-Note: package-era caches ALSO reference lorentz_fit.FitResult, so the
-lorentz_fit/ package directory stays in the repo root (importable)
-until those caches are regenerated; it is not the active code.
+Pickle portability, explicitly scoped (verified 2026-10-10):
+- caches written since the 2026-10-08 merge reference 'AI_fit' (or
+  'refine_sampling') — they unpickle wherever this alias layer is
+  importable;
+- PACKAGE-ERA caches (pre-merge, e.g. cmp_fits_exactera.npz)
+  reference 'lorentz_fit.FitResult' and unpickle ONLY where the
+  legacy lorentz_fit/ package is importable — i.e. in THIS repo.
+  A migrated tree (Zandpack/AI_code/FittingRoutine/) does NOT carry
+  lorentz_fit: there, package-era caches FAIL to unpickle by
+  design and must be regenerated; the compatibility guarantee
+  covers post-merge caches only.
+
 New code should import AI_fit_base directly.
 """
 import sys as _sys

@@ -244,10 +244,24 @@ class GammaSweep:
         """(lead0, lead1) pair with lead1 INHERITING lead0's poles.
         For the own-fit alternative run a second GammaSweep on lead1
         and compare at the T level (inheritance is an option, not a
-        mandate - HANDOFF / guide section 8)."""
-        pick = (self.results[name] if name is not None
-                else min(self.results.values(),
-                         key=lambda c: c["rms"]))
+        mandate - HANDOFF / guide section 8).
+
+        name: the CONFIG whose lead0 fit to inherit from. Required
+        when the sweep ran more than one config (an implicit
+        best-rms pick would silently mix fits whose health-gate
+        policies or knob sets differ)."""
+        if name is None:
+            if not self.results:
+                raise ValueError("best_pair_inherit: no sweep results "
+                                 "yet - call run(configs) first.")
+            if len(self.results) > 1:
+                raise ValueError(
+                    "best_pair_inherit: sweep holds multiple configs "
+                    f"({sorted(self.results)}) - pass name= explicitly; "
+                    "an implicit best-rms pick across configs would "
+                    "mix different knob sets / gate calibrations.")
+            name = next(iter(self.results))
+        pick = self.results[name]
         f0 = pick["r"]
         E1, F1 = self.lf.extract_dense(R, lead1, ik)
         f1 = pole_inherit_fit(self.lf, E1, F1, f0,
@@ -277,18 +291,17 @@ def evaluate_pair(lf, R, pair, E_ref, T_ref, dos_ref, teta, corr,
     Data2 drivers).
     """
     from Zandpack.FittingTools import find_correction
-    RX = R
-    lf.inject_fits(RX, pair)
+    lf.inject_fits(R, pair)          # NOTE: R is mutated IN PLACE
     if renormalise:
-        RX.Renormalise_H(find_correction(RX, Emin=corr[0],
-                                         Emax=corr[1]))
+        R.Renormalise_H(find_correction(R, Emin=corr[0],
+                                        Emax=corr[1]))
     n = 600
     Eg = np.linspace(twin[0], twin[1], n)
-    _, T_new = RX.Inspect_transmission_from_hilbert_transform(
+    _, T_new = R.Inspect_transmission_from_hilbert_transform(
         Eg, eta=teta, return_result=True)
-    _, dos_k = RX.Inspect_dos_from_hilbert_transform(
+    _, dos_k = R.Inspect_dos_from_hilbert_transform(
         Eg, eta=teta, return_result=True)
-    dos_new = (dos_k * RX.tbtwkpt[:, None]).sum(axis=0)
+    dos_new = (dos_k * R.tbtwkpt[:, None]).sum(axis=0)
     T_at = np.interp(Eg, E_ref, T_ref)
     dos_at = np.interp(Eg, E_ref, dos_ref)
 

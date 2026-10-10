@@ -154,6 +154,23 @@ try:  # optional: ~2-4x faster dense Jacobian assembly (see below)
 except ImportError:  # pragma: no cover - numpy fallback stays exact
     _njit = None
 
+# --- environment invariants (measured, HANDOFF 4.11) -----------------------
+# OMP_NUM_THREADS=1 is REQUIRED: threaded BLAS is ~11% SLOWER here
+# post-compression AND breaks run-to-run reproducibility (threaded
+# reduction order flips trust-region trajectories on knife-edge
+# basins). Warn once at import if it is not set - the caller can
+# still fix it before the first fit (the threads are read lazily by
+# BLAS at the first large operation).
+_omp = os.environ.get("OMP_NUM_THREADS", "")
+if _omp != "1":
+    warnings.warn(
+        f"OMP_NUM_THREADS is {_omp!r}, not '1': threaded BLAS is "
+        "measured SLOWER for this workload and BREAKS run-to-run "
+        "reproducibility (different fit basins). Set "
+        "OMP_NUM_THREADS=1 in the environment (before numpy is "
+        "imported) or expect nondeterministic results.",
+        RuntimeWarning, stacklevel=2)
+
 __all__ = ["fit", "fit_fixed_poles", "FitResult", "prepare", "FitData", "fit_boosted",
            "CombinedFit", "inject_fits", "extract_dense", "resample",
            "refine_loop", "sampled_transmission_dos", "load_pickle",
@@ -773,6 +790,21 @@ try:
     _TRF_COMMON_OK = True
 except ImportError:  # pragma: no cover - tr_solver="gram" unavailable
     _TRF_COMMON_OK = False
+
+# The private-API import succeeded: still warn if the running scipy
+# is not the VERIFIED version - a same-named private API on another
+# release is untested (results/wall time may differ). The pin lives
+# in requirements.txt (scipy==1.18.1); this is the loud fallback.
+import scipy as _scipy  # noqa: E402
+_SCIPY_VERIFIED = "1.18.1"
+if _TRF_COMMON_OK and _scipy.__version__ != _SCIPY_VERIFIED:
+    warnings.warn(
+        f"tr_solver='gram' verified on scipy {_SCIPY_VERIFIED}, "
+        f"running {_scipy.__version__}: the private API "
+        "scipy.optimize._lsq.common imported cleanly, but this "
+        "combination is UNTESTED - results and wall time may "
+        "differ. Pin scipy==1.18.1 (requirements.txt) or use "
+        "tr_solver='lsmr'/'exact'.", RuntimeWarning, stacklevel=2)
 
 # Optional diagnostic hook for the gram solver (validation scripts):
 # when set to a callable, _trf_gram calls it at every outer iteration
