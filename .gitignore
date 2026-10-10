@@ -21,4 +21,5 @@ Zandpack/mpi_RK4pars.py
 Zandpack/AI_code/__pycache__/
 get_issues.sh
 issues.txt
+issues.json
 .spyproject/
