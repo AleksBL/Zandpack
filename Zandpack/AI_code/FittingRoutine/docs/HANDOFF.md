@@ -1489,6 +1489,16 @@ system):
   psd=True - the dispatch always uses the NNLS dictionary),
   COMPRESSED caches (np.savez_compressed; existing 283 caches
   recompressed 238 MB -> 33 MB), lead_label for multi-k slices.
+  Review round (2026-10-10, Zandpack-side code review): ENVIRONMENT
+  INVARIANTS NOW ENFORCED IN CODE (AI_fit_base warns at import when
+  OMP_NUM_THREADS != 1; warns when gram runs on an unverified scipy
+  even if the private import succeeds; requirements.txt added with
+  the scipy==1.18.1 pin), evaluate_pair's RX=R alias removed (R
+  mutated in place, documented), best_pair_inherit REQUIRES name=
+  when the sweep holds multiple configs (no implicit cross-config
+  rms pick) and raises on empty results, AI_fit_adaptivesampling
+  docstring states the pickle-portability scope explicitly
+  (package-era lorentz_fit caches are NOT portable by design).
 
 **LOWPOLE round (2026-10-09, agnr + Fig2Ag5)**: same systems,
 same grids, constraint = max 50 TOTAL poles per electrode

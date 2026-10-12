@@ -51,43 +51,62 @@ Import surface: `from Zandpack.AI_code.FittingRoutine.AI_fit_base
 import fit, fit_fixed_poles`, `... .AI_fit_sweep import GammaSweep`,
 or the sampling surface via `... .AI_fit_adaptivesampling`.
 
-## 2. The alias mechanics (critical for old pickles)
+## 2. The alias mechanics (critical for old pickles) — ONE canonical import path
 
-Old pickled fit caches (all `sweep_*/`, `cmp_fits*.npz` in this
-repo) pickle-reference the TOP-LEVEL module NAMES 'AI_fit' and
-'refine_sampling'. Inside the package those top-level names do not
-exist, so the package `__init__.py` must REGISTER them:
+CANONICAL PATH RULE: the package import
+(`import Zandpack.AI_code.FittingRoutine`) is THE way in. The
+FittingRoutine folder must NEVER be placed on sys.path/PYTHONPATH —
+a flat `import AI_fit_base` from a sys.path'd folder would create a
+SECOND module object (same classes under a different __module__
+name), and pickles written under one identity would silently fail
+under the other. There is exactly one module object; every name is
+a sys.modules alias of it:
 
 ```python
 # Zandpack/AI_code/FittingRoutine/__init__.py
 import sys as _sys
 from . import AI_fit_base as _base
-_sys.modules.setdefault("AI_fit", _base)          # pickle compat
-_sys.modules.setdefault("AI_fit_base", _base)     # flat-name compat
-_sys.modules.setdefault("refine_sampling", _base) # historical name
+# historical + flat-name aliases, ALL pointing at the ONE package
+# module object (setdefault: never overwrite an existing entry):
+_sys.modules.setdefault("AI_fit", _base)           # pickle compat
+_sys.modules.setdefault("AI_fit_base", _base)      # flat-name compat
+_sys.modules.setdefault("refine_sampling", _base)  # historical name
+_sys.modules.setdefault("AI_fit_adaptivesampling", _base)
 ```
 
 After `import Zandpack.AI_code.FittingRoutine` (once, at the top of
 any driver), every old `import AI_fit` / `import refine_sampling`
-and every old-cache unpickle works. The two alias FILES
-(AI_fit.py, refine_sampling.py) then serve in-folder convenience:
-convert them to RELATIVE imports
-(`from . import AI_fit_base as _base; _sys.modules[__name__] = _base`)
-— the repo-root versions of this pattern are the verified template
-(alias identity, cache unpickling, both test suites ALL PASS,
-2026-10-10). The 'AI_fit_adaptivesampling' alias = AI_fit_base is
-registered the same way.
+and every post-merge-cache unpickle resolves to the one object. The
+two alias FILES (AI_fit.py, refine_sampling.py) use RELATIVE
+imports (`from . import AI_fit_base as _base`) and exist only for
+in-folder convenience; the repo-root versions of the aliasing
+pattern are the verified template (alias identity, cache
+unpickling, both suites ALL PASS, 2026-10-10).
+
+PICKLE PORTABILITY, SCOPED: post-merge caches (module names
+'AI_fit'/'refine_sampling') are covered by this alias layer.
+PACKAGE-ERA caches (module 'lorentz_fit.FitResult') are NOT
+portable and NOT covered: the legacy lorentz_fit/ package
+deliberately stays in this repo (see section 6), so in the
+Zandpack tree those caches fail to unpickle BY DESIGN and must be
+regenerated. Docstrings state this; the compatibility guarantee is
+post-merge caches only.
 
 ## 3. Dependencies
 
-numpy; scipy PINNED at 1.18.1 (the gram solver uses the private
-`scipy.optimize._lsq.common` behind a guarded import —
-`_TRF_COMMON_OK` falls back with a clear error if the pin breaks);
-OPTIONAL numba (Jacobian assembly + the four PSD/ADMM kernels —
-bitwise-identical numpy fallbacks exist); matplotlib (AI_fit_sweep
-plots only, Agg in scripts). sisl appears only in per-system data
-scripts, never in the library. OMP_NUM_THREADS=1 mandatory (faster
-AND reproducible; threaded BLAS shifts fit basins).
+Machine-readable pin: `requirements.txt` travels with the package
+(scipy==1.18.1 — the gram solver uses the private
+`scipy.optimize._lsq.common`, verified on 1.18.1; numpy>=2.0;
+numba and matplotlib commented as optional). The pin is ENFORCED
+in code, not just documented: AI_fit_base warns loudly at import
+when OMP_NUM_THREADS != '1' (threaded BLAS is slower AND breaks
+reproducibility), warns loudly when gram runs on an unverified
+scipy even if the private import succeeds, and raises a clear
+RuntimeError when the private API is missing (tr_solver='gram'
+then unavailable — use lsmr/exact). numba is optional
+(bitwise-identical numpy fallbacks for the Jacobian + PSD/ADMM
+kernels). sisl appears only in per-system data scripts, never in
+the library.
 
 ## 4. Documentation migration (small .md files only; no large data)
 
@@ -116,24 +135,39 @@ instructions), `project_handoff.md` (retired stub), the per-system
 runs and reference local caches; keep a copy as reference if
 wanted).
 
-## 5. Validation migration (code + READMEs; artifacts excluded)
+## 5. Validation: two tiers — CI-able tests vs data-dependent provenance
 
-`validation/` here is 20 MB but only ~480 KB is migratable material:
-92 gate/benchmark .py scripts + 6 READMEs. MIGRATE those into
-`FittingRoutine/validation/` preserving the 15 numbered folders
-(01..14_*, README-documented, one gate per optimization round).
-EXCLUDE (regenerable by rerunning the gates, and mostly
-pickle-referencing old module names): all `*.npz` fit caches,
-`*.jsonl` spread results, `*.prof` cProfile dumps, `*.png`,
-`*.gz`/pickles — 19 MB in 11_gram_basin_spread alone.
+`validation/` here is 20 MB but only ~480 KB is migratable
+material: 92 gate/benchmark .py scripts + 6 READMEs. Migrate those
+into `FittingRoutine/validation/` preserving the 15 numbered
+folders. EXCLUDE (regenerable, and mostly pickle-referencing old
+module names): all `*.npz`, `*.jsonl`, `*.prof`, `*.png`, pickles
+— 19 MB in 11_gram_basin_spread alone.
 
-Run pattern after the migration: gates that do
-`sys.path.insert(0, ROOT); import AI_fit` work unchanged by putting
-the FittingRoutine folder on PYTHONPATH (the alias registration
-covers the flat names), or adapt them to the package import. The
-portable acceptance gates: validation/10_gram_solver/*,
-validation/13_refit_scales/unit_gate.py,
-validation/14_psd_numba_fusion/unit_gate.py.
+BE HONEST ABOUT WHAT THEY ARE: the gates split into two tiers.
+
+- CI-ABLE (runnable from a fresh clone, synthetic data only):
+  `AI_fit_routine_tests.py` (the two ported suites — recovery,
+  Jacobian, PSD, off-window, model form), and the self-contained
+  unit gates: `10_gram_solver` (identities/step agreement on
+  synthetic cases), `13_refit_scales/unit_gate.py`,
+  `14_psd_numba_fusion/unit_gate.py` (bitwise kernel gates). These
+  are the post-migration CI story and they are strong: optimizer,
+  Jacobian, gram-solver, PSD/ADMM and NNLS gates are all synthetic.
+- DATA-DEPENDENT PROVENANCE (NOT runnable without the Data2
+  pickles, which do not migrate — section 6): every gate that
+  reads `Data2/<sys>/tmp.gz` or a README round record. These
+  scripts document HOW the nine-system numbers were produced;
+  they cannot be wired into CI and the numbers are not
+  regenerable from the Zandpack tree alone. Their READMEs must
+  say so; cite the numbers as provenance, not as a repo-runnable
+  gate.
+
+Run pattern after the migration: gates import the PACKAGE (the
+canonical path, section 2) — never put the FittingRoutine folder
+itself on sys.path. Adapt each gate's import to
+`import Zandpack.AI_code.FittingRoutine as fr; lf = fr.AI_fit_base`
+(or the AI_FIT_MODULE env-var pattern the tests use).
 
 ## 6. What does NOT migrate (stays in this repo)
 
@@ -142,8 +176,12 @@ examples, not library code; the per-system pipeline scripts are
 ready-made TEMPLATES to copy when applying the routine to a new
 system), `bench/` (package-era benchmarks, data-heavy), `attempt-1/`,
 `checkpoint_*/`, `backups/` (this repo's snapshot history),
-`lorentz_fit/` (legacy, importable only for package-era cache
-unpickling), `.junk/`, `Archive.tar.gz`, `AGENTS.md`, `HANDOFF.md`.
+`lorentz_fit/` (legacy; stays HERE so package-era caches keep
+unpickling in THIS repo — CONSEQUENCE: package-era caches are NOT
+portable to the Zandpack tree and must be regenerated there; the
+section-2 alias guarantee is post-merge caches only), `.junk/`,
+`Archive.tar.gz`, `AGENTS.md`, `HANDOFF.md`, `requirements.txt`'s
+comment header stays authoritative for the pin.
 
 ## 7. Key facts the migration must respect (all measured, HANDOFF 4.11-4.16)
 
@@ -208,10 +246,12 @@ unpickling), `.junk/`, `Archive.tar.gz`, `AGENTS.md`, `HANDOFF.md`.
 
 | risk | mitigation |
 |---|---|
-| gram's private scipy API breaks on upgrade | pin scipy 1.18.1; guarded fallback; gram opt-in |
-| old pickles stop unpickling in the package | __init__.py alias registration (section 2) + gate in step 3 |
+| dual module identity (flat import of AI_fit_base creates a second class set) | ONE canonical path (section 2): never put the folder on sys.path; __init__ registers ALL flat names as aliases of the one package module |
+| gram's private scipy API breaks on upgrade | requirements.txt pin; loud import-time warning on unverified scipy; hard RuntimeError when the API is missing |
+| threaded BLAS nondeterminism | import-time RuntimeWarning when OMP_NUM_THREADS != 1 + docstring rule |
+| old pickles stop unpickling in the package | __init__.py alias registration (section 2) + gate in step 3; package-era caches are explicitly NOT covered (regenerate) |
 | basin chaos makes a "migrated" fit look wrong | never single-start; multi-start health gate is part of the framework; >30 min fit = pathological basin, stop and reseed |
 | numba absent on the target | automatic numpy fallbacks, bitwise identical |
 | eta-mismatched comparisons mislead the acceptance gate | evaluate at the contour eta (step 5) |
-| validation gates assume repo-root layout | run with the FittingRoutine folder on PYTHONPATH (aliases cover the flat names) or adapt imports |
+| validation gates assume repo-root layout | canonical-path import adaptation (section 5); CI = the synthetic tier only |
 | Zandpack evolves (containers, setLval) | the glue is one ~350-line section, isolated |
