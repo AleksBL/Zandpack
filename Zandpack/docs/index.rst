@@ -89,7 +89,7 @@ and is released together with the publication:
    :maxdepth: 2
    :caption: Getting started
 
-   quickstart/readme
+   Introduction <quickstart/readme>
 
 .. toctree::
    :maxdepth: 2

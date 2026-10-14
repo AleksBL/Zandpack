@@ -22,6 +22,19 @@ The typical Zandpack workflow is a four-step pipeline:
 4. Propagate in time (``zand`` / ``nozand``, or an ``Initial.py`` + ``Bias.py``
    pair in a ``Calculate``/``Calc`` directory).
 
+Driving the tools from Python
+-----------------------------
+
+.. grid:: 1 1 2 2
+   :gutter: 2
+
+   .. grid-item-card:: generic_wrapper
+      :link: generic_wrapper
+      :link-type: doc
+
+      The preferred way to run the command-line tools: calling the ``wrapper``
+      class from Python to perform step 4 of a calculation.
+
 Tight-binding tutorials
 -----------------------
 
@@ -136,12 +149,6 @@ Advanced features
 
       A time-dependent calculation with a superconducting device region.
 
-   .. grid-item-card:: generic_wrapper
-      :link: generic_wrapper
-      :link-type: doc
-
-      Using the ``wrapper`` class for step 4.
-
    .. grid-item-card:: MoS2 spin-orbit coupling
       :link: mos2_soc
       :link-type: doc
@@ -175,6 +182,7 @@ Reproducibility and checks
 .. toctree::
    :hidden:
 
+   generic_wrapper
    notebook_tutorials
    tb_ribbon
    grribgr
@@ -189,7 +197,6 @@ Reproducibility and checks
    pohl
    pohl2
    supercond
-   generic_wrapper
    mos2_soc
    graphite_surface
    reproduce_and_checks

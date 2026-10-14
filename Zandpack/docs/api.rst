@@ -2,9 +2,9 @@ API reference
 =============
 
 This reference is generated from the source docstrings with
-``sphinx.ext.autosummary``. Only modules that are tracked in the repository are
-listed below, so the documented set is identical on every checkout (a handful of
-experimental modules are git-ignored and deliberately omitted).
+``sphinx.ext.autosummary``. The module list is curated: experimental modules
+that are git-ignored, and superseded or legacy modules, are deliberately left
+out, so the documented set is identical on every checkout.
 
 Core time-dependent transport
 -----------------------------
@@ -14,9 +14,7 @@ Core time-dependent transport
    :nosignatures:
 
    Zandpack.TimedependentTransport
-   Zandpack.Louivillian
    Zandpack.Response
-   Zandpack.Quasiparticle
    Zandpack.Pulses
    Zandpack.PadeDecomp
    Zandpack.FittedSelfEnergy
@@ -34,11 +32,10 @@ Drivers and control
    Zandpack.Help
    Zandpack.Loader
    Zandpack.Writer
-   Zandpack.GETPATH
    Zandpack.k0nfig
 
-Numerics and utilities
-----------------------
+Numerics, utilities and MPI helpers
+-----------------------------------
 
 .. autosummary::
    :toctree: api
@@ -53,14 +50,6 @@ Numerics and utilities
    Zandpack.DOP54
    Zandpack.td_constants
    Zandpack.plot
-
-MPI helpers
------------
-
-.. autosummary::
-   :toctree: api
-   :nosignatures:
-
    Zandpack.mpi_funcs
    Zandpack.mpi_runge_kutta_methods
    Zandpack.mpi_splitter

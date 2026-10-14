@@ -2,13 +2,27 @@
 #
 # Build the Zandpack documentation.
 #
-#   Zandpack/docs/build.sh
+#   Zandpack/docs/build.sh [--strict]
 #
-# The output goes to docs/_build/html/index.html. Everything the build needs
-# beyond the docs dependencies (namely an importable Zandpack and pandoc, which
-# nbsphinx uses for the notebook tutorials) is checked below.
+#     --strict   treat Sphinx warnings as errors (-W --keep-going). Use this in
+#                CI; it only passes once the build is warning-free.
+#
+# Output: docs/_build/html/index.html
 
 set -euo pipefail
+
+usage() {
+    echo "Usage: $(basename "$0") [--strict]" >&2
+    echo "  --strict   fail the build on Sphinx warnings" >&2
+}
+
+strict=0
+case "${1:-}" in
+    --strict) strict=1 ;;
+    -h|--help) usage; exit 0 ;;
+    "") ;;
+    *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
+esac
 
 docs_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${docs_dir}/../.." && pwd)"
@@ -35,9 +49,15 @@ if ! command -v pandoc >/dev/null 2>&1; then
 fi
 
 # -- Build -------------------------------------------------------------------
+sphinx_args=(-b html)
+if (( strict )); then
+    sphinx_args+=(-W --keep-going)
+fi
+sphinx_args+=("${docs_dir}" "${out_dir}")
+
 echo "==> Building documentation into ${out_dir}"
 rm -rf "${docs_dir}/_build" "${docs_dir}/api"
-python -m sphinx -b html "${docs_dir}" "${out_dir}"
+python -m sphinx "${sphinx_args[@]}"
 
 echo
 echo "Done. Open the docs with:"

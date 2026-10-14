@@ -20,7 +20,8 @@ spaces.
 .. note::
 
    The ``Zandpack.wrapper`` module provides several ways to call most of these
-   command-line tools from Python.
+   command-line tools from Python -- this is the preferred way to use them. See
+   :doc:`../examples/generic_wrapper`.
 
 Core tools
 ----------
@@ -104,11 +105,59 @@ state. ``nozand --help`` prints the available keywords.
    * - ``omg_start``
      - ``None``
 
+viljas-cuevas
+~~~~~~~~~~~~~
+
+Minimal Floquet photo-assisted current, following Viljas and Cuevas (2007). It
+uses the same Zandpack files as the ``nozand`` / ``zand`` programs and returns
+the current in units of ``e/fs`` (energies in eV).
+
+.. cmdhelp:: viljas-cuevas
+
 zand
 ~~~~
 
 **Superseded by ``nozand``.** The orthogonal-basis variant of the propagation
 code, invoked the same way (``Dir=...``); prefer ``nozand``.
+
+Archiving tools
+---------------
+
+A time-dependent calculation with ``nozand`` (or ``zand``) writes its density
+matrices and currents to disk in chunks as the calculation progresses, rather
+than keeping everything in memory. A long run therefore leaves a directory full
+of small files behind. The tools in this group collect those chunks into one
+compressed file, so a finished calculation can be stored and transferred
+cheaply.
+
+.. note::
+
+   The best way to archive a calculation is to use the ``wrapper.py`` module,
+   :mod:`Zandpack.wrapper`, rather than driving the tools below by hand.
+   :func:`Zandpack.wrapper.archive_calculation` copies the calculation folder to
+   the archive name, deletes the intermediate density matrices, currents and
+   ``nozand`` output, and leaves an ``ARCHIVE_COMPLETE.txt`` marker so a
+   finished archive is recognisable. The command-line tools below are the
+   lower-level building blocks it builds on.
+
+lossydm
+~~~~~~~
+
+Collects the chunks of the time-dependent density matrix produced by ``zand`` /
+``nozand`` into a single file and compresses it, using either the built-in
+``numpy.savez_compressed`` or the ``xz`` tool. This is the lossy counterpart to
+``compress_currents``.
+
+.. cmdhelp:: lossydm
+
+compress_currents
+~~~~~~~~~~~~~~~~~
+
+Collects the chunks of the time-dependent currents produced by ``zand`` /
+``nozand`` into one file and compresses it. Unlike ``lossydm``, the currents are
+stored losslessly: every point the calculation saved is kept.
+
+.. cmdhelp:: compress_currents
 
 Other tools
 -----------
@@ -137,25 +186,6 @@ Plots and quickly inspects the results of a time-dependent calculation.
 .. video:: videos/td_info.webm
    :width: 75%
    :muted:
-
-lossydm
-~~~~~~~
-
-Collects the chunks of the time-dependent density matrix produced by ``zand`` /
-``nozand`` into a single file and compresses it, using either the built-in
-``numpy.savez_compressed`` or the ``xz`` tool. This is the lossy counterpart to
-``compress_currents``.
-
-.. cmdhelp:: lossydm
-
-compress_currents
-~~~~~~~~~~~~~~~~~
-
-Collects the chunks of the time-dependent currents produced by ``zand`` /
-``nozand`` into one file and compresses it. Unlike ``lossydm``, the currents are
-stored losslessly: every point the calculation saved is kept.
-
-.. cmdhelp:: compress_currents
 
 qp_grid
 ~~~~~~~
@@ -189,15 +219,6 @@ Takes a spin-degenerate calculation and adds a spin component, i.e.
 .. video:: videos/add_spin_component.webm
    :width: 75%
    :muted:
-
-viljas-cuevas
-~~~~~~~~~~~~~
-
-Minimal Floquet photo-assisted current, following Viljas and Cuevas (2007). It
-uses the same Zandpack files as the ``nozand`` / ``zand`` programs and returns
-the current in units of ``e/fs`` (energies in eV).
-
-.. cmdhelp:: viljas-cuevas
 
 zzz
 ~~~

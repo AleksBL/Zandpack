@@ -6,10 +6,12 @@ from importlib.metadata import PackageNotFoundError, version as _dist_version
 from pathlib import Path
 import re
 import sys
+from types import ModuleType
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 from docutils.statemachine import StringList
+from sphinx.ext.autosummary import Autosummary
 
 # -- Path setup --------------------------------------------------------------
 # This file lives in <repo>/Zandpack/docs, so the importable package root is two
@@ -59,6 +61,25 @@ autodoc_member_order = "groupwise"
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_use_rtype = False
+
+# -- Autodoc docstring cleanup -----------------------------------------------
+# Many modules carry an editor-generated header inside their module docstring:
+# a "Created on <date>" line followed by an "@author" line. Neither says
+# anything about the code, and the "@author" line was being picked up as the
+# module summary in the API reference tables. Both are therefore dropped from
+# the rendered docstring at build time, which also leaves the summary column
+# free for real descriptions. The source files are left untouched.
+
+_EDITOR_HEADER_LINE = re.compile(r"^\s*(Created on\s+\S+.*|@author:.*)$")
+
+
+def _strip_editor_headers(app, what, name, obj, options, lines):
+    """Drop editor-generated header lines from an autodoc docstring."""
+    kept = [line for line in lines if not _EDITOR_HEADER_LINE.match(line)]
+    # Removing the header usually leaves blank line(s) at the top.
+    while kept and not kept[0].strip():
+        kept.pop(0)
+    lines[:] = kept
 
 # Notebook tutorials are shipped pre-executed; never run them during the build.
 nbsphinx_execute = "never"
@@ -186,6 +207,35 @@ class CmdHelpDirective(Directive):
         return node.children
 
 
+# -- apimodules --------------------------------------------------------------
+# The tables in api.rst list modules only. autosummary fills their second column
+# with the first line of the module docstring, which for these modules is either
+# missing or not a useful description. That column is left empty instead, ready
+# for short module descriptions to be filled in later. Member tables (the ones
+# on the generated module pages) keep their summaries.
+#
+# api.rst keeps writing ``.. autosummary::`` because that literal name is what
+# the stub generator scans the sources for; the directive itself is overridden
+# below, after the extension has registered its own version.
+
+class ModuleListAutosummary(Autosummary):
+    """``autosummary`` that blanks the summary column of module-only tables."""
+
+    def get_items(self, names):
+        items = super().get_items(names)
+        if not all(
+            isinstance(sys.modules.get(real_name), ModuleType)
+            for _name, _sig, _summary, real_name in items
+        ):
+            return items
+        return [
+            (name, sig, "", real_name)
+            for name, sig, _summary, real_name in items
+        ]
+
+
 def setup(app):
     app.add_directive("cmdhelp", CmdHelpDirective)
+    app.add_directive("autosummary", ModuleListAutosummary, override=True)
+    app.connect("autodoc-process-docstring", _strip_editor_headers)
     return {"parallel_read_safe": True}
