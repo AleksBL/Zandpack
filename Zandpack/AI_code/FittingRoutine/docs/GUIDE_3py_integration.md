@@ -6,6 +6,13 @@ sweep_framework.py), the sampling/glue surface is
 `AI_fit_adaptivesampling.py` (was refine_sampling.py). The old
 names survive as module-alias shims. This guide uses the NEW names.
 
+PHYSICS LAYER (2026-10-13/14): the routine now PREVENTS the
+monster-residue pathology at the source (an in-optimizer Tikhonov
+ridge, `opt_ridge`, DEFAULT 1e-3) and backstops it with a guarded
+residue cap (`residue_cap_mult=10`, on by default). Section 4b is
+the entry point; the evidence lives in HANDOFF 4.16 items 11-12
+and `Data3/default_runs/`.
+
 Audience: you, porting a system folder in `Data2/<system>/` (or a fresh
 one) from the old `PoleGuess -> R.Fit -> curvefit_all -> iterative_PSD`
 pipeline to the new `AI_fit_base.py` routine — by editing that folder's
@@ -30,7 +37,7 @@ tail, byte for byte.
 | 2.py's fixed contour | `lf.refine_loop(R, D, ...)` | OPTIONAL (section 6): adaptive energy grid — adds points where the sampling under-resolves, drops redundant ones |
 | `R.PoleGuess(...)` per lead | inside the fit | deterministic `skrf` PSD-dictionary init (`n_init` poles) |
 | `pad_poles` / `fix_missing` / `nlmax` bookkeeping | inside the fit | adaptive pole insert/remove/merge; pole cap = `max_poles` |
-| `R.Fit(...)` + `R.curvefit_all(...)` | `lf.fit_boosted(E, F, kw, n_res=8)` | shared-pole Lorentzian fit + residual-correction fit |
+| `R.Fit(...)` + `R.curvefit_all(...)` | `lf.fit_boosted(E, F, kw, n_res=8)` | shared-pole Lorentzian fit + residual-correction fit + combined-model residue-cap check |
 | `iterative_PSD(...)` per lead | inside the fit (`psd=True`) | exact PSD projection + PSD-constrained ADMM solve |
 | `R.NO_fitted_lorentzians[...]` containers | `lf.inject_fits(R, fits)` | also pads pole counts to a common `NumL` and runs `FitNO2O` |
 | your tail | unchanged | — |
@@ -88,6 +95,21 @@ BASE_KW = dict(
                            # undulation persists (4.9)
     local_floor_frac=1.5,
     tr_solver="lsmr",      # default; see solver note below
+    # --- physics layer (section 4b); both DEFAULT-ON, listed here
+    #     so you know they exist ---
+    opt_ridge=1e-3,        # Tikhonov ridge inside every fit_poles
+                           # stage + the final solve. Prevents the
+                           # near-degenerate-pole residue blow-ups
+                           # (Ag3Au3: 0/6 -> 6/6 healthy starts).
+                           # Known-CLEAN systems (zgnr_spin, nogap,
+                           # zgnr) take opt_ridge=None for max
+                           # accuracy (they pay T for the cure).
+    residue_cap_mult=10.0, # backstop: ||C_i||_F <= 10 x max||F_n||;
+                           # guarded, never silently enforced - a
+                           # failure leaves the fit unchanged with
+                           # history['residue_cap_failed'] + a loud
+                           # warning (read it: the fit's accuracy is
+                           # then riding on cancelling residues)
 )
 
 # basin-sensitive system? (Ag3Au3 measured; any system whose single
@@ -240,13 +262,83 @@ That is the recipe that produced Ag3Au3 T rms 0.0077 (old 3.py
 pipeline: 0.0383) in ~3.5 min for 6 fits, where a single 'exact'
 control start once landed T rms 3.44.
 
+NOTE (2026-10-14): under the ridge, all three solvers AGREE on
+healthy fits (Ag3Au3: gram 0.00446 / lsmr 0.00441 / exact 0.00447)
+- the historical solver gaps were monster-basin artifacts. Choose
+by speed (gram fastest at large M*n_ch), not by fear.
+
+## 4b. The physics layer: `opt_ridge` and the residue cap
+
+THE PROBLEM: near-degenerate pole clusters give the pole search
+near-null LS directions where coefficients explode - residues up to
+1e11x the sampled Gamma scale, Zandpack's per-pole eigenvalue print
+shows +-1e8, and the transport tail inherits garbage. Historically
+only the final polish carried a ridge, so the POLE SEARCH was free
+to reward cancellation (excellent sample rms, unphysical model).
+
+THE FIX (in order of effect, both DEFAULT-ON):
+
+1. `opt_ridge=1e-3` — a Tikhonov ridge inside EVERY fit_poles
+   stage and the final coefficient solve (the varproj derivative
+   stays exact). The clusters never form: Ag3Au3 went 0/6 -> 6/6
+   healthy starts at BETTER frob and T 0.0062 (monster era) ->
+   0.0044; the Fig2Ag5 tight-target pileup (48 added poles,
+   1e8-residue cluster) never forms (32 added) at better frob and
+   better 2-4 eV band; per-pole eigenvalues return to O(data
+   scale).
+2. `residue_cap_mult=10` — the backstop: ||C_i||_F <= 10 x
+   max_n||F_n||_F, enforced after the PSD stage by a guarded
+   drop/clip re-solve with a BAND-level guard (a global rms
+   threshold is blind to damage concentrated in one energy band).
+   Never silent: if no bounded state passes the guard, the input
+   fit is returned UNCHANGED with `history['residue_cap_failed']`
+   plus a loud warning. SEEING THAT WARNING MEANS: this fit's
+   accuracy is riding on cancelling residues - either accept the
+   flag, or change something upstream (the ridge should have
+   prevented it; if you turned it off, put it back).
+
+PER-SYSTEM LAMBDA RULE (measured, Data3/default_runs): the ridge
+is a TREATMENT, not a vitamin. Keep the default 1e-3 unless the
+system is known-clean; for maximum accuracy on known-clean systems
+(nogap, zgnr_spin, zgnr - census residue ratios ~1) use
+`opt_ridge=None` (measured cost of the default there: zgnr_spin T
+0.139 -> 0.212, nogap 0.068 -> 0.106). Pathological families
+(Ag3Au3*, tight-target configs) NEED the ridge - do not disable it
+there.
+
+WHAT TO READ IN `fit.history` (recorded on every fit, free):
+- `max_pole_amplification`, `design_kappa` — VULNERABILITY
+  metrics (how ill-conditioned the design is). Healthy systems
+  still show large values (1e3-1e7) — do not gate on them.
+- `cancellation_index` — the EXCITATION metric (sum of in-window
+  per-pole contributions / max Gamma norm). Healthy ~1-3;
+  monsters 1e5+. Gate on THIS if you gate on anything.
+- `ridge_used` — the FINAL solve's effective ridge (including
+  its >2x fallback to 0). Sanity: equals opt_ridge when set.
+- `residue_cap_failed`, `n_dropped`, `n_clipped`,
+  `target_missed_due_to_cap` — the cap verdicts.
+- `psd_applied` — whether the PSD model was actually kept.
+
+The sweep framework's `fit_health`/`is_healthy`
+(AI_fit_sweep.py) now also carries and gates the padded-grid
+ENVELOPE (max||Gamma||/max||F|| on a grid padded beyond the
+window, default tolerance 5) — use it instead of hand-rolling
+health checks in new drivers.
+
 ## 5. Verify (do not skip on a new system)
 
 Per fit, read the health record printed in the template:
 `rms` should be at/below `target_rms` (or the best the system
 supports, HANDOFF 6.3), `min_eig` should be a small negative number
 or positive; min_eig << -1 means the model leaves the PSD cone
-between samples and the transport tail can go unphysical.
+between samples and the transport tail can go unphysical. ALSO
+read the physics-layer history keys (section 4b): a healthy
+production fit has `residue_cap_failed` absent/False and
+`cancellation_index` in the 1-3 range; `residue_cap_failed=True`
+means the residues stayed unbounded and the accuracy is riding on
+cancellation. And check what Zandpack prints per pole: the
+eigenvalues of the Lorentzian Gammas should be O(data scale), not
++-1e8.
 
 System level, compare the fitted T against the sampled self-energy
 reference BEFORE injection:
@@ -263,8 +355,13 @@ t_rms = float(np.sqrt(np.mean(
 ```
 
 Reference values to beat/expect: per-system table in HANDOFF 6.3
-(e.g. agnr 0.153, VerySmallRSSE T(0) 0.0212 / TOTAL 0.0079,
-Ag3Au3 gram 0.0077 vs old 3.py 0.0383).
+and the POST-RIDGE baselines in HANDOFF 4.16.12
+(Data3/default_runs/summary.json): Ag3Au3 0.0044, Ag3Au3_gap
+0.0034, spinpol 0.0081, Fig2Ag5 0.0061 [tgt1e4], agnr 0.0221
+[tgt1e4], zgnr_spin 0.139 [noridge], nogap 0.068 [noridge], zgnr
+0.115 [noridge]. NOTE: the older Ag3Au3-family numbers (0.0077/
+0.0062/0.0036 era) were produced by MONSTER fits (residues 1e5x
+data); do not chase them at the cost of the physics layer.
 
 Full end-to-end reference implementations you can diff against:
 `Data2/zgnr/compare_dos_t.py` (old and new pipelines side by side),
@@ -425,6 +522,20 @@ rms_ref = lf.frobenius_rms_error(res.evaluate(E0), F0)   # relative
 - Single-start results on basin-sensitive systems carry no
   information — health-gate + multi-start before concluding anything
   about a solver or a knob (HANDOFF 4.13).
+- `residue_cap_failed=True` is a VERDICT, not a bug: the fit cannot
+  be bounded at the current settings without blowing the guard -
+  fix upstream (keep opt_ridge on) or accept the flag knowingly
+  (section 4b). Do not silence it.
+- Per-system lambda (4b): the opt_ridge=1e-3 default is safe
+  everywhere but costs T on known-clean systems; do not "fix" a
+  clean system's regression by loosening OTHER knobs before trying
+  opt_ridge=None.
+- Parallel sweeps (joblib/loky): workers must NOT print (warnings
+  to an undrained PTY block the whole pool - suppress warnings in
+  workers, file-log progress); a parent-side module-valued global
+  is pickled BY REFERENCE (name it AI_fit_base_local, not
+  AI_fit_base). Working templates: Data3/default_sweep.py,
+  Data2/Fig2Ag5/3new_par.py.
 
 ## 8. Symmetric systems: pole inheritance (`fit_fixed_poles`)
 
@@ -440,6 +551,16 @@ f1 = lf.fit_fixed_poles(E1, F1, f0.e, f0.w,
                         psd=True, psd_force=True)  # seconds
 fits = {(0, 0): f0, (1, 0): f1}
 ```
+
+MEASURED (2026-10-13): Fig2Ag5 saves ~2x wall at T rms 0.0061 vs
+0.0067 own-fit - inheritance is the right default there. BUT
+"symmetric" is a PHYSICS statement, not a fit statement: the Ag3Au3
+family is NOT symmetric (different electrodes) - forcing
+inheritance there inflated T 5.4x (0.0067 own-fit vs 0.0374
+inherit). Check the electrodes before inheriting; when in doubt,
+run both ways once and compare at the T level. Under the residue
+cap, `fit_fixed_poles` enforces clip-ONLY (never drops poles) so
+the inherited pole set is exactly preserved.
 
 `fit_fixed_poles` runs the exact final-solve + PSD machinery of the
 full fit at the FIXED poles (same weights, tail anchors, PSD
@@ -518,9 +639,16 @@ run the loader with cwd = the repo root); configs touching
 `init`/`n_init`/`e_margin` get their OWN start set (so those knobs
 are actually exercised — note `init` is inert under `psd=True`, the
 dispatch always uses the NNLS PSD dictionary); the health gate is
-min eig AND rms together; `evaluate_pair` mutates R, so pass a
-freshly loaded copy per evaluation. The constructor's `n_res` sets
-the residual-boost poles
+min eig AND rms AND the padded-grid ENVELOPE together (2026-10-13:
+fit_health computes it, is_healthy gates it at 5x data scale, and
+the fit's cancellation_index rides along in the record for optional
+gating via is_healthy(cancellation_max=...)); winners whose fit
+history carries residue_cap_failed can be excluded with
+is_healthy-style filtering — `sf.fit_health` already carries the
+cancellation index from the fit history. `evaluate_pair` mutates R,
+so pass a freshly loaded copy per evaluation. The constructor's
+`n_res` sets the
+residual-boost poles
 (fit_boosted). `n_res=None` runs the PLAIN adaptive fit (`lf.fit`,
 no boost) — use that for pole budgets. WARNING: `n_res=0` does NOT
 mean "no boost": `fit_boosted` pops `max_poles` from the residual
