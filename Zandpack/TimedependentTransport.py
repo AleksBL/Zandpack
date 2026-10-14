@@ -932,6 +932,10 @@ class TD_Transport:
         nlead = self.num_leads
         Ntot  = N_L + 2*N_F
         comp  = np.complex128
+        # Guard against gamma_i <= 0
+        for _gams in self.broadenings:
+            # This should pass cleanly every time, havent been an issue so far
+            assert (_gams > 0.0).all(), "Broadening of one or more poles was found to be <= 0, ensure imaginary part is always positive please." 
         
         GG_P  = np.zeros((nk, nlead, Ntot, no),dtype = comp)
         GG_M  = np.zeros((nk, nlead, Ntot, no),dtype = comp)

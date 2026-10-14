@@ -875,10 +875,26 @@ def Worker(role_info):
     
     ##### NEW
     ##### Check Where the diff is smaller than float acc.
+    ## 14.10.2026 - Fermi-pole detection bug-fix for padded fits.
+    ## Reworked fermi-pole detection, new fitting routine pads leads with different poles
+    ## with poles with zero coefficients, which show up here as wrongly detected fermipoles,
+    ## since the code just checks the magnitude of the difference of the eigenvalues.
+    ## Previously, these poles with zero weight are located arbitrary positions in the pole-indices,
+    ## so the assert on the fully-lorentzian-pole slice fails. 
+    ## FIX:
     _nlrz = D["num_lorentzians"]
     _nlrz = int(_nlrz)
-    _is_fpole_loc = (np.abs(diff_GGP_GLP).sum(axis=(0,1,3))<1e-14).copy()
-    _is_fpole_all = (np.abs(diff_GGM_GLM_all).sum(axis=(0,1,3))<1e-14).copy()
+    _nfrm = D["num_poles_fermi"]
+    _nfrm = int(_nfrm)
+    ## 14.10.2026 New implm.
+    ## Ordering of poles assumed here [e1,e2,e3, ... , f1,f2 ...] (with e1 and f1 fit and fermi poles)
+    _is_fpole_all = np.array([False]*_nlrz + [True]*_nfrm)
+    _is_fpole_loc = _is_fpole_all[pole_idx]
+    assert (np.abs(diff_GGP_GLP    ).sum(axis=(0,1,3))[_is_fpole_loc]<1e-14).all()
+    assert (np.abs(diff_GGM_GLM_all).sum(axis=(0,1,3))[_is_fpole_all]<1e-14).all()
+    ## 14.10.2026 Previous implm. which also marks fitted poles with zero coefficient as a fermi pole. (wrong)
+    ##_is_fpole_loc = (np.abs(diff_GGP_GLP).sum(axis=(0,1,3))<1e-14).copy()
+    ##_is_fpole_all = (np.abs(diff_GGM_GLM_all).sum(axis=(0,1,3))<1e-14).copy()
     if (_is_fpole_loc==False).any():
         loc_poles_only_fermi = False
     else:
@@ -892,6 +908,7 @@ def Worker(role_info):
         lrzlim_0 = _min_x_lrz
         lrzlim_1 = _max_x_lrz + 1
         assert _nlrz_loc == lrzlim_1 - lrzlim_0
+    
     
     ## BUG FIX 14.07.2026
     ## ravelled_lrz_idx_loc = []
