@@ -82,25 +82,48 @@ def _starts(lf, E, F, n_init, e_margin, n_starts, jitter, seed):
     return starts
 
 
-def fit_health(lf, r, E, pad=2.0, npts=801):
-    """(rms, padded min eigenvalue) health record of a fit.
+def fit_health(lf, r, E, F=None, pad=2.0, npts=801):
+    """(rms, padded min eigenvalue, envelope) health record of a fit.
 
     rms is whatever the fit object reports (see the module docstring
     for the metric caveat); min_eig is the model's smallest
     eigenvalue on a grid PADDED beyond the window - the PSD health of
-    the transport model, not just on the samples.
+    the transport model, not just on the samples; envelope is the
+    padded-grid max||Gamma|| / max||F|| MODEL-level bound (2026-10-13
+    review point 4 - computed only when the data F is supplied; it
+    catches off-window growth that per-coefficient gates cannot).
     """
     Eg = np.linspace(min(E) - pad, max(E) + pad, npts)
-    return dict(rms=float(r.rms),
-                min_eig=float(np.linalg.eigvalsh(r.evaluate(Eg)).min()))
+    Fev = r.evaluate(Eg)
+    rec = dict(rms=float(r.rms),
+               min_eig=float(np.linalg.eigvalsh(Fev).min()))
+    if F is not None:
+        data_max = float(np.sqrt(np.sum(np.abs(np.asarray(F)) ** 2,
+                                        axis=(1, 2))).max())
+        env = float(np.sqrt(np.sum(np.abs(Fev) ** 2,
+                                   axis=(1, 2))).max())
+        rec["envelope"] = env / max(data_max, 1e-300)
+    return rec
 
 
-def is_healthy(rec, min_eig_tol=-1.0, rms_max=0.05):
+def is_healthy(rec, min_eig_tol=-1.0, rms_max=0.05,
+               envelope_max=5.0, cancellation_max=None):
     """Joint health gate (user-set policy 2026-10-09): padded min eig
     AND sample rms together. Thresholds are heuristics from the
     Ag3Au3/nogap production runs - loosen rms_max for systems that
-    honestly cannot reach it, never loosen min_eig_tol below -1."""
-    return rec["min_eig"] > min_eig_tol and rec["rms"] <= rms_max
+    honestly cannot reach it, never loosen min_eig_tol below -1.
+    envelope_max (2026-10-13 review point 4, census-anchored: healthy
+    systems sit at 0.4-3.3, pathological fits reach 8+): gate on the
+    model-level padded-grid envelope when the record carries it.
+    cancellation_max: optional gate on the record's
+    cancellation_index (healthy p90 <= ~3.6 in the census)."""
+    ok = rec["min_eig"] > min_eig_tol and rec["rms"] <= rms_max
+    if ok and envelope_max is not None and "envelope" in rec:
+        ok = rec["envelope"] <= envelope_max
+    if ok and cancellation_max is not None and \
+            "cancellation_index" in rec:
+        ok = rec["cancellation_index"] <= cancellation_max
+    return ok
 
 
 def pole_inherit_fit(lf, E1, F1, f0, psd=True, psd_force=True):
@@ -183,7 +206,12 @@ class GammaSweep:
         else:
             r = self.lf.fit_boosted(self.E, self.F, kw,
                                     n_res=self.n_res)
-        rec = fit_health(self.lf, r, self.E)
+        rec = fit_health(self.lf, r, self.E, F=self.F)
+        # carry the fit's recorded diagnostics into the record so
+        # is_healthy's optional gates can see them (2026-10-13)
+        fh = getattr(r, "history", None) or {}
+        if "cancellation_index" in fh:
+            rec["cancellation_index"] = float(fh["cancellation_index"])
         rec["wall"] = time.time() - t
         np.savez_compressed(cache, fit=r, rec=rec)
         return r, rec

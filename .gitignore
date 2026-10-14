@@ -20,6 +20,7 @@ Zandpack/params2latex.py
 Zandpack/mpi_RK4pars.py
 Zandpack/AI_code/__pycache__/
 Zandpack/AI_code/FittingRoutine/__pycache__/
+Zandpack/AI_code/FittingRoutine/*.bak
 get_issues.sh
 issues.txt
 issues.json

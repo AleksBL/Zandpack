@@ -1823,6 +1823,60 @@ def merge_duplicates(centers, widths, C, e_factor=0.05, w_factor=0.05,
             n_before - len(out_e))
 
 
+def merge_proximity(centers, widths, C, alpha=0.15):
+    """Merge pole pairs closer than alpha * max(w_i, w_j).
+
+    The SEPARATION constraint (2026-10-13 review): near-coincident
+    poles are the root cause of the residue blow-ups - their
+    near-parallel dictionary columns create the near-null LS
+    directions (noise amplification ~ 2/alpha for an equal-width
+    pair: alpha=0.05 permits ~40x, alpha=0.2 keeps ~10x; clusters of
+    more than two are worse). Proximity ALONE triggers the merge -
+    unlike merge_duplicates, no cancellation test - because the
+    constraint is structural; aligned close poles merge to a
+    numerically identical model anyway. Merging is strongest-first,
+    residues summed, position norm-weighted (same mechanics as
+    merge_duplicates). SWEEP alpha and judge at the T level: an
+    earlier experiment that loosened merge_duplicates' cancellation
+    threshold ate legitimate close poles at 30x rms.
+    """
+    centers = np.asarray(centers, dtype=float)
+    widths = np.asarray(widths, dtype=float)
+    C = np.asarray(C)
+    if centers.size == 0:
+        return centers, widths, C, 0
+    norm = residue_norms(C)
+    order = np.argsort(-norm)
+    out_e, out_w, out_C, out_n = [], [], [], []
+    for i in order:
+        target = None
+        for k in range(len(out_e)):
+            if abs(centers[i] - out_e[k]) < alpha * max(widths[i],
+                                                         out_w[k]):
+                target = k
+                break
+        if target is None:
+            out_e.append(float(centers[i]))
+            out_w.append(float(widths[i]))
+            out_C.append(C[i].copy())
+            out_n.append(float(norm[i]))
+        else:
+            k = target
+            tot = out_n[k] + norm[i]
+            if tot > 0:
+                out_e[k] = (out_e[k] * out_n[k]
+                            + centers[i] * norm[i]) / tot
+            else:
+                # both residues are zero (inert poles): plain mean
+                out_e[k] = 0.5 * (out_e[k] + centers[i])
+            out_w[k] = max(out_w[k], widths[i])
+            out_C[k] = out_C[k] + C[i]
+            out_n[k] = tot
+    n_before = centers.size
+    return (np.array(out_e), np.array(out_w), np.array(out_C),
+            n_before - len(out_e))
+
+
 # ==========================================================================
 # SECTION: constraints
 # ==========================================================================
@@ -2117,6 +2171,55 @@ def psd_min_eigenvalue(E_grid, centers, widths, C):
     """Minimum over the grid of the smallest eigenvalue of the model."""
     F_fit = evaluate(E_grid, centers, widths, C)
     return float(np.min(np.linalg.eigvalsh(F_fit)))
+
+
+def pole_amplification(E_grid, centers, widths, sample_weights=None):
+    """Per-pole noise amplification sqrt(diag((A^T A)^-1)) of the
+    weighted design (2026-10-13 review: the principled 'the data
+    cannot determine this pole' metric - the gram solver already
+    forms the same Gram, so this is free). Amplification ~2/alpha
+    for a pair separated by alpha*max(w_i, w_j).
+
+    Returns (amp (M,), kappa) where amp_i is how much unit-variance
+    noise lands in pole i's coefficients and kappa = sqrt(g_max /
+    g_min) is the design condition number. UNRIDGED by design -
+    the diagnostic must see the ill-conditioning the solve hides.
+    """
+    Phi = lorentzian_basis(np.asarray(E_grid, dtype=float),
+                           np.asarray(centers, dtype=float),
+                           np.asarray(widths, dtype=float))
+    if sample_weights is None:
+        swv = np.ones(Phi.shape[0])
+    else:
+        swv = np.asarray(sample_weights, dtype=float)
+    Aw = Phi * np.sqrt(swv)[:, None]
+    gval, gvec = np.linalg.eigh(Aw.T @ Aw)
+    amp2 = np.sum(gvec ** 2 / np.maximum(gval, 1e-300), axis=1)
+    amp = np.sqrt(np.maximum(amp2, 0.0))
+    kappa = float(np.sqrt(gval.max() / max(gval.min(), 1e-300)))
+    return amp, kappa
+
+
+def cancellation_index(E, centers, widths, C, gamma_ref=None):
+    """sum_i max_n ||C_i phi_i(E_n)||_F / max_n ||Gamma(E_n)||_F.
+
+    In-window CONTRIBUTIONS rather than peak amplitudes (2026-10-13
+    review): not fooled by broad or off-window poles (their basis
+    factor is small on the window), and catches a CLUSTER of poles
+    that each pass a per-pole cap but cancel in the sum. Healthy
+    constructive fits sit at O(1); a cancelling cluster pushes this
+    to the cluster's individual contribution sum.
+    """
+    E = np.asarray(E, dtype=float)
+    norms = residue_norms(np.asarray(C))
+    Phi = np.abs(lorentzian_basis(E, np.asarray(centers, dtype=float),
+                                  np.asarray(widths, dtype=float)))
+    num = float((norms * Phi.max(axis=0)).sum())
+    if gamma_ref is None:
+        gamma_ref = float(np.sqrt(np.sum(np.abs(
+            evaluate(E, centers, widths, C)) ** 2,
+            axis=(1, 2))).max())
+    return num / max(gamma_ref, 1e-300)
 
 
 def complex_plane_limsup(centers, widths, C, radius_factor=10.0,
@@ -2596,7 +2699,14 @@ def fit(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         w_max_raw: Optional[float] = None,
         init_poles=None,
         operator_threshold: int = 3_000_000,
-        tr_solver="lsmr", gram_cut: float = 1e-9) -> FitResult:
+        tr_solver="lsmr", gram_cut: float = 1e-9,
+        residue_cap_mult: Optional[float] = 10.0,
+        cap_guard_target: float = 5e-3,
+        stab_weight: float = 0.0,
+        stab_onset: float = 1.0,
+        opt_ridge: Optional[float] = 1e-3,
+        psd_gain_tol: Optional[float] = None,
+        sep_alpha: Optional[float] = None) -> FitResult:
     """Fit shared-pole Lorentzians to samples of a Hermitian matrix function.
 
     The width floor is chosen in two stages: first the STABLE tight floor
@@ -2627,7 +2737,14 @@ def fit(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                         psd_force=psd_force, eta_raw=eta_raw,
                         eta_floor_mult=eta_floor_mult,
                         w_max_raw=w_max_raw, init_poles=init_poles,
-                        operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut)
+                        operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+                        residue_cap_mult=residue_cap_mult,
+                        cap_guard_target=cap_guard_target,
+                        stab_weight=stab_weight,
+                        stab_onset=stab_onset,
+                        opt_ridge=opt_ridge,
+                        psd_gain_tol=psd_gain_tol,
+                        sep_alpha=sep_alpha)
         res.history["w_min"] = float(w_min)
         return res
 
@@ -2659,7 +2776,14 @@ def fit(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
               local_floor_frac=local_floor_frac, psd_force=psd_force,
               eta_raw=eta_raw, eta_floor_mult=eta_floor_mult,
               w_max_raw=w_max_raw, init_poles=init_poles,
-              operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut)
+              operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+              residue_cap_mult=residue_cap_mult,
+              cap_guard_target=cap_guard_target,
+              stab_weight=stab_weight,
+              stab_onset=stab_onset,
+              opt_ridge=opt_ridge,
+              psd_gain_tol=psd_gain_tol,
+              sep_alpha=sep_alpha)
 
     res1 = _fit_impl(E, F, w_min=tight, **kw)
     res1.history["w_min"] = tight
@@ -2683,7 +2807,15 @@ def fit(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
 def fit_fixed_poles(E, F, centers, widths, psd=True, psd_force=True,
                    weight="relative", ridge=0.0, rcond=None,
                    tail_anchors=True, anchor_weight=0.05,
-                   admm_iters=200, target_rms=5e-3, verbose=False):
+                   admm_iters=200, target_rms=5e-3,
+                   residue_cap_mult: Optional[float] = 10.0,
+                   cap_guard_target: float = 5e-3,
+                   stab_weight: float = 0.0,
+                   stab_onset: float = 1.0,
+                   opt_ridge: Optional[float] = 1e-3,
+                   psd_gain_tol: Optional[float] = None,
+                   sep_alpha: Optional[float] = None,
+                   verbose=False):
     """Fit ONLY the residue coefficients at FIXED poles - no pole
     initialization, no relocation, no adaptive loop.
 
@@ -2784,6 +2916,69 @@ def fit_fixed_poles(E, F, centers, widths, psd=True, psd_force=True,
                   f"{'APPLIED' if refined['applied'] else 'rejected'}"
                   f"{' (forced)' if psd_force else ''}")
 
+    if residue_cap_mult is not None:
+        cap_target = max(target_rms, cap_guard_target)
+        psd_eff = bool(psd and history.get("psd_applied", psd_force))
+        history["ridge_used"] = float(ridge)
+        # allow_drop=False (review fix 3): this path exists to fit
+        # residues at a FIXED pole set (pole inheritance); dropping
+        # poles per block silently breaks the shared-pole promise.
+        # The cap CLIPS (common-lambda pin) instead.
+        e_s, w_s, C_s, cap_hist = _cap_residues_core(
+            E_s, F_s, E_fit, B_fit, sw_fit, qw, chans, p,
+            e_s, w_s, C_s, cap_mult=residue_cap_mult,
+            psd=psd_eff, psd_force=psd_force, admm_iters=admm_iters,
+            target_rms=cap_target,
+            rcond=rcond, ridge=float(ridge),
+            allow_drop=False,
+            verbose=verbose)
+        history.update(cap_hist)
+        history["cap_guard_target"] = float(cap_target)
+        history["cap_psd_eff"] = bool(psd_eff)
+        if cap_hist.get("residue_cap_failed"):
+            warnings.warn(
+                f"[fit_fixed_poles] residue cap FAILED "
+                f"({residue_cap_mult}x): residues up to "
+                f"{cap_hist.get('worst_res_over_cap', float('nan')):.3g}x "
+                f"the cap remain; the fit's accuracy rides on "
+                f"near-degenerate cancelling residues "
+                f"(rms_rejected_drop="
+                f"{cap_hist.get('rms_rejected_drop', float('nan')):.4e}, "
+                f"rms_rejected_clip="
+                f"{cap_hist.get('rms_rejected_clip', float('nan')):.4e})")
+        rms = _quad_rms(basis_apply(lorentzian_basis(E_s, e_s, w_s),
+                                   C_s), F_s, qw)
+        history["rms"] = float(rms)
+        history["n_poles"] = int(e_s.size)
+        cap_changed = (cap_hist.get("n_dropped", 0)
+                       + cap_hist.get("n_clipped", 0)) > 0
+        if cap_changed:
+            psd_info = None
+        if cap_changed and cap_hist["rms_uncapped"] <= target_rms < rms:
+            history["target_missed_due_to_cap"] = True
+            warnings.warn(
+                f"[fit_fixed_poles] residue cap accepted at an "
+                f"accuracy cost: rms "
+                f"{cap_hist['rms_uncapped']:.4e} -> "
+                f"{rms:.4e} crossed target_rms {target_rms:.4e} "
+                f"(history['target_missed_due_to_cap'] = True; the "
+                "sweep should score on this flag)")
+        if verbose:
+            print(f"[fit_fixed_poles] residue cap "
+                  f"({residue_cap_mult}x): "
+                  f"{cap_hist.get('n_dropped', 0)} dropped, "
+                  f"{cap_hist.get('n_clipped', 0)} clipped -> "
+                  f"{e_s.size} poles, rms {rms:.4e}"
+                  + (" [FAILED - kept uncapped]"
+                     if cap_hist.get("residue_cap_failed") else ""))
+
+    amp, kappa = pole_amplification(E_fit, e_s, w_s, sw_fit)
+    history["max_pole_amplification"] = float(amp.max())
+    history["worst_amp_pole"] = int(np.argmax(amp))
+    history["design_kappa"] = kappa
+    history["cancellation_index"] = float(cancellation_index(
+        E_s, e_s, w_s, C_s))
+
     return FitResult(
         e=fd.unscale_centers(e_s),
         w=fd.unscale_widths(w_s),
@@ -2799,6 +2994,335 @@ def fit_fixed_poles(E, F, centers, widths, psd=True, psd_force=True,
         history=history,
         psd=psd_info,
     )
+
+
+# The cap's rms budget anchors to the PRODUCTION quality floor (fit's
+# default target 5e-3), NOT to the calling config's aspiration. A
+# tight-target fit (target_rms <= 1e-4) cannot have both its rms and
+# bounded residues: passing the config's own target into the cap guard
+# (max(guard_mult*rms0, 2*target_rms) = 5.5e-4 for tgt1e4) rejects
+# every capped state on exactly the pathological fits the cap exists
+# for (review 2026-10-13, point 2.1). Floored here, the guard accepts
+# bounded states up to 2x production-target rms and flags worse.
+_CAP_GUARD_TARGET = 5e-3
+
+
+def _cap_residues_core(E_s, F_s, E_fit, B_fit, sw_fit, qw, chans, p,
+                       e_s, w_s, C_s, cap_mult,
+                       psd, psd_force, admm_iters, target_rms,
+                       rcond=None, ridge=0.0, guard_mult=1.5,
+                       max_rounds=8, n_bands=8, band_guard_mult=10.0,
+                       allow_drop=True,
+                       verbose=False):
+    """Enforce the residue cap ||C_i||_F <= cap_mult * max_n ||F_n||_F.
+
+    Scaled units throughout (the ||C|| / ||F|| ratio is f_scale
+    invariant, so the cap defined on the scaled samples equals the
+    raw-units rule "residues must not drastically exceed the sampled
+    function"). Guarded, iterative:
+
+    per round, violators (poles above the cap) are handled by
+      A) DROP + re-solve: violators removed, kept poles re-solved on
+         the full augmented system (the huge cancelling directions
+         are near-null ON the samples, so the kept set re-absorbs
+         the net contribution and the pole count DROPS). psd:
+         psd_refine at the kept poles, applied under the same
+         guard as the production path;
+      B) CLIP + re-solve (finisher, only when A exceeds the guard):
+         violators scaled by ONE COMMON factor lam = cap / max_norm
+         (per-pole clipping would destroy the intra-cluster
+         cancellation and blow up the residual) and pinned; free
+         poles re-solved on the residual data; PSD projection on the
+         re-solved free poles; any remaining violators hard-clipped.
+
+    Every accepted state must keep the sample rms under the guard
+    max(guard_mult x the ORIGINAL rms, 2 x target_rms) - the same
+    absolute floor the production PSD accept-guard uses - AND pass
+    the BAND guard (review 2.2): a global threshold is blind to
+    damage concentrated in one region (measured on Fig2Ag5 tgt1e4:
+    the capped error is entirely in the 2-4 eV band while all other
+    bands match the good fits), so every equal-width band must stay
+    under max(band_guard_mult x its own uncapped rms, the global
+    guard). If no variant manages that, the input configuration is
+    returned unchanged with history['residue_cap_failed'] = True
+    and the band diagnostics recorded (the cap is never enforced at
+    the price of a silent fit degradation).
+
+    Returns (e_s, w_s, C_s, history).
+    """
+    def _rms(e_in, w_in, C_in):
+        return _quad_rms(basis_apply(lorentzian_basis(E_s, e_in, w_in),
+                                    C_in), F_s, qw)
+
+    scale = float(np.sqrt(np.sum(np.abs(F_s) ** 2,
+                                 axis=(1, 2))).max())
+    cap = float(cap_mult) * max(scale, 1e-300)
+    rms0 = _rms(e_s, w_s, C_s)
+    # Accept-guard: the cap may cost accuracy, but never silently - a
+    # capped state is accepted only if its rms stays within
+    # guard_mult x the ORIGINAL rms, or under the same absolute floor
+    # the production PSD guard uses (2 x target_rms). Tight-target
+    # fits (rms 1e-4-class) legitimately re-solve to a few e-3 when
+    # the violator cluster is capped - that is still a good fit by
+    # suite standards (health gate RMS_MAX 0.05, typical winners
+    # 4e-3..2e-2), so the floor keeps the guard from rejecting the
+    # ONLY way to bound the residues.
+    rms_guard = max(guard_mult * rms0, 2.0 * target_rms)
+
+    # ---- band-level guard (review 2.2) --------------------------
+    edges = np.linspace(float(E_s.min()), float(E_s.max()),
+                        n_bands + 1)
+    bidx = np.clip(np.digitize(E_s, edges) - 1, 0, n_bands - 1)
+    bw = np.bincount(bidx, weights=qw, minlength=n_bands)
+
+    def _band_rms(e_in, w_in, C_in):
+        d2 = qw * np.sum(np.abs(basis_apply(
+            lorentzian_basis(E_s, e_in, w_in), C_in) - F_s) ** 2,
+            axis=(1, 2))
+        num = np.bincount(bidx, weights=d2, minlength=n_bands)
+        return np.sqrt(num / np.maximum(bw, 1e-300))
+
+    rms0_b = _band_rms(e_s, w_s, C_s)
+
+    def _band_ok(e_in, w_in, C_in):
+        rb = _band_rms(e_in, w_in, C_in)
+        return bool(np.all(rb <= np.maximum(band_guard_mult * rms0_b,
+                                            rms_guard))), rb
+
+    def _band_reject_hist(rb, key):
+        ratio = rb / np.maximum(rms0_b, 1e-300)
+        i = int(np.argmax(ratio))
+        hist[key] = dict(
+            worst_band_ratio=float(ratio[i]),
+            rms_before=float(rms0_b[i]), rms_after=float(rb[i]),
+            band_center=float(0.5 * (edges[i] + edges[i + 1])))
+
+    hist = dict(residue_cap_mult=float(cap_mult),
+                residue_cap_scale=scale, rms_uncapped=float(rms0),
+                rms_guard=float(rms_guard),
+                guard_mult=float(guard_mult),
+                n_bands=int(n_bands),
+                band_guard_mult=float(band_guard_mult),
+                worst_res_over_cap=float(residue_norms(C_s).max() / cap))
+
+    e_c, w_c, C_c = e_s, w_s, C_s
+    n_dropped = 0
+    for _ in range(max_rounds):
+        if not allow_drop:
+            # fixed-pole callers (pole inheritance) must keep the
+            # shared pole set - go straight to the clip variant
+            break
+        norms = residue_norms(C_c)
+        viol = np.flatnonzero(norms > cap)
+        if viol.size == 0 or e_c.size <= viol.size:
+            break
+        keep = norms <= cap
+        e_k, w_k = e_c[keep], w_c[keep]
+        Phi_k = lorentzian_basis(E_fit, e_k, w_k)
+        X_k, _ = solve_coefficients(Phi_k, B_fit,
+                                    sample_weights=sw_fit,
+                                    rcond=rcond, ridge=ridge)
+        C_k = unpack_coefficients(X_k, chans, p)
+        rms_k = _rms(e_k, w_k, C_k)
+        if psd:
+            refined = psd_refine(E_fit, B_fit, e_k, w_k, C_k, chans,
+                                admm_iters=admm_iters)
+            rms_p = _rms(e_k, w_k, refined["C"])
+            refined["rms"] = rms_p
+            if (psd_force or
+                    rms_p <= max(3.0 * rms_k, 2.0 * target_rms)):
+                C_k, rms_k = refined["C"], rms_p
+        ok_b, rb = _band_ok(e_k, w_k, C_k)
+        if rms_k > rms_guard or not ok_b:
+            if verbose:
+                print(f"[cap] drop of {viol.size} violator(s) would "
+                      f"cost rms {rms0:.4e} -> {rms_k:.4e} "
+                      f"(guard {rms_guard:.4e}, "
+                      f"band {'ok' if ok_b else 'REJECT'}); "
+                      "clipping instead")
+            hist["rms_rejected_drop"] = float(rms_k)
+            if not ok_b:
+                _band_reject_hist(rb, "band_rejected_drop")
+            break
+        e_c, w_c, C_c = e_k, w_k, C_k
+        n_dropped += int(viol.size)
+        if verbose:
+            print(f"[cap] dropped {viol.size} violator(s) -> "
+                  f"{e_c.size} poles, rms {rms_k:.4e}")
+
+    norms = residue_norms(C_c)
+    viol = np.flatnonzero(norms > cap)
+    n_clipped = 0
+    if viol.size:
+        keep = norms <= cap
+        # ONE COMMON scale factor for all violators: the huge residues
+        # live in near-degenerate clusters whose members cancel ON the
+        # samples. Per-pole clipping to the cap scales each member by a
+        # DIFFERENT factor, destroys the cancellation, and leaves a
+        # data-scale garbage term in the residual (measured: rms 24 on
+        # Fig2Ag5 tgt1e4). A common lambda = cap / max_norm brings the
+        # worst violator to the cap (all others below it) while
+        # preserving the cluster's internal structure.
+        lam = cap / max(float(norms.max()), 1e-300)
+        C_v = C_c * np.where(norms > cap, lam, 1.0)[:, None, None]
+        Phi_v = lorentzian_basis(E_fit, e_c[~keep], w_c[~keep])
+        B_res = np.asarray(B_fit) - pack_responses(
+            basis_apply(Phi_v, C_v[~keep]), chans)
+        Phi_k = lorentzian_basis(E_fit, e_c[keep], w_c[keep])
+        X_f, _ = solve_coefficients(Phi_k, B_res,
+                                    sample_weights=sw_fit,
+                                    rcond=rcond, ridge=ridge)
+        C_new = np.empty_like(C_c)
+        C_new[keep] = unpack_coefficients(X_f, chans, p)
+        C_new[~keep] = C_v[~keep]
+        if psd:
+            C_new, _, _ = project_psd(C_new)
+        nrm2 = residue_norms(C_new)
+        over = nrm2 > cap
+        if over.any():
+            C_new = C_new * np.where(
+                over, cap / np.maximum(nrm2, 1e-300),
+                1.0)[:, None, None]
+        rms_new = _rms(e_c, w_c, C_new)
+        ok_b, rb = _band_ok(e_c, w_c, C_new)
+        if rms_new <= rms_guard and ok_b:
+            C_c = C_new
+            n_clipped = int(viol.size)
+            if verbose:
+                print(f"[cap] clipped {viol.size} violator(s), "
+                      f"rms {rms0:.4e} -> {rms_new:.4e}")
+        else:
+            if verbose:
+                print(f"[cap] FAILED: rms {rms0:.4e} -> {rms_new:.4e} "
+                      f"exceeds guard {rms_guard:.4e} "
+                      f"(band {'ok' if ok_b else 'REJECT'}); "
+                      "keeping the uncapped fit")
+            hist["rms_rejected_clip"] = float(rms_new)
+            if not ok_b:
+                _band_reject_hist(rb, "band_rejected_clip")
+            e_c, w_c, C_c = e_s, w_s, C_s
+            n_dropped = 0
+            hist["residue_cap_failed"] = True
+
+    hist.update(n_dropped=int(n_dropped), n_clipped=int(n_clipped),
+                n_poles=int(e_c.size),
+                rms=float(_rms(e_c, w_c, C_c)))
+    return e_c, w_c, C_c, hist
+
+
+def cap_residues(E, F, fit, cap_mult=10.0, psd=None, psd_force=False,
+                 weight="relative", ridge=0.0, rcond=None,
+                 tail_anchors=True, anchor_weight=0.05,
+                 admm_iters=200, target_rms=5e-3, guard_mult=1.5,
+                 max_rounds=8, n_bands=8, band_guard_mult=10.0,
+                 allow_drop=True,
+                 verbose=False):
+    """Post-fit residue cap on an EXISTING fit (cache-friendly).
+
+    Enforces the rule that no residue matrix may exceed cap_mult x
+    the largest sampled level-width norm: ||C_i||_F <=
+    cap_mult * max_n ||F_n||_F. The huge cancelling residues of
+    tight-target high-pole fits (the +-1e8 Lorentzian-Gamma tail
+    prints) violate this by ~1e6x; they live in near-degenerate
+    pole clusters where the least-squares solve is free to blow up
+    along near-null directions (merge_duplicates catches only exact
+    coincidences - HANDOFF 4.5). The cap stage drops or clip-pins
+    the violators and re-solves the rest, accepting a state only if
+    the sample rms stays within the global guard AND every
+    energy band stays within band_guard_mult x its own uncapped
+    rms (a global threshold is blind to band-concentrated damage).
+
+    psd : None (default) = INFER from the fit's history
+        (psd_applied / rms_psd keys; if unrecorded, warn and assume
+        True - PSD-projecting during the cap must not silently
+        change a deliberately non-PSD fit's character, so pass psd
+        explicitly when the history is missing).
+    fit : FitResult or CombinedFit (only .e/.w/.C are used).
+    Returns a NEW FitResult (pole count may drop); on guard failure
+    the input model is returned essentially unchanged with
+    history['residue_cap_failed'] = True.
+    """
+    if psd is None:
+        h = getattr(fit, "history", None) or {}
+        if "psd_applied" in h:
+            psd = bool(h["psd_applied"])
+        elif "rms_psd" in h:
+            psd = True
+        else:
+            warnings.warn("[cap_residues] psd not inferable from "
+                          "the fit history; assuming psd=True")
+            psd = True
+    E = np.asarray(E, dtype=float).ravel()
+    fd = prepare(E, F)
+    E_s, F_s = fd.E, fd.F
+    p = F_s.shape[1]
+    chans = hermitian_channels(p)
+    B = pack_responses(F_s, chans)
+    e_s = fd.scale_centers(np.asarray(fit.e, dtype=float))
+    w_s = np.asarray(fit.w, dtype=float) / fd.e_scale
+    C_s = np.asarray(fit.C, dtype=complex) / fd.f_scale
+
+    qw = _quad_widths(E_s)
+    sw = _sample_weights(F_s, weight, quad=qw)
+    N_real = E_s.size
+    E_fit, B_fit, sw_fit = E_s, B, sw
+    if tail_anchors:
+        span = float(E_s.max() - E_s.min())
+        d = np.array([0.05, 0.15, 0.35, 0.65]) * 0.5 * span
+        E_anchor = np.concatenate([E_s.min() - d, E_s.max() + d])
+        B_anchor = np.zeros((B.shape[0], E_anchor.size))
+        ref_w = 1.0 if sw is None else float(np.median(sw))
+        w_anchor = anchor_weight * ref_w
+        E_fit = np.concatenate([E_s, E_anchor])
+        B_fit = np.concatenate([B, B_anchor], axis=1)
+        if sw is None:
+            sw_fit = np.concatenate(
+                [np.ones(N_real), np.full(E_anchor.size, anchor_weight)])
+        else:
+            sw_fit = np.concatenate(
+                [sw, np.full(E_anchor.size, w_anchor)])
+
+    e_c, w_c, C_c, cap_hist = _cap_residues_core(
+        E_s, F_s, E_fit, B_fit, sw_fit, qw, chans, p,
+        e_s, w_s, C_s, cap_mult=cap_mult, psd=psd, psd_force=psd_force,
+        admm_iters=admm_iters, target_rms=target_rms, rcond=rcond,
+        ridge=ridge, guard_mult=guard_mult, max_rounds=max_rounds,
+        n_bands=n_bands, band_guard_mult=band_guard_mult,
+        allow_drop=allow_drop,
+        verbose=verbose)
+    # carry the INPUT fit's history forward (review fix 5): a second
+    # cap call must see the same provenance (psd_applied etc.), and
+    # stale cap verdicts from a previous pass are replaced by the
+    # new one - cap(cap(fit)) stays idempotent and un-warning.
+    base_hist = dict(getattr(fit, "history", None) or {})
+    for stale in ("residue_cap_failed", "target_missed_due_to_cap"):
+        base_hist.pop(stale, None)
+    hist = {**base_hist, **cap_hist}
+    hist["psd_applied"] = bool(psd)
+
+    rms = _quad_rms(basis_apply(lorentzian_basis(E_s, e_c, w_c), C_c),
+                    F_s, qw)
+    hist["rms"] = float(rms)
+    hist["frobenius_before"] = float(frobenius_rms_error(
+        fit.evaluate(E), np.asarray(F)))
+    out = FitResult(
+        e=fd.unscale_centers(e_c),
+        w=fd.unscale_widths(w_c),
+        C=fd.unscale_coeffs(C_c),
+        p=p,
+        rms=float(rms),
+        data=fd,
+        e_scaled=e_c,
+        w_scaled=w_c,
+        C_scaled=C_c,
+        n_poles=int(e_c.size),
+        chans=chans,
+        history=hist,
+        psd=None,
+    )
+    out.history["frobenius_after"] = float(frobenius_rms_error(
+        out.evaluate(E), np.asarray(F)))
+    return out
 
 
 def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
@@ -2817,7 +3341,14 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         w_max_raw: Optional[float] = None,
         init_poles=None,
         operator_threshold: int = 3_000_000,
-        tr_solver="lsmr", gram_cut: float = 1e-9) -> FitResult:
+        tr_solver="lsmr", gram_cut: float = 1e-9,
+        residue_cap_mult: Optional[float] = 10.0,
+        cap_guard_target: float = 5e-3,
+        stab_weight: float = 0.0,
+        stab_onset: float = 1.0,
+        opt_ridge: Optional[float] = 1e-3,
+        psd_gain_tol: Optional[float] = None,
+        sep_alpha: Optional[float] = None) -> FitResult:
     """Fit shared-pole Lorentzians to samples of a Hermitian matrix function.
 
     Parameters
@@ -2867,6 +3398,40 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         and the coefficient solve (their coefficients are set to zero).
         0.0 keeps everything. Useful at large p where the level-width
         matrix is effectively sparse.
+    residue_cap_mult : residue-magnitude guard, DEFAULT 10.0 (ON).
+        No residue matrix may exceed residue_cap_mult x the largest
+        sampled level-width norm: ||C_i||_F <= cap * max_n ||F_n||_F
+        (f_scale invariant - the scaled-units rule equals the raw-units
+        statement "residues must not drastically exceed the sampled
+        function"). Enforced AFTER the PSD stage by a guarded
+        drop/clip-re-solve loop (see _cap_residues_core): violator
+        poles are dropped + the kept poles re-solved, or (finisher)
+        the violators are pinned at one COMMON scale cap/max_norm and
+        the free poles re-solved on the residual. A capped state is
+        accepted only if its rms stays under max(1.5x the original
+        rms, 2x target_rms); on total failure the uncapped fit is
+        returned with history['residue_cap_failed'] = True - the cap
+        is never silently enforced at the price of accuracy. Pass
+        None to disable. Tight-target fits (target_rms <= 1e-4) can
+        legitimately hit the failure path - their accuracy is then
+        riding on near-degenerate cancelling residues (measured on
+        Fig2Ag5 tgt1e4: residues 5.6e5x data, cap -> 0.99x data at
+        quad rms 3.7e-4 -> 4.9e-3, T rms 0.0067 -> 0.030; HANDOFF
+        4.16 item 11).
+    EXPERIMENTAL KNOBS (2026-10-13 evidence rounds; default-off,
+    keep off unless reproducing those experiments): stab_weight +
+    stab_onset (consider()/psd-add candidate demotion above an
+    onset ratio - the onset premise FAILED: clean-system
+    trajectory maxima reach 1e5-4.5e8, no separating onset; the
+    penalty is REDUNDANT under opt_ridge); psd_gain_tol (psd-add
+    stopping rule - no effect on the tested trajectories);
+    sep_alpha (pole-separation merges + insertion filter - never
+    fired where the ridge is active). opt_ridge (Tikhonov ridge
+    inside every fit_poles stage AND the final solve) is the
+    validated mechanism: lambda=1e-3 made Ag3Au3 6/6 healthy
+    (vs 0/6) at BETTER frob and cap-clean, killed the Fig2Ag5
+    tgt1e4 pileup at better frob/band, neutral-to-better on the
+    clean systems (HANDOFF 4.16 item 12, stab_spread3.json).
     e_margin : how far beyond the sampling window pole centers may sit,
         as a fraction of the window span. 0.0 (default) confines centers
         to the window: a narrow pole outside the window is invisible to
@@ -3022,7 +3587,24 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         refined["rms"] = _quad_rms(F_psd, F_s, qw)
         return refined
 
+    # cap scale for the stability-aware candidate ranking (scaled
+    # units, same definition as the cap itself)
+    cap_scale = float(np.sqrt(np.sum(np.abs(F_s) ** 2,
+                                     axis=(1, 2))).max())
+    # step 5 (2026-10-13): optional Tikhonov ridge INSIDE every
+    # fit_poles stage of this fit (the varproj derivative stays
+    # exact - the design is ridge-augmented, _varproj_core).
+    # None = the historical behavior EXACTLY (no ridge in the
+    # optimizer stages; the FINAL POLISH alone keeps the fit's own
+    # ridge, as it always did).
+    ridge_opt = float(opt_ridge) if opt_ridge is not None else 0.0
+    ridge_polish = (ridge_opt if opt_ridge is not None
+                    else float(ridge))
     best = None
+    # instrumentation: the max candidate residue ratio reached during
+    # the adaptive loop, whatever the penalty setting - the ONSET
+    # placement knob (tau must sit above every clean system's max)
+    max_cand_ratio = [0.0]
 
     def consider(res):
         # with psd on, candidates are tracked by the rms of their
@@ -3037,6 +3619,28 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         if psd:
             refined = psd_of(res, C_s)
             key = refined["rms"]
+        ratio = 0.0
+        if residue_cap_mult is not None:
+            ratio = float(residue_norms(C_s).max()) / max(
+                float(residue_cap_mult) * cap_scale, 1e-300)
+            if ratio > max_cand_ratio[0]:
+                max_cand_ratio[0] = ratio
+        if stab_weight and residue_cap_mult is not None \
+                and ratio > stab_onset:
+            # STABILITY-AWARE RANKING (2026-10-13 review), ONSET
+            # form: demote candidates only above ratio tau (the
+            # weight form fired on TRANSIENT intermediate candidates
+            # barely above ratio 1 - the census gap is huge, clean
+            # fits sit at ratio ~1 while monsters sit at 1e3+, so
+            # the onset belongs ABOVE every clean system's max
+            # candidate ratio, recorded in history as
+            # max_cand_ratio). key *= 1 + w*(ratio/tau - 1): at the
+            # onset no penalty, a candidate at 100x tau is demoted
+            # 100x. DEFAULT OFF (stab_weight 0.0) per the
+            # multi-start evidence round: the weight form made
+            # Ag3Au3 cap-clean 6/6 (vs 1/6) but moved clean systems
+            # at the T level (nogap pair-T 0.078 -> 0.229).
+            key *= 1.0 + stab_weight * (ratio / stab_onset - 1.0)
         if best is None or key < best["key"]:
             best = dict(rms=rms, res=res, C=C_s, key=key,
                         refined=refined)
@@ -3048,7 +3652,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
     # only seed the next candidate, and the polish below re-refines
     # the winner tightly. The polish keeps the tight defaults.
     LOOSE = dict(ftol=1e-6, xtol=1e-6, gtol=1e-6)
-    res = fit_poles(E_fit, B_fit, centers, widths, sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+    res = fit_poles(E_fit, B_fit, centers, widths, sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt,
                         bounds_fun=bounds_fun, rcond=rcond, max_nfev=nfev_step, **LOOSE)
     rms = consider(res)
     if verbose:
@@ -3062,7 +3666,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         n_before = best["res"]["e"].size
         if pruned[0].size != n_before and pruned[0].size >= 2:
             res_p = fit_poles(E_fit, B_fit, pruned[0], pruned[1],
-                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, bounds_fun=bounds_fun,
+                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt, bounds_fun=bounds_fun,
                                   rcond=rcond, max_nfev=nfev_step, **LOOSE)
             rms_p = consider(res_p)
             if verbose:
@@ -3091,7 +3695,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         centers = np.clip(centers, lo_a[0::2] + 1e-9, hi_a[0::2] - 1e-9)
         widths = np.clip(widths, lo_a[1::2] + 1e-9, hi_a[1::2] - 1e-9)
         res_a = fit_poles(E_fit, B_fit, centers, widths,
-                              sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, bounds_fun=bounds_fun,
+                              sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt, bounds_fun=bounds_fun,
                               rcond=rcond, max_nfev=nfev_step, **LOOSE)
         rms_a = consider(res_a)
         if verbose:
@@ -3105,9 +3709,8 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
     # final polish: one bounded-budget refit from the best poles, then a
     # weighted coefficient solve (real samples + tail anchors)
     res_f = fit_poles(E_fit, B_fit, best["res"]["e"], best["res"]["w"],
-                          sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, bounds_fun=bounds_fun,
-                          rcond=rcond, max_nfev=max_nfev_polish,
-                          ridge=ridge)
+                          sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_polish, bounds_fun=bounds_fun,
+                          rcond=rcond, max_nfev=max_nfev_polish)
     rms_f = consider(res_f)
     if verbose:
         print(f"[fit] final polish: rms {rms_f:.4e} ({res_f['nfev']} nfev)")
@@ -3125,7 +3728,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         e_m, w_m, C_m, n_m = merge_duplicates(e_b, w_b, C_b)
         if n_m == 0 or e_m.size < 2:
             break
-        res_m = fit_poles(E_fit, B_fit, e_m, w_m, sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+        res_m = fit_poles(E_fit, B_fit, e_m, w_m, sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt,
                               bounds_fun=bounds_fun, rcond=rcond,
                               max_nfev=nfev_step, **LOOSE)
         C_rm = unpack_coefficients(res_m["X"], chans, p)
@@ -3151,6 +3754,56 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         e_b, w_b, C_b, rms_b = accept
         n_merged += n_m
 
+    # 4a. SEPARATION CONSTRAINT (2026-10-13 review): merge poles
+    # closer than sep_alpha * max(w_i, w_j) - near-coincident poles
+    # are the ROOT CAUSE of the residue blow-ups (near-parallel
+    # dictionary columns -> near-null LS directions; amplification
+    # ~ 2/alpha per equal-width pair). Guard uses the cap's FLOORED
+    # budget max(2x rms, 2x max(target, cap_guard_target)) - the
+    # plain 2x-rms guard rejects the merge exactly on the tight-
+    # target fits the constraint exists for (measured: the first
+    # implementation never fired on the Fig2Ag5 tgt1e4 cluster).
+    # Off by default - sweep alpha (0.1-0.2) and judge at the T
+    # level before adopting.
+    n_sep_merged = 0
+    if sep_alpha is not None:
+        sep_guard = max(2.0 * rms_b,
+                        2.0 * max(target_rms, cap_guard_target))
+        for _ in range(2):
+            e_p, w_p, C_p, n_p = merge_proximity(e_b, w_b, C_b,
+                                                 alpha=sep_alpha)
+            if n_p == 0 or e_p.size < 2:
+                break
+            res_p2 = fit_poles(E_fit, B_fit, e_p, w_p, sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt,
+                              bounds_fun=bounds_fun, rcond=rcond,
+                              max_nfev=nfev_step, **LOOSE)
+            C_rp = unpack_coefficients(res_p2["X"], chans, p)
+            F_rp = basis_apply(
+                lorentzian_basis(E_s, res_p2["e"], res_p2["w"]), C_rp)
+            rms_rp = _quad_rms(F_rp, F_s, qw)
+            accept = None
+            if rms_rp <= sep_guard:
+                accept = (res_p2["e"], res_p2["w"], C_rp, rms_rp)
+            else:
+                F_po = basis_apply(
+                    lorentzian_basis(E_s, e_p, w_p), C_p)
+                rms_po = _quad_rms(F_po, F_s, qw)
+                if rms_po <= sep_guard:
+                    accept = (e_p, w_p, C_p, rms_po)
+            if accept is None:
+                if verbose:
+                    print(f"[fit] proximity merge (alpha="
+                          f"{sep_alpha:g}) would degrade rms "
+                          f"{rms_b:.4e} > guard {sep_guard:.4e}; "
+                          "keeping pre-merge poles")
+                break
+            e_b, w_b, C_b, rms_b = accept
+            n_sep_merged += n_p
+            if verbose:
+                print(f"[fit] proximity merge (alpha={sep_alpha:g}) "
+                      f"{n_p} pair(s) -> {e_b.size} poles")
+    history["n_sep_merged"] = int(n_sep_merged)
+
     # 4b. local width floor (non-uniform grids): a pole much narrower
     # than the distance from its center to the nearest sample is
     # invisible to every sample and only produces between-sample spikes.
@@ -3171,7 +3824,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                 break
             w_l = np.maximum(w_b, floor)
             res_l = fit_poles(E_fit, B_fit, e_b, w_l,
-                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt,
                                   bounds_fun=bounds_fun, rcond=rcond,
                                   max_nfev=nfev_step, **LOOSE)
             C_l = unpack_coefficients(res_l["X"], chans, p)
@@ -3221,7 +3874,16 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         F_ = basis_apply( Phi_r, C_)
         return C_, _quad_rms(F_, F_s, qw)
 
-    C_s, rms = _final_solve(e_s, w_s, ridge)
+    # objective consistency (2026-10-13 review, item 4): when the
+    # optimizer stages ran at opt_ridge, the FINAL coefficient
+    # solve must minimize the SAME objective the poles were tuned
+    # for - a differently-damped last step can degrade the fit or
+    # reintroduce cancellation. opt_ridge=None keeps the historical
+    # final ridge (the fit's own ridge kwarg).
+    final_ridge = (float(opt_ridge) if opt_ridge is not None
+                   else float(ridge))
+    C_s, rms = _final_solve(e_s, w_s, final_ridge)
+    ridge_used = float(final_ridge)
     # the ridge exists to bound near-null residue excursions; at high pole
     # counts it can also shrink legitimate near-degenerate structure. If
     # it costs more than 2x, redo the final solve without it.
@@ -3232,17 +3894,20 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                 print(f"[fit] ridge degraded final rms {rms:.4e} -> "
                       f"{rms0:.4e}; solving without ridge")
             C_s, rms = C_r0, rms0
+            ridge_used = 0.0
     if n_merged and rms > 4.0 * rms_b:
         if verbose:
             print(f"[fit] merge degraded rms {rms_b:.4e} -> {rms:.4e};"
                   " reverting")
         e_s, w_s = e_b, w_b
         n_merged = 0
-        C_s, rms = _final_solve(e_s, w_s, ridge)
+        C_s, rms = _final_solve(e_s, w_s, final_ridge)
+        ridge_used = float(final_ridge)
     Phi = lorentzian_basis(E_fit, e_s, w_s)
     Phi_real = lorentzian_basis(E_s, e_s, w_s)
     history.update(n_poles=int(e_s.size), rms=float(rms),
-                   n_merged_duplicates=int(n_merged))
+                   n_merged_duplicates=int(n_merged),
+                   ridge_used=float(ridge_used))
 
     psd_info = None
     if psd:
@@ -3260,6 +3925,20 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         # put - no drift back toward the unconstrained optimum) and a
         # short local pole refit; keep whichever projects better.
         n_psd_added = 0
+
+        def _psd_score(rms_in, C_in):
+            # step 4 (2026-10-13): the SAME onset-scored candidate
+            # key as consider() - the psd-add stage is where the
+            # tgt1e4 pileup cluster forms (25 -> 73 poles), so its
+            # ranking/acceptance must not optimize raw rms alone.
+            if stab_weight and residue_cap_mult is not None:
+                r_in = float(residue_norms(C_in).max()) / max(
+                    float(residue_cap_mult) * cap_scale, 1e-300)
+                if r_in > stab_onset:
+                    return rms_in * (1.0 + stab_weight * (
+                        r_in / stab_onset - 1.0))
+            return rms_in
+
         for _ in range(12):
             if (refined["rms"] <= target_rms
                     or e_s.size >= max_poles):
@@ -3269,6 +3948,23 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                 max_insert=max(1, min(4, max_poles - e_s.size)))
             if new_c.size == 0:
                 break
+            if sep_alpha is not None:
+                # SEPARATION AT INSERTION (2026-10-13 review, root
+                # cause): the psd-add pileup inserts at the SAME
+                # residual peak round after round and CREATES the
+                # near-degenerate cluster (measured: every violator
+                # of the Fig2Ag5 tgt1e4 monster is a psd-ADDED
+                # pole). Reject insertions closer than
+                # sep_alpha * max(w) to an existing pole.
+                keep_i = np.ones(new_c.size, dtype=bool)
+                for j in range(new_c.size):
+                    d = np.abs(e_s - new_c[j])
+                    win = np.maximum(w_s, new_w[j])
+                    if np.any(d < sep_alpha * win):
+                        keep_i[j] = False
+                new_c, new_w = new_c[keep_i], new_w[keep_i]
+                if new_c.size == 0:
+                    break
             centers_a = np.concatenate([e_s, new_c])
             widths_a = np.concatenate([w_s, new_w])
             lo_a, hi_a = bounds_fun(centers_a.size)
@@ -3285,7 +3981,7 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
             cands.append(dict(e=centers_a, w=widths_a, X=X_a))
             # variant B: short local pole refit from the same start
             res_b = fit_poles(E_fit, B_fit, centers_a, widths_a,
-                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut,
+                                  sample_weights=sw_fit, B_opt=Bc_fit, operator_threshold=operator_threshold, tr_solver=tr_solver, gram_cut=gram_cut, ridge=ridge_opt,
                                   bounds_fun=bounds_fun, rcond=rcond,
                                   max_nfev=150)
             cands.append(res_b)
@@ -3293,10 +3989,20 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
             for res_a in cands:
                 C_a = unpack_coefficients(res_a["X"], chans, p)
                 refined_a = psd_of(res_a, C_a)
-                if best_a is None or refined_a["rms"] < best_a[1]:
-                    best_a = (res_a, refined_a["rms"], refined_a, C_a)
-            res_a, rms_a, refined_a, C_a = best_a
-            if refined_a["rms"] < refined["rms"]:
+                sc_a = _psd_score(refined_a["rms"], C_a)
+                if best_a is None or sc_a < best_a[1]:
+                    best_a = (res_a, sc_a, refined_a, C_a)
+            res_a, sc_a, refined_a, C_a = best_a
+            sc_cur = _psd_score(refined["rms"], C_s)
+            # stop: the candidate's residues crossed the onset -
+            # further additions would ride cancellation (step 4)
+            if stab_weight and residue_cap_mult is not None:
+                r_a = float(residue_norms(C_a).max()) / max(
+                    float(residue_cap_mult) * cap_scale, 1e-300)
+                if r_a > stab_onset:
+                    break
+            if sc_a < sc_cur:
+                gain = sc_cur - sc_a
                 e_s, w_s, C_s = res_a["e"], res_a["w"], C_a
                 refined = refined_a
                 rms, _ = rms_of(res_a)
@@ -3305,6 +4011,11 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                 if verbose:
                     print(f"[fit] psd add {new_c.size} -> {e_s.size} "
                           f"pairs, psd rms {refined['rms']:.4e}")
+                # stop: marginal score gain per added round below
+                # psd_gain_tol (step 4 stopping rule)
+                if psd_gain_tol is not None and \
+                        gain < psd_gain_tol * sc_cur:
+                    break
             else:
                 break
         history["n_psd_added"] = int(n_psd_added)
@@ -3320,6 +4031,9 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
         refined["applied"] = (psd_force or
                               refined["rms"] <= max(rms * 3.0,
                                                      target_rms * 2.0))
+        # recorded so cap_residues(psd=None) can infer the fit's PSD
+        # character instead of guessing (review 2026-10-13, 5a)
+        history["psd_applied"] = bool(refined["applied"])
         rms_unc = rms
         if refined["applied"]:
             C_s = refined["C"]
@@ -3332,6 +4046,71 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
                   f"{'APPLIED' if refined['applied'] else 'rejected'}"
                   f"{' (forced)' if psd_force else ''}")
 
+    # 4c. FINAL separation enforcement (2026-10-13): the psd-add
+    # stage inserts poles at residual peaks and can CREATE the
+    # proximity clusters that stage 4a - which runs before it -
+    # cannot see (measured: the Fig2Ag5 tgt1e4 monster's pileup
+    # forms in the psd-add growth 25 -> 73 poles). Re-merge on the
+    # FINAL model, re-solve, re-project under the production PSD
+    # guard, accept under the same floored budget as the cap.
+    if sep_alpha is not None:
+        sep_guard = max(2.0 * rms,
+                        2.0 * max(target_rms, cap_guard_target))
+        for _ in range(2):
+            e_p, w_p, C_p, n_p = merge_proximity(e_s, w_s, C_s,
+                                                 alpha=sep_alpha)
+            if n_p == 0 or e_p.size < 2:
+                break
+            Phi_m = lorentzian_basis(E_fit, e_p, w_p)
+            X_m, _ = solve_coefficients(
+                Phi_m, B_fit, sample_weights=sw_fit, rcond=rcond,
+                ridge=float(history.get("ridge_used", ridge)))
+            C_m = unpack_coefficients(X_m, chans, p)
+            rms_m = _quad_rms(basis_apply(
+                lorentzian_basis(E_s, e_p, w_p), C_m), F_s, qw)
+            _4c_psd_applied = False
+            if psd:
+                ref_m = psd_refine(E_fit, B_fit, e_p, w_p, C_m,
+                                   chans, admm_iters=200)
+                rms_pm = _quad_rms(basis_apply(
+                    lorentzian_basis(E_s, e_p, w_p), ref_m["C"]),
+                    F_s, qw)
+                if (psd_force or rms_pm <= max(3.0 * rms_m,
+                                               2.0 * target_rms)):
+                    C_m, rms_m = ref_m["C"], rms_pm
+                    _4c_psd_applied = True
+            accept = None
+            if rms_m <= sep_guard:
+                accept = (e_p, w_p, C_m, rms_m)
+            else:
+                F_po = basis_apply(
+                    lorentzian_basis(E_s, e_p, w_p), C_p)
+                rms_po = _quad_rms(F_po, F_s, qw)
+                if rms_po <= sep_guard:
+                    accept = (e_p, w_p, C_p, rms_po)
+            if accept is None:
+                if verbose:
+                    print(f"[fit] final proximity merge (alpha="
+                          f"{sep_alpha:g}) would degrade rms "
+                          f"{rms:.4e} > guard {sep_guard:.4e}; "
+                          "keeping unmerged poles")
+                break
+            e_s, w_s, C_s, rms = accept
+            # the merged model's PSD state is what the 4c
+            # re-projection decided (or unconstrained if the
+            # merged-as-is variant won); psd_info describes the
+            # OLD model - null it so nothing downstream reads
+            # stale state
+            history["psd_applied"] = bool(
+                _4c_psd_applied and accept[2] is C_m)
+            psd_info = None
+            history["n_sep_merged"] = int(
+                history.get("n_sep_merged", 0)) + n_p
+            if verbose:
+                print(f"[fit] final proximity merge "
+                      f"(alpha={sep_alpha:g}) {n_p} pair(s) -> "
+                      f"{e_s.size} poles, rms {rms:.4e}")
+
     if verbose:
         w_lo = float(bounds_fun(1)[0][1])
         print(f"[fit] done: {e_s.size} pole pairs, sample rms {rms:.4e} "
@@ -3340,6 +4119,78 @@ def _fit_impl(E, F, n_poles: Optional[int] = None, n_init: Optional[int] = None,
               f"{n_merged} merged"
               + (f", {history.get('n_psd_added', 0)} psd-added"
                  if psd else ""))
+
+    if residue_cap_mult is not None:
+        cap_target = max(target_rms, cap_guard_target)
+        # psd_eff: the cap must not silently RE-APPLY PSD that the
+        # pipeline rejected (review fix 1) - a psd_force=False fit
+        # whose PSD model was rejected stays unconstrained inside
+        # the cap stage too.
+        psd_eff = bool(psd and history.get("psd_applied", psd_force))
+        # ridge consistency (review fix 6): re-solve with the ridge
+        # the FINAL solve actually used, not the requested one
+        ridge_eff = float(history.get("ridge_used", ridge))
+        e_s, w_s, C_s, cap_hist = _cap_residues_core(
+            E_s, F_s, E_fit, B_fit, sw_fit, qw, chans, p,
+            e_s, w_s, C_s, cap_mult=residue_cap_mult,
+            psd=psd_eff, psd_force=psd_force, admm_iters=200,
+            target_rms=cap_target,
+            rcond=rcond, ridge=ridge_eff,
+            verbose=verbose)
+        history.update(cap_hist)
+        history["cap_guard_target"] = float(cap_target)
+        history["cap_psd_eff"] = bool(psd_eff)
+        if cap_hist.get("residue_cap_failed"):
+            warnings.warn(
+                f"[fit] residue cap FAILED ({residue_cap_mult}x): "
+                f"residues up to "
+                f"{cap_hist.get('worst_res_over_cap', float('nan')):.3g}x "
+                f"the cap remain; the fit's accuracy rides on "
+                f"near-degenerate cancelling residues "
+                f"(rms_rejected_drop="
+                f"{cap_hist.get('rms_rejected_drop', float('nan')):.4e}, "
+                f"rms_rejected_clip="
+                f"{cap_hist.get('rms_rejected_clip', float('nan')):.4e})")
+        rms = _quad_rms(basis_apply(lorentzian_basis(E_s, e_s, w_s),
+                                   C_s), F_s, qw)
+        history["rms"] = float(rms)
+        history["n_poles"] = int(e_s.size)
+        cap_changed = (cap_hist.get("n_dropped", 0)
+                       + cap_hist.get("n_clipped", 0)) > 0
+        if cap_changed:
+            # the pre-cap refined dict describes the OLD model -
+            # null it so nothing downstream (health gates, callers)
+            # reads stale state (review fix 5)
+            psd_info = None
+        if cap_changed and cap_hist["rms_uncapped"] <= target_rms < rms:
+            history["target_missed_due_to_cap"] = True
+            warnings.warn(
+                f"[fit] residue cap accepted at an accuracy cost: "
+                f"rms {cap_hist['rms_uncapped']:.4e} -> "
+                f"{rms:.4e} crossed target_rms "
+                f"{target_rms:.4e} (history["
+                "'target_missed_due_to_cap'] = True; the sweep "
+                "should score on this flag)")
+        if verbose:
+            print(f"[fit] residue cap ({residue_cap_mult}x): "
+                  f"{cap_hist.get('n_dropped', 0)} dropped, "
+                  f"{cap_hist.get('n_clipped', 0)} clipped -> "
+                  f"{e_s.size} poles, rms {rms:.4e}"
+                  + (" [FAILED - kept uncapped]"
+                     if cap_hist.get("residue_cap_failed") else ""))
+
+    # free pathology diagnostics (2026-10-13 review + census):
+    # amplification is a VULNERABILITY metric (healthy systems show
+    # 1e3-1e7 medians - weak directions exist unexcited; the census
+    # measured this), so it is recorded, not gated; the EXCITATION
+    # gates are the residue cap and the cancellation index.
+    amp, kappa = pole_amplification(E_fit, e_s, w_s, sw_fit)
+    history["max_pole_amplification"] = float(amp.max())
+    history["worst_amp_pole"] = int(np.argmax(amp))
+    history["design_kappa"] = kappa
+    history["cancellation_index"] = float(cancellation_index(
+        E_s, e_s, w_s, C_s))
+    history["max_cand_ratio"] = float(max_cand_ratio[0])
 
     return FitResult(
         e=fd.unscale_centers(e_s),
@@ -3875,8 +4726,9 @@ def fit_boosted(E, F, base_kw, n_res=8, res_kw=None):
     res_kw  : optional overrides for the correction fit.
     Returns a CombinedFit (e/w/C concatenated, injectable).
     """
+    overrides = res_kw or {}
     res_kw = dict(base_kw or {})
-    res_kw.update(res_kw or {})
+    res_kw.update(overrides)
     res_kw["n_poles"] = int(n_res)
     # target_rms=0.0 + no max_poles: the correction fit stays at
     # exactly n_res poles (no adaptive insertion growth).
@@ -3892,6 +4744,57 @@ def fit_boosted(E, F, base_kw, n_res=8, res_kw=None):
     resid = F - r1.evaluate(E)
     r2 = fit(E, resid, **res_kw)
     comb = CombinedFit([r1, r2])
+
+    # COMBINED-MODEL CAP CHECK (review 2.3, verified necessary
+    # 2026-10-13: the Data3 verification sweep showed a cap-FAILED
+    # base part surfacing as a cap-CLEAN CombinedFit - the parts'
+    # flags died in CombinedFit.__init__ and the SUM was never
+    # re-checked). The per-part caps cannot see cancelling clusters
+    # that span the base/residual boundary either, so the cap is
+    # re-enforced on the CONCATENATED model with the same guarded
+    # machinery, and both parts' verdicts are surfaced in the
+    # history the sweep reads.
+    cap_mult = (base_kw or {}).get("residue_cap_mult", 10.0)
+    if cap_mult is not None:
+        # psd_force=True matches the PARTS' policy (both are PSD-
+        # forced, so the sum is PSD by construction; review fix 2:
+        # with psd_force=False a costly variant-A PSD refine could
+        # be skipped and the capped sum come back non-PSD).
+        # ridge: the ridge the BASE part's final solve actually
+        # used (review fix 6 - fit() defaults to 0.05, and the final
+        # solve may have fallen back to 0).
+        out = cap_residues(E, F, comb, cap_mult=float(cap_mult),
+                           psd=True, psd_force=True,
+                           weight=(base_kw or {}).get("weight",
+                                                     "relative"),
+                           ridge=float(r1.history.get(
+                               "ridge_used",
+                               (base_kw or {}).get("ridge", 0.05))))
+        h = out.history
+        comb.history.update({f"cap_combined_{k}": v
+                             for k, v in h.items()})
+        comb.history["residue_cap_failed"] = bool(
+            h.get("residue_cap_failed", False))
+        comb.history["target_missed_due_to_cap"] = bool(
+            h.get("target_missed_due_to_cap", False)
+            or r1.history.get("target_missed_due_to_cap", False)
+            or r2.history.get("target_missed_due_to_cap", False))
+        for part, key in ((r1, "cap_base"), (r2, "cap_res")):
+            ph = getattr(part, "history", None) or {}
+            comb.history[key] = dict(
+                failed=bool(ph.get("residue_cap_failed", False)),
+                fired=((int(ph.get("n_dropped", 0) or 0)
+                        + int(ph.get("n_clipped", 0) or 0)) > 0),
+                worst_over_cap=ph.get("worst_res_over_cap"))
+        if (int(h.get("n_dropped", 0) or 0)
+                + int(h.get("n_clipped", 0) or 0) > 0
+                and not h.get("residue_cap_failed", False)):
+            # enforcement accepted on the combined model: swap in
+            # the capped arrays (raw units, same as comb's)
+            comb.e = np.asarray(out.e)
+            comb.w = np.asarray(out.w)
+            comb.C = np.asarray(out.C)
+            comb.n_poles = int(comb.e.size)
     comb.rms = float(frobenius_rms_error(
         comb.evaluate(E), F))
     return comb

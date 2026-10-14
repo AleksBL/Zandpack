@@ -70,7 +70,7 @@ Python scripts of several example calculations can be found in the examples fold
 ## Contact 
 Users can get in contact with the developer by submitting an issue on the Zandpack Github page. You also direct messages to aleksander.bl@proton.me or the signal chat (scan QR Below). The signal chat has a bot inside that has access to the Zandpack documentation. 
 ## Ongoing development efforts
- - The fitting workflow is going through an overhaul at the moment, as the old fitting work-flow was both somewhat convoluted and inefficient. In the AI_code folder, there is a new module for this which has been crafted using a combination of GLM-5.3 Claude Sonnet 5.5 to implement a much nicer workflow. The nice thing about the fitting part of the method is that it is easy to verify if a fit satisfies the necessary assumptions and if its good or not. 
+ - The fitting workflow is going through an overhaul at the moment, as the old fitting work-flow was both somewhat convoluted and inefficient. In the AI_code folder, there is a new module for this which has been crafted using a combination of GLM-5.3 and Claude Sonnet 5.5 to implement a much nicer workflow. The nice thing about the fitting part of the method is that it is easy to verify if a fit satisfies the necessary assumptions and if its good or not. 
  - Better python interface that wraps the command-line tools in the cmdtools and mpi folders (the wrapper.py module).
 
 <img src="./Zandpack/svg/GroupChat.png" width="100">

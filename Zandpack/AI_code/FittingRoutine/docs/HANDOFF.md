@@ -566,6 +566,19 @@ Zandpack wiring (`refine_sampling.py`, repo root):
   dense first), then a normal fit-based loop, or standalone when the
   fits are too expensive per round (large-channel systems).
 
+TBtrans noise during `resample` rounds (Fig2Ag5 refinement, 2026-10-13
+check): the tbtrans binary prints `ERROR: SSR_sGreen_DOS GSR/GSL
+MATRIX INVERSION FAILED / LAPACK INFO = 1` at the tail end of a run
+(28 lines over 3 rounds). These are BENIGN: the failure is in the
+electrode surface-GF inversion for the DOS output, the process still
+exits 0, and a full NaN/inf scan of the refined pickle (all Gamma
+blocks, both leads) found ZERO non-finite entries — the level-width
+data the fit consumes is unaffected (downstream fits reproduced the
+production numbers bit-for-bit). Not a segfault; nothing to fix in
+the workflow. If an actual SIGSEGV from mpirun/tbtrans shows up on
+another machine, that is an environment issue (MPI library / rank
+count), separate from these LAPACK messages.
+
 CRITICAL import discipline: the repo-root `Zandpack/`,
 `siesta_python/`, `Block_matrices/` folders are INSPECTION COPIES and
 shadow the installed packages as soon as the repo root is on `sys.path`
@@ -1630,6 +1643,15 @@ not opinionated; references point to the sections with the numbers.
 6. SYMMETRIC systems: lead1 by POLE INHERITANCE (fit_fixed_poles;
    ridge=0 default; MATCH the source fit's psd policy) — equal or
    better than lead1's own full fit at ~1/50 cost (guide 8).
+   CAVEAT (Fig2Ag5, 2026-10-13, 3new.py A/B): "symmetric" is a
+   physics statement, not a fit statement. On Fig2Ag5 the inherited
+   lead1 sample rms at lead0's tgt1e4 poles is 0.0164 vs 0.0012 for
+   its own sweep fit, and T rms degrades 0.0053 (own) -> 0.0067
+   (inherit), same winner, same ranking order. Inheritance still
+   halves the runtime and is the right default when the leads are
+   truly identical, but the own-fit variant is worth one evaluation
+   before production: keep the toggle (INHERIT_LEAD1 in 3new.py),
+   don't hard-wire either way.
 7. MULTI-K systems: one GammaSweep per (lead, ik) slice
    (lead_label), equalize_pole_counts across all slices before
    inject_fits (one common NumL is a Zandpack requirement).
@@ -1648,7 +1670,478 @@ not opinionated; references point to the sections with the numbers.
    refinement final fit, p=46; nogap's w30_exact s1) - there is no
    in-flight wall guard yet (open item); when a fit is taking
    abnormally long, stop it and take a different start.
-
+10. PARALLEL SWEEP (Data2/Fig2Ag5/3new_par.py, 2026-10-13): the
+   sweep is embarrassingly parallel at (slice x config x start)
+   granularity; joblib/loky gives a measured 12.2x on 12 workers
+   (48 fits: 1682 s sequential-equivalent -> 137 s wall) with
+   BIT-IDENTICAL results (seeded starts computed in the parent,
+   each fit deterministic, same npz caches/resume; tgt1e4 T rms
+   reproduced to the last digit). N_JOBS=1 falls back to a plain
+   loop. The parent assembles the health-gated picks and loads the
+   winner fits from the caches; evals also parallelize (16 configs
+   in 30 s). OMP_NUM_THREADS=1 per worker is inherited from the
+   parent env - never trade process-parallel for BLAS threads.
+    THE LOKY/siesta_python TRAP (the "joblib doesn't know
+    siesta_python is installed" failure, now root-caused - TWO
+    vectors, both fixed in 3new_par.py):
+    (a) in-process: unpickling R imports
+    Zandpack.TimedependentTransport and siesta_python, whose
+    module bodies APPEND their own package dirs to sys.path. loky
+    serializes the parent's sys.path into the workers' PYTHONPATH,
+    so workers are BORN with .../siesta_python/siesta_python/ on
+    their path - its bare siesta_python.py shadows the installed
+    package and the first RX unpickle dies with "'siesta_python'
+    is not a package". FIX: snapshot sys.path before the R loads
+    and drop everything the loads appended before the first
+    Parallel call.
+    (b) pre-polluted parent (hit at XAg5, 2026-10-13): a parent
+    whose path was ALREADY poisoned before main() ran - e.g. an
+    interactive IPython/Jupyter session that had imported Zandpack
+    or loaded R earlier (the self-appended dirs are then inside the
+    snapshot, so fix (a) keeps them; the parent itself works
+    because siesta_python is already correctly in ITS sys.modules,
+    but the workers are fresh interpreters). FIX: _purge_siesta_
+    shadow() at the top of EVERY worker task - drop sys.path
+    entries that ARE the inner siesta_python dir (basename
+    'siesta_python' + a bare siesta_python.py inside) and clear a
+    poisoned sys.modules['siesta_python'] (module without
+    __path__). Verified no-op on a clean path.
+    Also proven (fresh-cache rerun at Fig2Ag5): fresh fits do NOT
+    poison workers - the 48 fresh fits reproduced all eval numbers
+    bit-for-bit, so the trap is purely a sys.path/PYTHONPATH issue,
+    never a fit-path issue.
+    3new_par.py also imports the fit modules via the installed
+    package (from Zandpack.AI_code.FittingRoutine import
+    AI_fit_base/AI_fit_sweep) instead of a repo-root sys.path
+    insert - the package __init__ registers the flat aliases, so
+    flat-name caches still unpickle. Package-import discipline is
+    used in 3new_par.py ONLY for now; 3new.py still uses the
+    repo-root insert (both verified working).
+    EXTENDED SWEEP RESULTS (16 configs x 3 starts, inherit mode,
+    matched eta): new Fig2Ag5 winner is ef05 (eta_floor_mult=0.5):
+    T rms 0.00620 vs tgt1e4's 0.00668, at n_eq 68, min_eig 0.0
+    (gate boundary) and FAR healthier Lorentzian-Gamma eigenvalues
+    (max ~212 vs tgt1e4's ~9e7 cancelling residues). eta_floor_mult
+    BELOW 1 was never tried before ("never above 1" only banned the
+    high side) - 0.5 is now the Fig2Ag5 default candidate. Knob
+    confirmations: tgt1e5 == tgt1e4 == mx150_t4 exactly (targets
+    <= 1e-4 equivalent, the 150 cap not binding at 81 poles);
+    pf1 == base (psd_force inert here); ni48 (n_init=48) second at
+    0.00648. Ranking + per-config rows:
+    sweep_3new/results_eval_par.json, method_summary_3new_par.json.
+11. RESIDUE CAP + TOTAL-PSD SANITY (Fig2Ag5, 2026-10-13; scripts
+    psd_sanity_3new_par.py, cap_validation_3new.py, cap_tlevel_3new.py
+    + their .json artifacts in Data2/Fig2Ag5).
+    WHAT THE ZANDPACK PRINT MEASURES: get_propagation_quantities
+    (TimedependentTransport.py ~873) builds Gl_eig from the fitted
+    container DENSIFIED PER POLE (the assert Gl_eig.shape[2] ==
+    NumL is the tell). "Maximum/Minimum of eigenvalues of Lorentzian
+    Gammas" is the spectrum of the INDIVIDUAL residue matrices C_i,
+    NOT of the assembled Gamma. A negative minimum there means a
+    non-PSD residue, not a non-PSD total; judge the total by
+    evaluating the sum on the real window + padded grids + the
+    Fermi-pole contour points (psd_sanity_3new_par.py does all
+    three; its stage D reproduces the container-side numbers).
+    SUITE VERDICT (16 lead0 winners + inherit lead1 + eq pairs +
+    both production pickles): the par winner ef05 is CLEAN on both
+    user criteria - max ||C_i||_F = 0.51x max||F_sample||, assembled
+    Gamma PSD on the window, +-2/5/10 pads AND at the Fermi poles
+    (min ~1e-15, max +11); tmp_fit_3new_par.gz verified identical
+    to the recomputed pair. The PATHOLOGICAL configs are exactly
+    target_rms<=1e-4: tgt1e4/tgt1e5/mx150_t4 have residues 5.6e5x
+    data (pole cluster at E~3.06, C eigenvalues -1.65e8/+6.5e7),
+    assembled real-axis min eig -0.052, Fermi-pole min -3.2e-4.
+    The sequential 3new.py WINNER was tgt1e4, so tmp_fit_3new.gz
+    (the older production pickle) IS the monster fit - the +-1e8
+    tail prints come from it, not from the par winner.
+    WHY THE GATE MISSED IT: (a) psd=True + psd_force=False rejects
+    the PSD-refined model when its rms exceeds max(3x uncstrained,
+    2x target_rms) - for these fits the guard REJECTS PSD and keeps
+    the monster residues; (b) is_healthy's min_eig is the SAMPLE
+    grid only (-0.052 > -1) and rms 0.0042 < 0.05, so both pass.
+    THE RESIDUE CAP (AI_fit_base.py, validated same day): knob
+    residue_cap_mult - DEFAULT 10.0 = ON since 2026-10-13 (user
+    decision: capped behavior is the default; pass None to
+    disable). Verified default-on: both regression suites pass
+    with every number IDENTICAL to the default-off run (no-op on
+    healthy fits), a plain default fit() carries the cap history
+    keys (n_dropped=0, n_clipped=0), and ef05 frob is
+    bit-identical under cap.
+    Enforces ||C_i||_F <= cap_mult x max_n ||F_n||_F (f_scale
+    invariant). Standalone: cap_residues(E, F, fit, ...) on any
+    cached FitResult. Guard semantics: a capped state is accepted
+    only if rms <= max(guard_mult x original rms, 2 x target_rms)
+    - the same absolute floor as the production PSD accept-guard
+    (without the floor the tight-target fits can NEVER be capped:
+    dropping the 24-pole violator cluster costs 13x rms but is
+    still a good fit by suite standards). REVIEW FIX (2026-10-13,
+    point 2.1): the IN-FIT cap stage floors the guard budget at
+    _CAP_GUARD_TARGET = 5e-3 (fit's default target), NOT the
+    calling config's aspiration - passing tgt1e4's own
+    target_rms=1e-4 gave guard 5.5e-4 and rejected every capped
+    state on exactly the fits the cap exists for, while the
+    standalone validation (target_rms=5e-3 default) accepted.
+    Verified on a FRESH tight-target fit of the Fig2Ag5 lead0
+    slice through fit() with defaults: violators at 56,339x the
+    cap, cap ACCEPTED (24 dropped -> 49 poles, residues <= 0.99x
+    data, rms 4.92e-4 -> 5.43e-3, no failure; cap_infit_verify.py).
+    A residue_cap_failed now also emits a LOUD warnings.warn with
+    the worst violator ratio and both rejected-candidate rms
+    values; history records guard_mult and worst_res_over_cap.
+    Forced-violator regression: tests/AI_fit_test_cap.py
+    SECOND REVIEW ROUND (2026-10-13, same day - points 1-5):
+    (1) BAND GUARD (the compensating safeguard for the floored
+    guard, now implemented): _cap_residues_core additionally splits
+    the window into n_bands=8 equal-width bands and accepts a
+    candidate only if EVERY band stays under
+    max(band_guard_mult x its own uncapped rms, the global guard);
+    default band_guard_mult=10 (exposed in cap_residues). Rejection
+    records band_rejected_drop/clip = worst_band_ratio, the band's
+    rms before/after and its center. Effect on the pathological
+    class: tgt1e4 cap=10 is now REJECTED (drop cost 4.93e-3 passes
+    the global guard 1e-2 but the damaged band degrades 32.9x >
+    10; the clip variant then fails globally at rms 1.53) -> the
+    uncapped fit is kept + loudly warned; cap=100 still ACCEPTS
+    (fewer poles dropped, band ratios under 10). In-fit verified on
+    a fresh tight-target fit: same outcome (rejected_drop 5.43e-3,
+    band REJECT, warning fired). The default policy is therefore:
+    CAP when the LOCAL cost is acceptable, FLAG loudly otherwise -
+    "never silently enforced at the price of accuracy" is accurate
+    again. (2) target_missed_due_to_cap: both fit paths set
+    history['target_missed_due_to_cap'] = True + warnings.warn
+    when the cap CHANGED the fit and the final rms exceeds the
+    config's own target_rms (sweep scoring can filter on it).
+    (3) refine_loop oscillation: NOT possible in the production
+    configuration - derivative_only=True is explicitly FIT-FREE
+    (insertions from the sampled function's derivative, no fit
+    poles involved; refine_loop docstring). The fit-based mode
+    (derivative_only=False) DOES feed fits into the proposals and
+    is the watch-item. (4) DISTRIBUTION over ALL existing caches
+    (validation/cap_distribution.py -> cap_distribution.json):
+    600 caches across 8 systems; violators in exactly 4, all
+    Fig2Ag5 (tgt1e4/tgt1e5/mx150_t4 lead0 - the SAME fit under
+    three config names, 5.6e5x cap, band-rejected as above - and
+    tgt1e4 lead1 s1, 8.2e4x cap, ACCEPTED at rms cost x8.95,
+    frob 1.2e-3 -> 1.8e-2). Every other system (Ag3Au3,
+    Ag3Au3_gap, agnr, nogap_Ag5, spinpol_ag5, zgnr, zgnr_spin,
+    640+ healthy caches incl. Fig2Ag5's own remaining winners):
+    ZERO violators - the default cap is a pure no-op. The Ag3Au3
+    +-1e8 tail prints do NOT violate the cap: those residues sit
+    within 10x of Ag3Au3's own (large) data scale - the rule is
+    relative, as intended. (5) small fixes done: psd_applied now
+    recorded in _fit_impl history too, cap_residues(psd=None)
+    infers from history (warns + assumes True when unrecorded);
+    cap_guard_target is an explicit fit()/fit_fixed_poles()
+    argument (default 5e-3, recorded in history); the cap test
+    suite gained test_guard_boundary - a hand-built near-duplicate
+    pair whose tiny net is REAL data signal, tuned so the drop
+    cost PASSES the global guard (7.76e-3 <= 1e-2) but is
+    rejected by the BAND guard (ratio 594x) - the exact case a
+    global-only threshold cannot see. All suites pass (synthetic,
+    model-form, cap).
+    THIRD REVIEW ROUND (2026-10-13, pre-sync fixes - all implemented,
+    suites re-passed): (1) psd_eff: the in-fit cap now passes
+    bool(psd and history['psd_applied']) instead of the requested
+    psd flag, so the cap cannot silently RE-APPLY PSD that the
+    pipeline rejected (a psd_force=False fit stays unconstrained
+    inside the cap). (2) fit_boosted's combined cap check is now
+    psd_force=True, matching the parts (both PSD-forced; the sum
+    must stay PSD). (3) fit_fixed_poles caps with allow_drop=False
+    (clip-only): the fixed-pole path exists for POLE INHERITANCE -
+    dropping poles per block silently breaks the shared-pole
+    promise. (4) target_missed_due_to_cap now requires
+    rms_uncapped <= target_rms < rms (crossed BY the cap) - before,
+    a fit that had already missed its target was mislabeled.
+    (5) stale state: FitResult.psd (the pre-cap refined dict) is
+    NULLed whenever the cap changed the model; cap_residues now
+    carries the INPUT history forward (dropping stale cap
+    verdicts) and sets psd_applied, so cap(cap(fit)) is idempotent
+    and un-warning; comb.rms is recomputed after any combined-cap
+    swap. (6) ridge consistency: _fit_impl records
+    history['ridge_used'] (the FINAL solve's effective ridge - it
+    falls back to 0 when the ridge costs >2x rms) and the cap
+    re-solves with THAT, not the requested ridge; fit_boosted's
+    combined check uses the base part's ridge_used (default 0.05,
+    fit()'s own default - not 0.0). UNRELATED BUG fixed in
+    fit_boosted: res_kw was REBOUND before use
+    (res_kw.update(res_kw or {})) - user overrides were silently
+    ignored; now saved to `overrides` first. Deferred smaller
+    points: deduplicating the two ~45-line cap call sites and the
+    tail-anchor grid into shared helpers (anchor patterns verified
+    IDENTICAL between fit_fixed_poles and cap_residues; the in-fit
+    cap reuses the fit's own E_fit/B_fit/sw_fit, so no mismatch is
+    possible there); the band-guard floor is rms_guard (>= 1e-2),
+    so a band at 1e-4 may degrade to 1e-2 and pass - documented,
+    tighten if it ever bites; the residual part's per-part cap runs
+    at the RESIDUAL data scale (stricter than the combined check -
+    kept, failures do not propagate to the CombinedFit flag).
+    (deterministic hand-built cancelling cluster; post-condition,
+    idempotence, failure path returns the input unchanged,
+    scale invariance s=7 with poles matching) - ALL PASS; the two
+    existing suites still pass unchanged. Review open items
+    (acknowledged, not yet implemented; the band-level guard from
+    this list is DONE - see the second-round paragraph):
+    combined-model cap check for
+    fit_boosted (per-part caps cannot see cross-part cancelling
+    clusters); fixed-pole fits may DROP inherited poles under
+    the cap (prefer clip for the inherit path or pass
+    residue_cap_mult=None for lead1); PSD-cone-plus-Frobenius-ball
+    projection inside psd_solve_admm as the cleaner variant-B
+    replacement; ridge-only prevention; provenance (fit kwargs +
+    code version in every cache). On total failure the
+    input is returned unchanged + history['residue_cap_failed'] -
+    the cap is never silently enforced. Variant A: drop violators +
+    re-solve kept poles (PSD-refined under the production guard);
+    variant B finisher: scale ALL violators by ONE COMMON factor
+    cap/max_norm (per-pole clipping destroys the intra-cluster
+    cancellation - measured rms 24 - so it is banned), pin them,
+    re-solve free poles, project_psd, hard-clip leftovers.
+    Two bugs were found and fixed during validation: the clip
+    path subtracted a dense (N,p,p) model from the packed (n_ch,N)
+    channel matrix (now pack_responses(...)); the per-pole clip
+    (now common-lambda, see above).
+    MEASURED (Fig2Ag5 tgt1e4): cap=10 drops 24 -> 57 poles, all
+    residues <= 0.99x data, assembled Gamma PSD EVERYWHERE (real
+    min +1e-18, Fermi min +2.6e-17), quad rms 3.7e-4 -> 4.9e-3,
+    frobenius 1.6e-3 -> 3.4e-2. cap=100: 19 -> 62 poles, frob
+    2.9e-2. T level (evaluate_pair, matched eta 2e-2, inherit
+    lead1): capped tgt1e4 T rms 0.0299 (cap10) / 0.0264 (cap100)
+    vs uncapped 0.00668 and winner ef05 0.00620 - i.e. the
+    tgt1e4 T-level advantage WAS the pathological residues; capped
+    it is a mediocre-but-SAFE fit. CONCLUSION: for production keep
+    ef05 (clean + best T). The cap's roles: (1) safety knob -
+    residue_cap_mult=10 in fit()/fit_fixed_poles when a
+    tight-target config wins a ranking; (2) diagnostic - a fit
+    whose accuracy dies under the cap (residue_cap_failed, or the
+    rms_rejected_drop/clip history entries) was riding on
+    unphysical residues; (3) the health gate should eventually
+    evaluate the ASSEMBLED Gamma on padded + Fermi grids (open
+    item) instead of the sample grid only.
+    RESOLVED (default-on): pole_inherit_fit forwards to
+    fit_fixed_poles, whose cap default now covers inherited lead1
+    fits automatically (cap_tlevel_3new.py additionally runs
+    cap_residues explicitly; with the default on, the explicit call
+    is redundant but harmless). GATE GAP ANALYSIS (merge_duplicates vs the
+    monster cluster): merge_duplicates ran and merged 3/81 but the
+    +-1e8 cluster escapes because the closest pair (29,34) fails
+    BOTH criteria - |dw|=0.0422 > 5%*mean(w)=0.0103, and the
+    pairwise cancellation ratio 0.43 >> 0.15; the cancellation is
+    CLUSTER-WIDE, not pairwise. Retuning the thresholds was tried
+    before and failed (50% ate legitimate close poles, 30x rms) -
+    the cap, not merge_duplicates, is the right tool here.
+12. EVIDENCE ROUND (2026-10-13, user-directed: no new features,
+    measure what exists). PREVENTION MACHINERY now in the code:
+    stab_weight (DEFAULT 1.0) - consider() demotes adaptive-loop
+    candidates whose residues exceed the cap (key *= 1 + w*(ratio-
+    1) above ratio 1; zero below); sep_alpha (DEFAULT None, opt-in)
+    - merge_proximity (poles closer than alpha*max(w_i,w_j) merged)
+    at stage 4a (guarded refit, floored guard) + 4c (final model,
+    after psd-add - the stage where the tgt1e4 pileup forms) +
+    insertion filter in psd-add; pole_amplification/cancellation_
+    index/design_kappa recorded per fit; fit_health carries envelope
+    + cancellation_index, is_healthy gates envelope (default 5.0,
+    census-anchored) and optionally cancellation.
+    CENSUS (validation/fit_census.json, 600 caches, all eras - the
+    alias fix was needed: the FIRST cap_distribution silently failed
+    to unpickle 534/600 caches under the old 'AI_fit' module name):
+    the Ag3Au3 FAMILY is pervasively pathological (median cap ratio
+    1e5, median cancellation index 2.2e5, singular designs at p90);
+    spinpol/zgnr have pathological minorities (p90 9.2e5 / max 2e9);
+    genuinely clean: nogap (max 0.99), zgnr_spin (0.97). AMPLIFI-
+    CATION IS A VULNERABILITY METRIC, NOT A VERDICT: healthy systems
+    show 1e3-1e7 medians (weak directions exist unexcited) - gate on
+    EXCITATION (residue cap, cancellation index), record amplifi-
+    cation. Envelope on the padded grid is mostly tame (monsters
+    cancel on-window) - kept as an off-window-growth gate, not the
+    primary detector; the per-pole cap STAYS because Zandpack
+    propagates per-pole quantities (Gl_eig is per-pole).
+    STEP 1 BIT-IDENTITY (validation/bitidentity_check.py): the cap
+    default is a verified BIT-IDENTICAL NO-OP on clean fits (A2==B0
+    bitwise on agnr); stab_weight=1.0 is NOT a trajectory no-op -
+    it steers whenever ANY intermediate candidate exceeds the cap,
+    and on agnr c0 the steering cost 10.7x frob at that start
+    (1.5e-2 -> 1.6e-1). The penalty is zero below ratio 1
+    (code-verified) - the divergence is the steering working;
+    whether the DEFAULT is right is what the multi-start spread
+    decides (validation/stab_spread.py: 4 systems x stab {0, 0.3,
+    1, 3} x 6 seeded starts, full scoring incl. T level).
+    0/0 regression test added (zero-residue duplicate poles through
+    merge_proximity + cap; found and fixed a real NaN->LAPACK crash).
+    MULTI-START SPREAD (validation/stab_spread.py/.json - 4 systems
+    x stab {0, 0.3, 1, 3} x 6 seeded starts, 96 fits, full scoring,
+    winner pairs via a FIXED lead1-inherit protocol):
+    Ag3Au3:  stab0 healthy 0/6, cap-clean 1/6 (median cap 9.6e4);
+    stab>=0.3 cap-clean 6/6, healthy 2/6, winner frob 8.7e-2,
+    quad 4.3e-2 (PASSES the 0.05 gate), held-out 5.2e-2, T 0.0597
+    (the stab0 monster's T 0.0374 rides cancelling residues, canc
+    19348, unhealthy 0/6). THE PENALTY MAKES Ag3Au3 FITTABLE.
+    spinpol: 4/6 -> 5/6 healthy; winner T 0.0085 -> 0.0130.
+    zgnr:    6/6 healthy everywhere; T 0.105 -> 0.110 (mild).
+    nogap (clean control): 6/6 everywhere, fits nearly identical
+    (frob 1.64e-2 -> 1.70e-2) BUT the selected pair's T moved
+    0.0776 -> 0.2294 - the penalty steered the winner to a start
+    whose pair-T is worse under the inherit protocol.
+    EFFECTS SATURATE at stab 0.3 (0.3 == 1.0 == 3.0 everywhere).
+    GO/NO-GO VERDICT (user's rule): the penalty makes Ag3Au3
+    cap-clean in most starts (6/6) but MOVES CLEAN SYSTEMS at the
+    T level -> NOT the default; stab_weight DEFAULT REVERTED TO 0.0
+    (opt-in, docstring carries the evidence). NEXT per the rule:
+    steps 4-5 - PSD-add stage scoring + stopping rules (where the
+    tgt1e4 cluster forms; the 2-4 eV band is the success metric)
+    and ridge INSIDE fit_poles (every stage, derivative stays
+    exact), compared against the penalty and against both combined;
+    then re-baseline Ag3Au3 + solver comparison; Data3 verification
+    runs only after that. Deferred until the multi-start evidence
+    shows remaining failures: group-lasso, RRQR, knee-stopping,
+    nonlinear polish. Cap and guard floors FROZEN until step 3's
+    accuracy comparison is trustworthy (now recorded in
+    stab_spread.json).
+    EVIDENCE ROUND 2 (2026-10-13 evening; user-directed onset/
+    cap-curve/step4-5 program). (1) ONSET PLACEMENT FAILED - the
+    premise does not hold: consider()-trajectory maxima in CLEAN
+    systems reach 1e5-4.5e8 (nogap 3e7, zgnr 4.5e8 - despite all-
+    clean finals), overlapping Ag3Au3's monster trajectories
+    completely (stab_spread2.json, max_cand_ratio instrumentation,
+    now recorded in every fit history). The census's 'clean ~1 vs
+    monsters 1e3+' gap is a FINAL-state property; no separating
+    onset tau exists. Onsets 30/100/1000 all steer clean systems;
+    on30 is merely the best Ag3Au3 search heuristic (healthy 3/6,
+    winner frob 7.1e-2, T ownfit 0.0246 vs monster 0.00697).
+    (2) T-PROTOCOL CHECK (user-confirmed): the Ag3Au3 family is
+    NOT symmetric - pole inheritance must be OFF there; the
+    inherit protocol inflated Ag3Au3 T 5.4x (ownfit 0.00697 vs
+    inherit 0.0374). Own-fit lead1 is the protocol for that
+    family. Same-start-both-leads (this experiment's ownfit) is
+    still not the production protocol (per-lead independent
+    winners) - within-setting comparisons only.
+    (3) CAP CURVE (ag3au3_cap_curve.json): a CLIFF, not a knee -
+    with on30 steering, caps 3..1000 all give T ~0.051 (all
+    winners already bounded; the cap value does not bind); the
+    one better point cap=10 (T 0.0409) is winner-basin luck.
+    (4) STEPS 4-5 IMPLEMENTED: psd-add now ranks/accepts
+    candidates by the same onset-scored key as consider() and
+    stops when the candidate ratio crosses the onset or the
+    marginal gain < psd_gain_tol (new knob, default None);
+    opt_ridge (new knob, default None = EXACT historical behavior
+    incl. the polish's own ridge) threads a Tikhonov ridge
+    through EVERY fit_poles stage (the varproj derivative stays
+    exact - the design is ridge-augmented).
+    (5) THE RIDGE RESULT (step45_experiment.json +
+    stab_spread3.json, 4 systems x 3 settings x 6 starts):
+    opt_ridge=1e-3 ALONE dominates the onset penalty on every
+    axis. Fig2Ag5 tgt1e4 c0: frob 1.30e-3 BETTER than the
+    monster's 1.87e-3, cap-clean, 2-4 eV band 5.9e-4 BETTER than
+    the monster's 1.1e-3 - the pileup never forms (32 psd-added
+    vs 48), NO rms jump. Ag3Au3 m1_w03 c0: frob 2.41e-2 BETTER
+    than the monster's 3.45e-2, cap 7.1. MULTI-START: Ag3Au3 6/6
+    healthy (vs 0/6 off, 2-3/6 on30), winner frob 5.33e-3 (3x
+    better than the monster), T ownfit 0.01006 (1.4x the
+    monster's 0.00697); spinpol 4/6 -> 6/6 healthy; zgnr/nogap
+    neutral-to-better on frob medians; nogap winner T BETTER
+    (0.195 -> 0.119); spinpol winner T +55% (0.0083 -> 0.0128 -
+    basin reshuffle, the one T regression). THE ONSET PENALTY IS
+    REDUNDANT UNDER THE RIDGE: on30+ridge == ridge bit-for-bit in
+    every cell (candidate ratios stay below 30). psd_gain_tol
+    changed nothing on the tested trajectories. RECOMMENDATION
+    (pending user sign-off): opt_ridge=1e-3 as the production
+    default; stab_weight stays 0 (redundant); cap + band guard
+    stay as the backstop; then step 7 (Ag3Au3 re-baseline +
+    exact/lsmr/gram on healthy fits) and Data3. Remaining open:
+    per-system lambda sensitivity (1e-4/1e-2 both ~10x worse
+    than 1e-3 on Fig2Ag5 c0; Ag3Au3 untested at other lambdas);
+    spinpol's T regression under the ridge; the zgnr T protocol
+    floor (this experiment's protocol gives zgnr ~0.11-0.13 in
+    ALL settings incl. off - protocol-level, not setting-level).
+    EVIDENCE ROUND 3 (2026-10-13 night; reviewer items 1-7,
+    then the user's go-ahead): ITEM 4 FIXED IN CODE - when
+    opt_ridge is set, the FINAL coefficient solve uses the SAME
+    ridge the poles were tuned for (final_ridge; opt_ridge=None
+    keeps the historical final-ridge behavior); ridge_used=0.001
+    verified in every ridge run. ITEM 7: the experimental knobs
+    (stab_weight/stab_onset, psd_gain_tol, sep_alpha) are marked
+    EXPERIMENTAL default-off in the docstring. LAMBDA SWEEP
+    (lambda_sweep.json: 8 systems incl. Ag3Au3_gap, zgnr_spin,
+    Fig2Ag5, agnr x {3e-4, 1e-3, 3e-3} x 6 starts, 144 fits,
+    sigma_max recorded): 3e-4 FAILS the Ag3Au3 family (healthy
+    2-3/6, residues 22-27x data); 1e-3 and 3e-3 are 6/6 healthy
+    on ALL 8 systems. sigma_max varies only 4.5-20, so absolute
+    1e-3 = rel-lambda 5e-5..2.2e-4 - within one order of
+    magnitude everywhere (a relative lambda remains an option,
+    not a necessity). Winner T (ownfit): Ag3Au3 0.0184/0.0089/
+    0.0094, gap 0.0044/0.00355/0.00351 (BEATS the stored monster
+    baseline 0.00364), spinpol 0.0139/0.0129/0.0124, zgnr
+    0.120/0.111/0.129, zgnr_spin 0.318/0.270/0.283, nogap
+    0.070/0.132/0.078 (nogap prefers 3e-4 - the one per-system
+    tweak candidate), Fig2Ag5 0.0077/0.0087/0.0075, agnr
+    0.138/0.121/0.122. 1e-3 = the only lambda at/next-to-best
+    health everywhere with T within ~25% of each system's best.
+    ITEM 6 SYMPTOM TEST (ridge_symptom_test.json): the ORIGINAL
+    +-1e8 pathology is GONE at its source - per-pole eigenvalue
+    max +150.7 on Fig2Ag5 (data scale 304; was +-1.9e8) and
+    +24.4 on Ag3Au3 (data scale 6.2); residues 0.85x and 7.1x
+    data (both under the 10x cap); Fig2Ag5 tgt1e4 ridge pair
+    T rms 0.006143 - BETTER than the uncapped monster (0.006682)
+    and tied with the suite winner (0.006196). (The full
+    get_propagation_quantities call fails inside the installed
+    Zandpack copy on an unrelated attribute error - the print's
+    CONTENT is the per-pole eigenvalues, measured directly.)
+    CAP-METRIC CLARIFICATION (reviewer item 2): experiments
+    report max||C_i||/data_scale; the production cap is 10x
+    data, so 7.1 or 1.07 means UNDER the cap (0.71x / 0.107x of
+    it), not a violation. DEFAULT ADOPTED (user go-ahead):
+    opt_ridge=1e-3 is now the fit() default; the exact-count
+    synthetic tests and the cap boundary test pin opt_ridge=None
+    (they test solver exactness / hand-tuned guard constants,
+    not the policy default). All three suites PASS with the new
+    default. REMAINING: step 7 (Ag3Au3 re-baseline + exact/
+    lsmr/gram comparison on healthy ridge fits) and the Data3
+    verification runs; nogap's 3e-4 preference (per-system
+    opt_ridge tweaks); the installed Zandpack copy needs the
+    sync (AI_fit_base.py has diverged massively).
+    DEFAULT-RUN VERIFICATION (2026-10-14, Data3/default_sweep.py
+    -> default_runs/): all 8 systems under the production
+    defaults, 6 starts, tuned configs, health-gated winners,
+    per-system lead protocol, 3-panel plots (T + DOS + Gamma
+    norm vs sampled reference) per system. RESULTS (best config
+    T rms vs baseline): Ag3Au3 0.00441 [lsmr] vs 0.00623
+    monster (x0.71 OK); Ag3Au3_gap 0.00344 vs 0.00364 (OK);
+    spinpol_ag5 0.00808 vs 0.0082 (OK); Fig2Ag5 0.006143
+    [tgt1e4] vs 0.006196 (OK); agnr 0.02211 [tgt1e4] vs 0.0544
+    (x0.41 OK); zgnr 0.1148 [m1_forc_w03_noridge] vs 0.0891
+    (x1.29 GAP); zgnr_spin 0.1391 [m5_forc_w05_noridge] vs
+    0.1309 (x1.06 OK); nogap_Ag5 0.0685 [w03_mx90_noridge] vs
+    0.0492 mixed-pair baseline (x1.39; NOTE the historical
+    single-config gram-refined level was 0.0684 - noridge
+    EXACTLY reproduces it; 0.0492 was the MIXED per-lead pair,
+    which remains the custom option).
+    THE PATTERN (key finding of the default run): the ridge is
+    a treatment for the CANCELLING-CLUSTER pathology - the
+    pathological family (Ag3Au3/Ag3Au3_gap 6/6 healthy at 1e-3
+    vs 0-2/6 off, Fig2Ag5 tgt-class, spinpol minority, agnr)
+    NEEDS opt_ridge=1e-3, while the ALWAYS-CLEAN census systems
+    (nogap cap max 0.99, zgnr_spin 0.97, zgnr winners clean) do
+    NOT have the disease and pay T for the cure: zgnr_spin 0.212
+    at ridge -> 0.139 at noridge; nogap 0.106 -> 0.0685; zgnr
+    0.120 -> 0.115. PER-SYSTEM LAMBDA RULE (the custom setting):
+    pathological family opt_ridge=1e-3; clean systems
+    opt_ridge=None (a principled auto-selector - the smallest
+    lambda keeping the residue ratio under the cap, effectively
+    0 for clean basins - is the natural follow-up, NOT
+    implemented). REMAINING GAPS: zgnr x1.29 (all configs
+    0.115-0.49; the stored baseline was a 2026-10-10 specific
+    basin; needs its own basin search or the wide-window fit);
+    nogap x1.39 vs the MIXED-PAIR baseline only (matches the
+    historical single-config level exactly; the mixed-pair
+    recipe from README_gram_refined is the fix if 0.0492
+    matters). SOLVER COMPARISON (step 7, Ag3Au3 under the
+    ridge): gram 0.00446 / lsmr 0.00441 / exact 0.00447 - ALL
+    THREE SOLVERS NOW AGREE on healthy ridge fits; the
+    historical exact-vs-gram gap was a monster-basin artifact;
+    Ag3Au3 re-baseline is 0.0044. HARNESS LESSONS: loky workers
+    must NOT print (warnings to an undrained PTY block the whole
+    pool - suppress + file-log; default_runs/tasklog.txt);
+    multi-k systems need pair assembly over ALL (lead, ik)
+    slices. Plots: Data3/default_runs/<sys>.png x8.
 
 ## 5. How to run
 
@@ -1667,7 +2160,11 @@ python3 plot_examples.py               # detail figures (refits, ~2-4 h)
 python3 performance_figure.py          # aggregate overview (fast, reads JSON)
 python3 run_fit_bench.py <example> [--psd] --json out.json
 
-# basin-spread round (4.13; the machine is ONE core, run sequentially):
+# basin-spread round (4.13; run sequentially - each script is a
+# single-process OMP=1 job. NOTE: the machine is NOT one core -
+# `nproc` reports 1 only because it honors OMP_NUM_THREADS; the
+# real core count is 18 (os.sched_getaffinity), see the parallel
+# sweep item in 4.16 for the 12.2x loky speedup):
 OMP_NUM_THREADS=1 python3 validation/11_gram_basin_spread/rsse_spread.py      # ~8 min
 OMP_NUM_THREADS=1 python3 validation/11_gram_basin_spread/ag3au3_spread.py    # ~2 h
 OMP_NUM_THREADS=1 python3 validation/11_gram_basin_spread/ag3au3_gram_production.py  # ~4 min
@@ -2207,6 +2704,63 @@ Knob rules of thumb (from the sweeps):
 
 ## 8. Open items
 
+- RESIDUE-PATHOLOGY PREVENTION (2026-10-13 design review, adopted
+  direction - act BEFORE the final repair instead of capping after):
+  the cap/band-guard is a POST-HOC repair; the root cause is
+  near-coincident poles (near-parallel dictionary columns -> near-
+  null LS directions -> exploding coefficients). Agreed starters,
+  in implementation order: (1) DENSE-GRID MODEL GATES in
+  is_healthy/sweep - assembled-Gamma min eig + envelope bound
+  ||Gamma(E)|| <= kappa*max||F|| on window + padded + Fermi-pole
+  grids (psd_sanity_3new_par.py implements all three offline; the
+  envelope bound is the MODEL-level version of the user's
+  coefficient criterion). No fit-behavior change. (2) FREE
+  DIAGNOSTICS, recorded per fit before gating: per-pole noise
+  amplification diag((A^T A)^-1) (the gram solver already forms
+  KK = R1^-1 R1^-T, so the diagonal is free - a principled "the
+  data cannot determine this pole" metric, better than a size cap)
+  and a CANCELLATION INDEX sum_i max_n ||C_i phi_i(E_n)|| /
+  max_n ||Gamma|| (in-window CONTRIBUTIONS, not peak amplitudes -
+  not fooled by broad/off-window poles, catches clusters whose
+  members each pass the per-pole cap). (3) STABILITY-AWARE
+  consider(): the adaptive loop ranks insertion candidates purely
+  by rms; add a residue-ratio/conditioning penalty so cluster-prone
+  candidates are rejected BEFORE the final stage (small change).
+  (4) MINIMUM POLE SEPARATION / COHERENCE: |e_i - e_j| >=
+  alpha*max(w_i, w_j) as a soft penalty (or projection) in the
+  trust-region step + at adaptive insertion - the root-cause fix;
+  mutual coherence max |<phi_i,phi_j>|/(||phi_i||||phi_j||) is the
+  cluster-aware version (merge_duplicates failed on the tgt1e4
+  cluster precisely because its test is PAIRWISE). RISK: measured
+  earlier that loosening merge_duplicates to 50% ATE legitimate
+  close poles at 30x rms - alpha must be swept and judged at the T
+  level + held-out, not sample rms alone. ALSO CONSIDERED, deferred
+  until the starters are measured: smooth Tikhonov filter /
+  raised QR-ratio threshold (1e-12 -> 1e-6..1e-4) on the
+  coefficient solve instead of the blanket ridge (measured: ridge
+  costs up to 3.5x on tight fits - the _final_solve fallback log;
+  NOTE the 24x figure in the review was the per-pole CLIP bug,
+  not ridge); group-lasso on ||C_i||_F in the ADMM X-step (the
+  smooth version of variant A's drop); PSD-cone-plus-Frobenius-
+  ball projection inside psd_solve_admm (the optimal variant-B /
+  fixed-pole replacement, acknowledged since review round 1); RRQR
+  subset selection (drop the ill-conditioned COMBINATION, not the
+  largest residues); held-out/LOO knee-stopping of the adaptive
+  loop (held_out_error exists; NOTE leave-one-out REMOVAL was
+  counterproductive on dense SAMPLING grids - pole-count stopping
+  is a different, untested thing); short NONLINEAR polish after a
+  cap drop (relocate kept poles - the current variant A re-solves
+  linearly at frozen poles, which is why the 2-4 eV band damage
+  cannot recover); PSD-primary (C_i = L_i L_i^H) makes the cap
+  nearly redundant by the Loewner argument (Gamma(e_i) >= C_i
+  under all-PSD residues), BUT the measured pipeline history says
+  PSD-forcing collapses VerySmallRSSE's E=0 notch and is rejected
+  by the accuracy guard on several systems - psd=True + accept-
+  guard (the current default) is the workable form; the cap
+  remains the backstop for the rejected cases. VALIDATION TARGET
+  for all of the above: the tgt1e4 case and its 2-4 eV band cost
+  (frob 1.6e-3 uncapped -> 3.4e-2 capped, T rms 0.0067 -> 0.030)
+  before building more.
 - Ag3Au3 / Ag3Au3_gap 'exact' pin (apply_method.py): RESOLVED BY
   MEASUREMENT (2026-10-10 remaining-systems round, 4.15): on the
   gradient-refined grids with the 3-start health gate, gram m1_w03
