@@ -1,0 +1,30 @@
+
+Minimal floquet photo-assisted current from Viljas and Cuevas, 2007.
+
+    I = (e/h) int_0^{hw} dE  sum_{k,l} Tr[G(E) Gam_R^(k) G^+(E) Gam_L^(l)] (f_L^(l) - f_R^(k))
+
+    [Gam^(l)]_{m,n} = J_{m+l}(a_W) J_{n+l}(a_W) Gam(E - lhw)
+    [Sig]_a{m,n}     = sum_l J_{m+l}(eVa/hw) J_{n+l}(eVa/hw) Sig(E - lhw)
+
+    For use with the Zandpack files used also for the nozand/zand programs.
+
+    e -> (norb, norb) array.  Energies in eV, current in e/fs.
+
+Returning current in units of e/fs
+device  :  ABC
+hw  :  0.5,3.0,10
+ampl  :  0.0,0.5,5
+voltage  :  0.0
+NPHOT  :  3
+outfile  :  tg_ext.npz
+kT  :  0.025
+epsrel  :  1e-7
+epsabs  :  1e-7
+limit  :  800
+Wmat  :  None
+Wmat_fact  :  1.0
+Wideband  :  False
+Wideband_fact  :  1.0
+use_ai_se_version  :  False
+slurm_array_rank  :  0
+slurm_array_size  :  1

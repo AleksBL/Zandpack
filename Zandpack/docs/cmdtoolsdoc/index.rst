@@ -1,110 +1,223 @@
 cmdtools documentation
 ======================
-This is the documentation of the othe commandline executables that comes with the Zandpack code. These tools are located in the cmdtools folder (you might have added the path to your PATH variable in the installation). These tools can be executed with the --help flag, which will print the keywords that can be specified with them. 
 
-The basic usage of the tools is as such: 
+This is the documentation of the command-line executables that come with the
+Zandpack code. The tools live in the ``cmdtools`` folder (which you may have
+added to your ``PATH`` during installation); the ``zand`` / ``nozand``
+time-propagation codes live in the ``mpi`` folder. Every tool can be run with
+``--help`` to print the keywords it accepts.
+
+The basic usage is:
 
 .. code-block:: bash
 
    tool Dir=$PWD kw1=v1 kw2=v2 ....
 
-The "Dir" variable is however not needed when using the --help flag. It does however specify which directory the code should have as working directory and is needed when the code is actually used.
+``Dir`` sets the working directory (``Dir=$PWD`` covers the common case) and is
+not needed with ``--help``. Keywords are assigned as ``keyword=value``, with no
+spaces.
+
+.. note::
+
+   The ``Zandpack.wrapper`` module provides several ways to call most of these
+   command-line tools from Python.
+
+Core tools
+----------
 
 SCF
----
-Calculates the steady-state density matrix, without and with bias.
+~~~
 
-.. code-block:: bash
+Self-consistent determination of the equilibrium density matrix. Implements the
+TranSIESTA method with an adaptive bias-window integration (orthogonal basis
+assumed; largely NumPy). See Papior, Nick, et al. (2017) and references therein.
 
-    SCF --help
+.. cmdhelp:: SCF
 
 .. video:: videos/SCF.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
-   
+   :width: 75%
+   :muted:
 
 psinought
----------
-Calculates the auxilliary mode wavevectors in the steady-state, without and with bias. 
+~~~~~~~~~
 
-.. code-block:: bash
+Determines the auxiliary mode wavevectors ``psi`` for the steady state, without
+and with bias.
 
-    psinought --help
+.. cmdhelp:: psinought
 
 .. video:: videos/psinought.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
+   :width: 75%
+   :muted:
 
-Adiabatic
----------
-
-Calculate properties in the steady state. Current, Transmission, DOS etc. 
-
-.. code-block:: bash
-
-    Adiabatic --help
-
-.. video:: videos/Adiabatic.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
-    
-    
 modify_occupations
-------------------
-Allows the user to change the Fermi function of the leads. It is also possible to add a new lead by specifying a python script in the new_lead keyword, but this should be considered an advanced feature. 
+~~~~~~~~~~~~~~~~~~
 
-.. code-block:: bash
+Changes the Fermi function of the leads. It is also possible to add a new lead
+by specifying a Python script in the ``new_lead`` keyword, but this should be
+considered an advanced feature.
 
-    modify_occupations --help
+.. cmdhelp:: modify_occupations
 
 .. video:: videos/modify_occupations.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
+   :width: 75%
+   :muted:
 
+nozand
+~~~~~~
+
+Propagates the system in time under a time-dependent bias, working in the
+non-orthogonal basis (faster, thanks to more sparsity in the matrices). This is
+the preferred propagation code. Run it under MPI, for example:
+
+.. code-block:: bash
+
+   export OMP_NUM_THREADS=1
+   export NUMBA_NUM_THREADS=1
+   mpirun -np 8 nozand Dir=$PWD > nozand.out
+
+An ``Initial.py`` and a ``Bias.py`` file must be present in the working
+directory. Input files are written by ``SCF`` and ``psinought``; if these were
+not run beforehand, the propagation starts from the isolated device density
+matrix and zero auxiliary modes, so it takes a long time to reach the steady
+state. ``nozand --help`` prints the available keywords.
+
+.. list-table:: nozand: keywords and default values
+   :header-rows: 1
+   :widths: 22 78
+   :class: cmdhelp-table
+
+   * - Keyword
+     - Default
+   * - ``Dir``
+     - (required) absolute path to the working directory, e.g. ``Dir=$PWD``
+   * - ``initial_file``
+     - ``Initial.py``
+   * - ``bias_file``
+     - ``Bias.py``
+   * - ``out_dir``
+     - ``None``
+   * - ``sigma_start``
+     - ``None``
+   * - ``psi_start``
+     - ``None``
+   * - ``omg_start``
+     - ``None``
+
+zand
+~~~~
+
+**Superseded by ``nozand``.** The orthogonal-basis variant of the propagation
+code, invoked the same way (``Dir=...``); prefer ``nozand``.
+
+Other tools
+-----------
+
+Analysis, post-processing and utility tools.
+
+Adiabatic
+~~~~~~~~~
+
+Calculates steady-state properties: instantaneous currents, DOS, transmission
+and quasiparticle states.
+
+.. cmdhelp:: Adiabatic
+
+.. video:: videos/Adiabatic.webm
+   :width: 75%
+   :muted:
 
 td_info
--------
-Tool for plotting calculated time-dependent current. 
+~~~~~~~
 
-.. code-block:: bash
+Plots and quickly inspects the results of a time-dependent calculation.
 
-    td_info --help
+.. cmdhelp:: td_info
 
 .. video:: videos/td_info.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
+   :width: 75%
+   :muted:
 
+lossydm
+~~~~~~~
+
+Collects the chunks of the time-dependent density matrix produced by ``zand`` /
+``nozand`` into a single file and compresses it, using either the built-in
+``numpy.savez_compressed`` or the ``xz`` tool. This is the lossy counterpart to
+``compress_currents``.
+
+.. cmdhelp:: lossydm
+
+compress_currents
+~~~~~~~~~~~~~~~~~
+
+Collects the chunks of the time-dependent currents produced by ``zand`` /
+``nozand`` into one file and compresses it. Unlike ``lossydm``, the currents are
+stored losslessly: every point the calculation saved is kept.
+
+.. cmdhelp:: compress_currents
+
+qp_grid
+~~~~~~~
+
+Makes a rectangular grid of energies and times to start the quasiparticle scheme
+from.
+
+.. cmdhelp:: qp_grid
 
 N-SC-N
-------
-Tool for adding a making the device region superconducting. A pairing field has to be specified as a python script. (THIS SHOULD BE CONSIDERED AN ADVANCED FEATURE. YOU SHOULD PROBABLY READ THE CODE TO SEE HOW IT WORKS.)
+~~~~~~
 
-.. code-block:: bash
+Makes the device region superconducting. A pairing field has to be specified as
+a Python script. (Advanced feature -- you should probably read the code to see
+how it works.)
 
-    N-SC-N --help
+.. cmdhelp:: N-SC-N
 
 .. video:: videos/N-SC-N.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
-
+   :width: 75%
+   :muted:
 
 add_spin_component
-------------------
+~~~~~~~~~~~~~~~~~~
+
+Takes a spin-degenerate calculation and adds a spin component, i.e.
+``(nk, ...) -> (2nk, ...)``.
+
+.. cmdhelp:: add_spin_component
+
+.. video:: videos/add_spin_component.webm
+   :width: 75%
+   :muted:
+
+viljas-cuevas
+~~~~~~~~~~~~~
+
+Minimal Floquet photo-assisted current, following Viljas and Cuevas (2007). It
+uses the same Zandpack files as the ``nozand`` / ``zand`` programs and returns
+the current in units of ``e/fs`` (energies in eV).
+
+.. cmdhelp:: viljas-cuevas
+
+zzz
+~~~
+
+Compression and easy transfer of files for the Zandpack code, for example:
 
 .. code-block:: bash
 
-    add_spin_component --help
+   zzz Dir=$PWD folder=tmp files=* command="rsync -a tmp.tar.xz user@host:/dir/" delete_all=True
+   zzz Dir=$PWD folder=tmp.tar.xz mode=decompress
 
-.. video:: videos/add_spin_component.webm
-   :width: 100%
-   :figwidth: 60%
-   :muted: 
+Further tools
+-------------
 
+These tools are also present in ``cmdtools`` but are not documented in detail
+here; run them with ``--help`` or read the source:
 
-
+* ``compress_xi`` -- compress the auxiliary-mode data from a calculation.
+* ``dos2qp_guess`` -- starting guesses for the quasiparticle scheme.
+* ``PSD_DM`` -- write a positive semi-definite density matrix.
+* ``WriteDM`` -- write a density matrix to be used by the steady-state
+  calculations.
+* ``set_time``, ``split_k``, ``pocket-tddft`` -- assorted utilities.

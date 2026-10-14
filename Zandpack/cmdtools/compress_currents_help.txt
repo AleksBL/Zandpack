@@ -1,0 +1,9 @@
+This tool takes the chunks of the timedependent currents produced by zand / nozand and puts them into one file and then compresses it using the built-in numpy savez_compressed, or using the xz tool.
+Unlike lossydm, the currents are stored losslessly: all points of the current that the calculation saved are kept.
+Keywords and default values. Assign with "keyword=value" argument after the compress_currents command (no spaces!)
+folder : ABC_save
+n : 2
+delete : True
+usexz : True
+extremexz : False
+xzlevel : 7

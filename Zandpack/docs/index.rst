@@ -1,69 +1,110 @@
-.. Zandpack documentation master file, created by
-   sphinx-quickstart on Tue Jan  7 15:20:12 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Zandpack: Timedependent Nanoelectronics Simulation with Nonequilibrium Green's Functions
+========================================================================================
 
-Zandpack: Timedependent Nanoelectronics Simulation with Nonequilibrium Greens Functions
-=======================================================================================
+Hello there, you have entered the Zandpack documentation! Zandpack is a code
+developed for modeling time-dependent nanoelectronics. It grew out of the
+following Ph.D. project:
 
-Hello there, you have entered the Zandpack documentation! This is a code developed with the purpose of modeling timedependent nanoelectronics. It is has been developed durign the Ph.D project which can be found here:
+* `Quantum transport theory of nanostructures: transient response and ... <https://orbit.dtu.dk/en/publications/quantum-transport-theory-of-nanostructures-transient-response-and>`_
 
-<https://orbit.dtu.dk/en/publications/quantum-transport-theory-of-nanostructures-transient-response-and>
+and is released together with the publication:
 
-It has been released in relation to the publication here:
+* `https://doi.org/10.1016/j.cpc.2026.110087 <https://doi.org/10.1016/j.cpc.2026.110087>`_
 
-< link-to-somewhere >
+.. image:: _static/workflow.svg
+   :width: 70%
+   :align: center
+   :class: zandpack-hero
+   :alt: Zandpack workflow
+
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item::
+
+      .. button-ref:: quickstart/readme
+         :ref-type: doc
+         :color: primary
+         :expand:
+
+         Introduction
+
+   .. grid-item::
+
+      .. button-ref:: examples/index
+         :ref-type: doc
+         :color: primary
+         :expand:
+
+         Examples
+
+   .. grid-item::
+
+      .. button-ref:: api
+         :ref-type: doc
+         :color: primary
+         :expand:
+
+         API reference
 
 .. grid:: 2
-    :gutter: 1
+   :gutter: 3
 
-    .. grid-item-card:: :fas:`person-running` -- Quick-start guides
-        :link: quickstart/nbtutorial
-        :link-type: doc
-    
-        Jump to introductory tutorials
-    
-    
-    .. grid-item-card:: :fas:`fa-calendar-check` -- Intro
-        :link: quickstart/readme
-        :link-type: doc
-        
-        Read the introduction, installation guide etc.
-        
-        
+   .. grid-item-card:: :fas:`person-running` Quick-start guides
+      :link: quickstart/nbtutorial
+      :link-type: doc
+
+      Jump to the introductory tutorials.
+
+   .. grid-item-card:: :fas:`book-open` Introduction
+      :link: quickstart/readme
+      :link-type: doc
+
+      Read the introduction, installation guide and features.
+
 .. grid:: 2
-    :gutter: 1
+   :gutter: 3
 
-    .. grid-item-card:: -- Documentation
-        :link: Zandpack
-        :link-type: doc
-        
-        See an overview of the usage of commandline tools and code of Zandpack
-        
-    .. grid-item-card:: -- Support
+   .. grid-item-card:: :fas:`flask` Examples
+      :link: examples/index
+      :link-type: doc
 
-        E-mail: aleksander.bl@proton.me
-        
+      Runnable example calculations shipped with Zandpack.
+
+   .. grid-item-card:: :fas:`code` API reference
+      :link: api
+      :link-type: doc
+
+      Command-line tools and the Zandpack Python API.
+
+.. grid:: 1
+   :gutter: 3
+
+   .. grid-item-card:: :fas:`envelope` Contact
+      :link: mailto:aleksander.bl@proton.me
+
+      E-mail: aleksander.bl@proton.me
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting started
-   
+
    quickstart/readme
-   quickstart/nbtutorial
-   quickstart/videotutorial
-   
-.. toctree::
-   :maxdepth: 2
-   :caption: Documentation
-   
-   cmdtoolsdoc/index
-   mpidoc/index
-   modules
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contributing
-   
-   
-   
+   :caption: Examples
+
+   examples/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Command-line tools
+
+   cmdtoolsdoc/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API reference
+
+   api

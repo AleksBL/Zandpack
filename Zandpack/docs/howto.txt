@@ -1,3 +1,9 @@
-# Type this:
-make html 
+# Build the documentation.
 
+# Easiest -- installs the docs dependencies (and Zandpack, if needed) and builds:
+./build.sh
+
+# Or, if the dependencies are already installed:
+make html
+
+# Either way the output lands in _build/html/index.html.

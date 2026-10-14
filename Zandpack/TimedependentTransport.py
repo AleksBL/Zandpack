@@ -520,7 +520,7 @@ class TD_Transport:
            classes to understand this part better. We are simply
            accessing the elements stored. 
         """
-        self.eliminate_small_numbers(small=1e-8)
+        self.eliminate_small_numbers()
         del self.read_SE
         def reduce_memory(m):
             for i in range(len(m.vals)):

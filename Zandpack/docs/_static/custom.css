@@ -1,0 +1,85 @@
+/* ------------------------------------------------------------------
+   Zandpack theme accents.
+
+   Palette derived from the logo (Zandpack/svg/logo3.svg), whose
+   dominant colour is amber #e79a00. Light mode uses a darker amber so
+   links and buttons keep enough contrast on white.
+   ------------------------------------------------------------------ */
+
+html[data-theme="light"] {
+  --pst-color-primary: #b06a00;
+  --pst-color-primary-highlight: #8f5600;
+  --pst-color-accent: #e79a00;
+  --pst-color-link: #a86200;
+  --pst-color-link-hover: #7d4900;
+}
+
+html[data-theme="dark"] {
+  --pst-color-primary: #e79a00;
+  --pst-color-primary-highlight: #f2b53c;
+  --pst-color-accent: #f0b64d;
+  --pst-color-link: #f0b64d;
+  --pst-color-link-hover: #ffd68a;
+}
+
+/* Announcement ribbon: dark strip so the amber text reads clearly. */
+.bd-header-announcement {
+  background-color: #1b1b1b;
+  color: #f2f2f2;
+}
+
+/* Cards: subtle depth, lift on hover, tinted title. */
+.sd-card {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sd-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+.sd-card .sd-card-title {
+  color: var(--pst-color-primary);
+}
+
+/* Landing hero diagram. The artwork is black-outlined with opaque white fills,
+   which show as a bright box on the dark theme. Rather than edit the SVG, blend
+   the image with the page so the white fills take on the background colour:
+   - light theme: `multiply` -> white fills become the page colour, black stays.
+   - dark theme:  invert first, then `screen` -> the (now black) fills take the
+                  page colour and the outlines stay visible. */
+img.zandpack-hero {
+  display: block;
+  margin: 0 auto 1.5rem auto;
+  mix-blend-mode: multiply;
+}
+html[data-theme="dark"] img.zandpack-hero {
+  filter: invert(1);
+  mix-blend-mode: screen;
+}
+
+/* Command-line tool keyword/default tables: keep the rows tight. The theme
+   applies Bootstrap's 0.5rem cell padding, and each docutils cell wraps its
+   content in a <p> that carries its own margin -- together these make the
+   long option lists very tall. */
+table.cmdhelp-table td,
+table.cmdhelp-table th {
+  padding: 0.1rem 0.5rem;
+  line-height: 1.2;
+  vertical-align: top;
+}
+table.cmdhelp-table td > p,
+table.cmdhelp-table th > p {
+  margin: 0;
+}
+
+/* pydata removes the navigation sidebar on any page with no "current" section in
+   the toctree -- which is the root landing page -- by emptying the sidebar list
+   and tagging it "hide-on-wide" (display:none). Keep the navigation on the left
+   there too by showing the sidebar and the header items it holds. */
+.bd-sidebar-primary.hide-on-wide {
+  display: flex;
+}
+.bd-sidebar-primary.hide-on-wide .sidebar-header-items {
+  display: flex;
+  flex-direction: column;
+}

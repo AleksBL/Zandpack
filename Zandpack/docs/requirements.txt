@@ -1,0 +1,16 @@
+# Documentation build dependencies.
+#
+# Install with:
+#     python -m pip install -r Zandpack/docs/requirements.txt
+#
+# Note: the package itself must also be importable (the API reference uses
+# autodoc, which imports Zandpack). Install it first with:
+#     python -m pip install -e .
+
+sphinx>=7
+pydata-sphinx-theme
+myst-parser
+sphinx-design
+nbsphinx
+sphinx-copybutton
+sphinxcontrib-video

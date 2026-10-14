@@ -1,0 +1,4 @@
+# Local build output and generated API stubs. These are produced by
+# docs/build.sh and should never be committed -- keep them off the repo.
+/_build/
+/api/

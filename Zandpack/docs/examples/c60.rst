@@ -1,0 +1,17 @@
+C60
+===
+
+A C60 molecular junction, set up as a three-script pipeline: build the device,
+read the calculation, and make the fit.
+
+*Location:* ``Zandpack/examples/C60``
+
+.. dropdown:: ``1_make_device.py``
+
+   .. literalinclude:: ../../examples/C60/1_make_device.py
+      :language: python
+
+.. dropdown:: ``2_read_calc.py``
+
+   .. literalinclude:: ../../examples/C60/2_read_calc.py
+      :language: python
