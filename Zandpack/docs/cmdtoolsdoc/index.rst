@@ -23,8 +23,72 @@ spaces.
    command-line tools from Python -- this is the preferred way to use them. See
    :doc:`../examples/generic_wrapper`.
 
+.. _tool-workflow:
+
+How the tools work together
+---------------------------
+
+A calculation runs through four steps. The solid arrows are the main flow; the
+dashed boxes are the tools that can be run once the stage they hang off has
+finished. The frame around step 4 is the ``wrapper.py`` module, which runs those
+tools for you.
+
+.. toolflow::
+   :also: Also in cmdtools, used on occasion rather than as part of this flow: zzz, WriteDM, set_time, split_k, PSD_DM, dos2qp_guess, add_spin_component, compress_xi.
+
+   Step 1: the initial steady state, from SIESTA, TranSIESTA or DFTB
+     - siesta_python | electrode band structures, pristine Hamiltonians and the density matrix of the device region
+
+   Step 2: transport quantities, from TBtrans
+     - siesta_python.run_tbtrans_in_dir | transmission function, device DOS and the self-energy matrices, written to disk and read back by TD_Transport
+
+   Step 3: Lorentzian fits of the sampled Γ_α | N-SC-N | can also be run once the fit exists | then step 4
+     - TD_Transport.PoleGuess / TD_Transport.Fit | fit the sampled Γ_α, or use the AI_code / FittingRoutine tools instead. They do the same type of job, but the FittingRoutine does it better: it is slower, and has only recently been added to the code.
+     - TD_Transport.inspect_* / Writer | inspect the fitted system properties; Writer saves the instance to disk
+
+   Step 4: the command-line tools
+   wrap 4 | wrapper.py (wrapper.Control) | drives the tools of this step from Python -- write_initial(), run_scf(), run_psinought(), run_nozand() -- so you do not have to type the commands yourself.
+     - modify_occupations | gives the Fermi function the poles it needs from the fit of step 3
+     - SCF | self-consistent density matrix of the device region, using the fit | viljas-cuevas, pocket-tddft, Adiabatic | all three can run once SCF has produced a density matrix
+     - psinought | steady-state auxiliary mode wave-vectors, starting from the SCF density matrix
+     - nozand (zand is deprecated) | time propagation, using the SCF density matrix and the auxiliary modes | td_info | inspect a propagation while it runs and after it finishes
+     - compress_currents / lossydm | compress the output of a finished propagation
+
+.. _tool-dependencies:
+
+What the tools depend on
+------------------------
+
+Each tool is a stand-alone script that imports a handful of modules from
+``Zandpack``. The graph below shows which ones: a line runs from the tool on the
+left to a module on the right, and the thicker it is, the more names the tool
+imports from that module. Hold the pointer over a tool to fade the rest of the
+graph and leave only its own dependencies visible.
+
+For the names themselves, open a tool underneath the graph. Each one expands
+into a picture of what it imports, in which every module and every name links to
+its page in the API reference, so a dependency can be followed all the way to
+the definition.
+
+The occasional tools -- the ones in the last box of the workflow above, plus
+``qp_grid`` -- are left out here.
+
+.. tooldeps:: TimedependentTransport.py:TD_Transport wrapper.py:wrapper
+   :skip: add_spin_component, compress_xi, dos2qp_guess, N-SC-N, PSD_DM, qp_grid, set_time, split_k, WriteDM, zzz
+
+Two of the tools listed above are Python objects rather than scripts:
+``TD_Transport`` is the class that owns a calculation (see
+:class:`Zandpack.TimedependentTransport.TD_Transport`), and ``wrapper`` holds
+the ``Control`` interface that runs the tools for you -- see
+:doc:`../examples/generic_wrapper`.
+
 Core tools
 ----------
+
+``modify_occupations`` is normally run before ``SCF``, since it sets the
+occupations that ``SCF`` converges.
+
+.. _cmdtool-scf:
 
 SCF
 ~~~
@@ -39,6 +103,8 @@ assumed; largely NumPy). See Papior, Nick, et al. (2017) and references therein.
    :width: 75%
    :muted:
 
+.. _cmdtool-psinought:
+
 psinought
 ~~~~~~~~~
 
@@ -50,6 +116,8 @@ and with bias.
 .. video:: videos/psinought.webm
    :width: 75%
    :muted:
+
+.. _cmdtool-modify-occupations:
 
 modify_occupations
 ~~~~~~~~~~~~~~~~~~
@@ -63,6 +131,8 @@ considered an advanced feature.
 .. video:: videos/modify_occupations.webm
    :width: 75%
    :muted:
+
+.. _cmdtool-nozand:
 
 nozand
 ~~~~~~

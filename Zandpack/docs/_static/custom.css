@@ -83,3 +83,150 @@ table.cmdhelp-table th > p {
   display: flex;
   flex-direction: column;
 }
+
+/* ------------------------------------------------------------------
+   Tool dependency graph, drawn by the "tooldeps" directive in conf.py.
+   The SVG is inlined into the page, so it picks up the theme variables
+   instead of needing a background of its own.
+   ------------------------------------------------------------------ */
+svg.zd-toolgraph {
+  display: block;
+  width: 100%;
+  max-width: 820px;
+  height: auto;
+  margin: 0 auto 1rem auto;
+}
+svg.zd-toolgraph text {
+  font-family: var(--pst-font-family-monospace, monospace);
+  font-size: 11px;
+  fill: var(--pst-color-text-base, #4a5560);
+}
+svg.zd-toolgraph rect.zd-box {
+  fill: none;
+}
+svg.zd-toolgraph rect.zd-tool {
+  stroke: var(--pst-color-border, #aab3bd);
+  stroke-width: 1;
+}
+
+/* ------------------------------------------------------------------
+   Tool workflow picture, drawn by the "toolflow" directive in conf.py.
+   Also inlined, so it follows the theme variables.
+   ------------------------------------------------------------------ */
+svg.zd-toolflow {
+  display: block;
+  width: 100%;
+  max-width: 880px;
+  height: auto;
+  margin: 0 auto 1rem auto;
+}
+svg.zd-toolflow text {
+  fill: var(--pst-color-text-base, #4a5560);
+}
+svg.zd-toolflow text.zd-tools {
+  font-family: var(--pst-font-family-monospace, monospace);
+  font-size: 12px;
+}
+svg.zd-toolflow text.zd-note {
+  font-size: 11px;
+  fill: var(--pst-color-text-muted, #737d89);
+}
+svg.zd-toolflow text.zd-head {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+svg.zd-toolflow rect.zd-group,
+svg.zd-toolflow rect.zd-stage {
+  fill: none;
+  stroke: var(--pst-color-border, #aab3bd);
+}
+svg.zd-toolflow rect.zd-group {
+  stroke-dasharray: 4 4;
+}
+svg.zd-toolflow rect.zd-branch {
+  fill: none;
+  stroke: var(--pst-color-border, #aab3bd);
+  stroke-dasharray: 6 5;
+}
+svg.zd-toolflow .zd-arrow {
+  fill: none;
+  stroke: #e79a00;
+  stroke-width: 2;
+}
+svg.zd-toolflow .zd-link {
+  fill: none;
+  stroke: var(--pst-color-border, #aab3bd);
+  stroke-dasharray: 4 4;
+}
+svg.zd-toolflow rect.zd-frame {
+  fill: none;
+  stroke: #e79a00;
+  stroke-width: 1.5;
+  stroke-dasharray: 9 5;
+}
+/* Fade everything except the tool under the pointer, so pointing at a tool
+   shows the modules it imports. */
+svg.zd-toolgraph rect.zd-tool {
+  pointer-events: all;
+}
+svg.zd-toolgraph g.zd-rows:hover g.zd-row:not(:hover) line {
+  opacity: 0.1;
+}
+svg.zd-toolgraph g.zd-row:hover line {
+  opacity: 1;
+  stroke-width: 3.2;
+}
+svg.zd-toolgraph g.zd-row:hover rect.zd-tool {
+  stroke-width: 2.5;
+  stroke: #e79a00;
+}
+
+/* ------------------------------------------------------------------
+   Per-tool drill-down under the dependency graph: one collapsed block
+   per tool, holding a picture of that tool's imports.
+   ------------------------------------------------------------------ */
+details.zd-deps {
+  border: 1px solid var(--pst-color-border, #aab3bd);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  padding: 0.3rem 0.6rem;
+}
+details.zd-deps > summary {
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+details.zd-deps[open] > summary {
+  margin-bottom: 0.4rem;
+}
+details.zd-deps .zd-count {
+  color: var(--pst-color-text-muted, #737d89);
+  font-size: 0.85rem;
+}
+svg.zd-tooldetail {
+  display: block;
+  width: 100%;
+  max-width: 660px;
+  height: auto;
+}
+svg.zd-tooldetail text.zd-name,
+svg.zd-tooldetail text.zd-tools {
+  font-family: var(--pst-font-family-monospace, monospace);
+  font-size: 11px;
+  fill: var(--pst-color-text-base, #4a5560);
+}
+svg.zd-tooldetail text.zd-note {
+  font-size: 11px;
+  fill: var(--pst-color-text-muted, #737d89);
+}
+svg.zd-tooldetail .zd-tree {
+  fill: none;
+  stroke: var(--pst-color-border, #aab3bd);
+  stroke-width: 1.2;
+}
+svg.zd-tooldetail rect.zd-mod {
+  fill: none;
+  stroke-width: 1.5;
+}
+svg.zd-tooldetail a:hover text {
+  text-decoration: underline;
+}

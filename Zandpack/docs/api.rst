@@ -6,6 +6,13 @@ This reference is generated from the source docstrings with
 that are git-ignored, and superseded or legacy modules, are deliberately left
 out, so the documented set is identical on every checkout.
 
+Every module has a page of its own, listing the classes and functions it
+defines. Each entry there links to a page with the full documentation of that
+object -- for a class, all of its methods, including the undocumented ones,
+which still get their signature. A ``[source]`` link on an object opens the
+highlighted implementation, so the code is one click away without being in the
+way of the documentation.
+
 Core time-dependent transport
 -----------------------------
 
@@ -14,11 +21,18 @@ Core time-dependent transport
    :nosignatures:
 
    Zandpack.TimedependentTransport
-   Zandpack.Response
-   Zandpack.Pulses
    Zandpack.PadeDecomp
    Zandpack.FittedSelfEnergy
    Zandpack.FittingTools
+
+The command-line programs that drive the propagation of the time-dependent
+calculations are documented with the other
+:doc:`command-line tools <../cmdtoolsdoc/index>`:
+:ref:`SCF <cmdtool-scf>`, :ref:`psinought <cmdtool-psinought>`,
+:ref:`modify_occupations <cmdtool-modify-occupations>` and
+:ref:`nozand <cmdtool-nozand>`. :ref:`What the tools depend on
+<tool-dependencies>` lists, tool by tool, which of these modules and functions
+each of them uses.
 
 Drivers and control
 -------------------
@@ -43,18 +57,28 @@ Numerics, utilities and MPI helpers
 
    Zandpack.decoupled_functions
    Zandpack.banded_matrix_funcs
-   Zandpack.equations
    Zandpack.func_step_forward
-   Zandpack.Interpolation
    Zandpack.convert
    Zandpack.DOP54
    Zandpack.td_constants
-   Zandpack.plot
    Zandpack.mpi_funcs
    Zandpack.mpi_runge_kutta_methods
    Zandpack.mpi_splitter
    Zandpack.mpi_timer
    Zandpack.mpi_tools
+
+Misc.
+-----
+
+.. autosummary::
+   :toctree: api
+   :nosignatures:
+
+   Zandpack.Response
+   Zandpack.Pulses
+   Zandpack.equations
+   Zandpack.Interpolation
+   Zandpack.plot
 
 Citation and help text
 ----------------------
