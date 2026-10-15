@@ -11,6 +11,7 @@ from Zandpack.plot import J, DM
 from copy import deepcopy
 from pickle import load
 from Zandpack.PadeDecomp import Hu_poles, FD_expanded
+from Zandpack.Help import TDHelper
 from textwrap import dedent
 from numba import njit
 glob_test = False
@@ -434,7 +435,8 @@ class Control: # Replaces bash scripting
             return 2
         else:
             return self.n_elec
-    
+    def get_helper(self):
+        return TDHelper(self.working_dir + "/" + self.input.name)
     @property
     def psinought_status(self):
         """
