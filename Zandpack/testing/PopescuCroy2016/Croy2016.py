@@ -11,9 +11,9 @@ import sisl
 from numba import njit
 from Zandpack.plot import plt
 from Zandpack.TimedependentTransport import TD_Transport as TDT
-from Zandpack.TimedependentTransport import AdaptiveRK4  as RK4
+from Zandpack.decoupled_functions import AdaptiveRK4  as RK4
 from Zandpack.Pulses import zero_dH, zero_bias, stairs
-from Zandpack.TimedependentTransport import scipy_ode
+from Zandpack.decoupled_functions import scipy_ode
 print('\n set hbar  = 1 in the constants module\n')
 
 tx = 6

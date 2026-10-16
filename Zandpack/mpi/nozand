@@ -57,6 +57,7 @@ if "--help" in args:
     for _kw in options.keys():
         print(_kw, ": ", options[_kw])
     del _kw
+    print("Please note that the files specified as init_file and bias_file contains most of the input parameters and need special care. ")
     sys.exit()
 
 original_folder = os.getcwd()
@@ -886,6 +887,13 @@ def Worker(role_info):
     _nlrz = int(_nlrz)
     _nfrm = D["num_poles_fermi"]
     _nfrm = int(_nfrm)
+    if _nfrm != diff_GGM_GLM_all.shape[2] - _nlrz:
+        if rank ==1:
+            for _nousevar in range(5):
+                print("WARNING -- THIS IS A BAD SIGN!!!")
+            print("Worker "+str(rank)+"num_poles_fermi from "+name+"doesnt match other array shapes, deducing from array shape instead")
+        _nfrm = diff_GGM_GLM_all.shape[2] - _nlrz
+        assert _nfrm % 2 == 0, "SOMETHING IS VERY WRONG IN THE CALCULATION."
     ## 14.10.2026 New implm.
     ## Ordering of poles assumed here [e1,e2,e3, ... , f1,f2 ...] (with e1 and f1 fit and fermi poles)
     _is_fpole_all = np.array([False]*_nlrz + [True]*_nfrm)

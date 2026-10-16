@@ -16,7 +16,11 @@ Use the .gitignore as a baseline for files that can safely be ignored, unless ex
 1. nozand performance.
   - Use of blas functions zgemv, zgemm directly in the code instead of using the 
     numpy matmul wrapper. Several places have 
-
+2. Getting the tests to run. 
+  - Currently only three of the tests are online. 
+  - The rest needs some modification in order to run as they are outdated and the code API has gone through some changes since they were made. 
+  - Furthermore, the examples given in the examples folder can also be used as tests, if adapted properly (Made to work with the scipy_ode wrapper) for independent testing.
+  
 Also see the issues.txt file to see the issues pulled from GitHub.
 
 ### Coding guidelines

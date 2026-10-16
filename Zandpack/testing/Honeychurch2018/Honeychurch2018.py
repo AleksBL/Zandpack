@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import sisl
 from numba import njit
 from Zandpack.TimedependentTransport import TD_Transport
-from Zandpack.TimedependentTransport import AdaptiveRK4  as RK4
 from Zandpack.Pulses import box_pulse, zero_dH
 from Zandpack.TimedependentTransport import hbar as print_hbar
 from Zandpack.Pulses import air_photonics_pulse as P
-
+from Zandpack.decoupled_functions import scipy_ode, AdaptiveRK4
+RK4=AdaptiveRK4
 print('Make sure you have put hbar = 1.0 in this module\n')
 print('Yes you have to do this manually\n')
 print('Go to the location of the package -> td_constants and set hbar = 1.0 for natural units \n\n')

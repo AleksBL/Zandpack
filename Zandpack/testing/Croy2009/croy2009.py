@@ -2,9 +2,9 @@ import numpy as np
 from numba import njit
 import matplotlib.pyplot as plt
 import sisl
-from Zandpack.TimedependentTransport import TD_Transport, AdaptiveRK4
+from Zandpack.TimedependentTransport import TD_Transport
 from Zandpack.Pulses import box_pulse, zero_dH
-from Zandpack.TimedependentTransport import scipy_ode
+from Zandpack.decoupled_functions import scipy_ode, AdaptiveRK4
 print('Make sure you have put hbar = 1.0 in this module\n')
 print('Yes you have to do this manually\n')
 print('Go to the location of the package -> constants and set hbar = 1.0 for natural units \n\n')
@@ -128,8 +128,8 @@ Test.tofile(name = 'TDT_Croy2009')
 np.savez_compressed("Croy2009_Results.npz",
                     rk4_t  = t,
                     rk4_jl = d["current_left"],
-                    rk4_lr = d["current_right"],
-                    scipy_t = t
+                    rk4_jr = d["current_right"],
+                    scipy_t = t1,
                     scipy_dm = dm,
                     scipy_jl    = jl,
                     )

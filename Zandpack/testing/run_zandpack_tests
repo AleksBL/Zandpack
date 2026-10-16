@@ -22,8 +22,8 @@ path = args[0].replace(' ', '').split('=')[1]
 os.chdir(path)
 new_folder = os.getcwd()
 sys.path.append(new_folder)
-Tests = [#"Croy2009",
-         #"PopescuCroy2016",
+Tests = ["Croy2009",
+         "PopescuCroy2016",
          "Honeychurch2018"
          ]
 

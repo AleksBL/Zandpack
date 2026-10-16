@@ -2557,20 +2557,26 @@ class TD_Transport:
         nl     = self.num_leads
         nf     = self.num_poles
         no     = H.shape[2]
-        Ntot   = self.NumL + nf
+        # Ntot   = self.NumL + nf
+        Ntot   = self.NumL + 2*nf
+        
         noT = self.max_orbital_idx + 1
         
         # index ordering: kidx, lead_idx, mode_idx, matrix_idx....
-        xi     = np.concatenate((self.Gl_vec.transpose(1,0,2,4,3), 
-                                 self.Gp_vec[:,:,0:nf,:,:].transpose(1,0,2,4,3)
-                                ), axis = 2)
-        xi = np.ascontiguousarray(xi)
-        
-        Ixi    = np.concatenate((self.Gl_vec.transpose(1,0,2,4,3).conj(),
-                                  self.Inv_Gp_vec[:,:,0:nf,:,:].transpose(1,0,2,3,4)
-                                ),axis = 2 )
-        Ixi = np.ascontiguousarray(Ixi)
-        
+        try:
+            xi     = np.concatenate((self.Gl_vec.transpose(1,0,2,4,3), 
+                                     self.Gp_vec[:,:,0:nf,:,:].transpose(1,0,2,4,3)
+                                    ), axis = 2)
+            xi = np.ascontiguousarray(xi)
+        except:
+            xi = np.ascontiguousarray(self.xi)
+        try:
+            Ixi    = np.concatenate((self.Gl_vec.transpose(1,0,2,4,3).conj(),
+                                      self.Inv_Gp_vec[:,:,0:nf,:,:].transpose(1,0,2,3,4)
+                                    ),axis = 2 )
+            Ixi = np.ascontiguousarray(Ixi)
+        except:
+            Ixi = np.ascontiguousarray(self.Ixi)
         diff_GGP_GLP = GG_P - GL_P
         diff_GGM_GLM = GG_M - GL_M
         self.diff_ggp_glp = diff_GGP_GLP
