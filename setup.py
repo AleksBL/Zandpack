@@ -55,7 +55,6 @@ setup(name='Zandpack',
                           "scipy", 
                           "siesta_python",
                           "Block_matrices",
-                          "Gf_Module",
                           "psutil",
                           "joblib",
        ])
