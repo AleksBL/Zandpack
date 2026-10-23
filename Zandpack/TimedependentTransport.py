@@ -1,8 +1,8 @@
 import os, sisl
 import numpy as np
 from siesta_python.siesta_python import SiP
-from Gf_Module.Gf import read_SE_from_tbtrans, read_overlap_data, pivot_and_sub
-from Gf_Module.Gf import Greens_function_olead as gfunc
+from Zandpack.Gf import read_SE_from_tbtrans, read_overlap_data, pivot_and_sub
+from Zandpack.Gf import Greens_function_olead as gfunc
 from Block_matrices.Block_matrices import Blocksparse2Numpy, block_sparse
 from Block_matrices.Block_matrices import multisort_eigval as Sorted_Eig
 from time import time
