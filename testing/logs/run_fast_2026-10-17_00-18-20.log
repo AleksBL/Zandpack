@@ -1,0 +1,215 @@
+Zandpack test suite -- fast mode
+date      : 2026-10-17 00:18:20
+host      : aleks-21kca024cd
+directory : /home/aleks/Skrivebord/ZP_testing/TestRUN
+tests     : Croy2009, PopescuCroy2016, Honeychurch2018, scipy_ode_vs_zand, scipy_ode_vs_AdaptiveRK4, scipy_vs_ARK4_Zand, synth_1, synth_dm, examples/small_bound, examples/SuperCond
+script    : run.sh
+RK_method : RK45
+jobs      : 3
+window    : t = 0 .. 2, 50 sampling points
+log       : ./logs/run_fast_2026-10-17_00-18-20.log
+
+======================================================================
+Croy2009
+======================================================================
+status    : ok
+elapsed   : 62.4 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - AdaptiveRK4      0.001304     0.000778
+scipy_ode - zand            5.065e-05    2.402e-05
+scipy_ode - nozand          5.065e-05    2.402e-05
+zand - nozand               1.524e-13    7.373e-14
+
+======================================================================
+PopescuCroy2016
+======================================================================
+status    : ok
+elapsed   : 75.7 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - AdaptiveRK4     1.804e-07     1.03e-07
+scipy_ode - zand            3.978e-09     1.63e-09
+scipy_ode - nozand          3.978e-09     1.63e-09
+zand - nozand               1.254e-16     4.53e-17
+
+======================================================================
+Honeychurch2018
+======================================================================
+status    : ok
+elapsed   : 60.7 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - AdaptiveRK4      0.001607    0.0004572
+scipy_ode - zand            0.0002375    8.783e-05
+scipy_ode - nozand          0.0002375    8.783e-05
+AdaptiveRK4 - zand            0.00143    0.0003797
+AdaptiveRK4 - nozand          0.00143    0.0003797
+zand - nozand               4.081e-13    1.296e-13
+Particle number at the end (scipy_ode / AdaptiveRK4 keep k=0 only)
+scipy_ode 0.7717
+zand      [0.7779]
+nozand    [0.7779] 
+
+======================================================================
+scipy_ode_vs_zand
+======================================================================
+status    : ok
+elapsed   : 139.7 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand             0.002874     0.001012
+scipy_ode - nozand           0.002881     0.001011
+zand - nozand               1.484e-05    6.078e-06
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 5.9598
+zand      [5.9598 5.888  5.9953]
+nozand    [5.9598 4.8467 5.6331] 
+
+======================================================================
+scipy_ode_vs_AdaptiveRK4
+======================================================================
+status    : ok
+elapsed   : 137.6 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - AdaptiveRK4      0.000101    5.752e-05
+scipy_ode - zand            4.652e-06    1.897e-06
+scipy_ode - nozand          4.652e-06    1.897e-06
+zand - nozand               5.605e-15    2.737e-15
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 6.9116
+AdaptiveRK4 [6.9122]
+zand      [6.9148]
+nozand    [6.9148] 
+
+======================================================================
+scipy_vs_ARK4_Zand
+======================================================================
+status    : ok
+elapsed   : 97.5 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand               0.2955       0.1019
+scipy_ode - nozand             0.2832       0.1044
+zand - nozand                 0.01675     0.006808
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 16.6664
+zand      [16.6653 16.4996 16.4486]
+nozand    [16.6552 16.5065 16.4235] 
+
+======================================================================
+synth_1
+======================================================================
+status    : ok
+elapsed   : 114.6 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            2.177e-05    8.527e-06
+scipy_ode - nozand          2.177e-05    8.527e-06
+zand - nozand               1.055e-14    4.048e-15
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 0.9489
+zand      [0.9494]
+nozand    [0.9494] 
+
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand             9.05e-05    3.274e-05
+scipy_ode - nozand           9.05e-05    3.274e-05
+zand - nozand                9.74e-14    3.015e-14
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 1.1094
+zand      [1.1145]
+nozand    [1.1145] 
+
+======================================================================
+synth_dm
+======================================================================
+status    : ok
+elapsed   : 55.2 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            0.0001243     6.14e-05
+scipy_ode - nozand          0.0001232    6.094e-05
+zand - nozand               2.299e-05     9.48e-06
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 1.0196
+zand      [1.0249]
+nozand    [1.0294] 
+
+======================================================================
+examples/small_bound
+======================================================================
+status    : ok
+elapsed   : 105.5 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            0.0007255     0.000326
+scipy_ode - nozand          0.0007255     0.000326
+zand - nozand               2.887e-14    1.494e-14
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 10.6291
+zand      [10.6182]
+nozand    [10.6182] 
+
+======================================================================
+examples/SuperCond
+======================================================================
+status    : ok
+elapsed   : 81.2 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            0.0008449    0.0003752
+scipy_ode - nozand          0.0008449    0.0003752
+zand - nozand               5.589e-15    1.304e-15
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 4.1529
+zand      [4.1535]
+nozand    [4.1535] 
+
+======================================================================
+SUMMARY (differences between the methods, max and rms of |dJ|)
+======================================================================
+test                         pair                            max|dJ|      rms|dJ|
+Croy2009                     scipy_ode - AdaptiveRK4        0.001304     0.000778
+Croy2009                     scipy_ode - zand              5.065e-05    2.402e-05
+Croy2009                     scipy_ode - nozand            5.065e-05    2.402e-05
+Croy2009                     zand - nozand                 1.524e-13    7.373e-14
+PopescuCroy2016              scipy_ode - AdaptiveRK4       1.804e-07     1.03e-07
+PopescuCroy2016              scipy_ode - zand              3.978e-09     1.63e-09
+PopescuCroy2016              scipy_ode - nozand            3.978e-09     1.63e-09
+PopescuCroy2016              zand - nozand                 1.254e-16     4.53e-17
+Honeychurch2018              scipy_ode - AdaptiveRK4        0.001607    0.0004572
+Honeychurch2018              scipy_ode - zand              0.0002375    8.783e-05
+Honeychurch2018              scipy_ode - nozand            0.0002375    8.783e-05
+Honeychurch2018              AdaptiveRK4 - zand              0.00143    0.0003797
+Honeychurch2018              AdaptiveRK4 - nozand            0.00143    0.0003797
+Honeychurch2018              zand - nozand                 4.081e-13    1.296e-13
+scipy_ode_vs_zand            scipy_ode - zand               0.002874     0.001012
+scipy_ode_vs_zand            scipy_ode - nozand             0.002881     0.001011
+scipy_ode_vs_zand            zand - nozand                 1.484e-05    6.078e-06
+scipy_ode_vs_AdaptiveRK4     scipy_ode - AdaptiveRK4        0.000101    5.752e-05
+scipy_ode_vs_AdaptiveRK4     scipy_ode - zand              4.652e-06    1.897e-06
+scipy_ode_vs_AdaptiveRK4     scipy_ode - nozand            4.652e-06    1.897e-06
+scipy_ode_vs_AdaptiveRK4     zand - nozand                 5.605e-15    2.737e-15
+scipy_vs_ARK4_Zand           scipy_ode - zand                 0.2955       0.1019
+scipy_vs_ARK4_Zand           scipy_ode - nozand               0.2832       0.1044
+scipy_vs_ARK4_Zand           zand - nozand                   0.01675     0.006808
+synth_1                      scipy_ode - zand              2.177e-05    8.527e-06
+synth_1                      scipy_ode - nozand            2.177e-05    8.527e-06
+synth_1                      zand - nozand                 1.055e-14    4.048e-15
+synth_1                      scipy_ode - zand               9.05e-05    3.274e-05
+synth_1                      scipy_ode - nozand             9.05e-05    3.274e-05
+synth_1                      zand - nozand                  9.74e-14    3.015e-14
+synth_dm                     scipy_ode - zand              0.0001243     6.14e-05
+synth_dm                     scipy_ode - nozand            0.0001232    6.094e-05
+synth_dm                     zand - nozand                 2.299e-05     9.48e-06
+examples/small_bound         scipy_ode - zand              0.0007255     0.000326
+examples/small_bound         scipy_ode - nozand            0.0007255     0.000326
+examples/small_bound         zand - nozand                 2.887e-14    1.494e-14
+examples/SuperCond           scipy_ode - zand              0.0008449    0.0003752
+examples/SuperCond           scipy_ode - nozand            0.0008449    0.0003752
+examples/SuperCond           zand - nozand                 5.589e-15    1.304e-15
+
+total wall clock: 403.0 s

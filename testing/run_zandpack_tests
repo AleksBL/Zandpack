@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Main driver for the Zandpack test suite.
+
+Purpose: test the zand/nozand codes against an independent codebase — the
+general-purpose scipy_ode propagator (shortlib right-hand side by default,
+make_f as the legacy alternative). All codes solve the same ODEs; the tests
+check to what degree scipy_ode reproduces the currents and device occupation,
+which is only meaningful because every method starts from the same total state
+and runs with converged solver tolerances.
+
+Runs the finished tests and writes one timestamped log holding the difference
+metrics that every test printed, so a regression can be pinned to a run.
+
+Each test's run.sh builds the device, runs the Python propagator and the
+zand/nozand MPI codes, and then compares them (a figure plus a table of
+difference metrics).  The driver only collects those tables.
+
+Usage
+    ./run_zandpack_tests [--fast] [--steady] [outdir] [test ...]
+
+    --fast   smoke-test mode: every test runs a short window (ZP_T1) with few
+             sampling points, starting from the default (not the SCF +
+             psinought steady state), so the whole suite finishes in a few
+             minutes
+    --steady run each test's run_steady.sh instead of run.sh: the same device,
+             dH and bias, but both sides start from the SCF + psinought steady
+             state.  This is a separate pipeline, not a variant of the default
+             one -- SCF rewrites Arrays/, which changes the start state.  Tests
+             without a run_steady.sh are reported and skipped.
+    outdir   where the log is written          (default: ./logs)
+    test     optional subset of the tests below (default: all of them)
+
+The tests run concurrently, each in its own directory.  The log is still
+written in the declared test order (blocks are buffered until all the tests
+before them have finished), so two logs can be diffed directly even though the
+tests themselves finish out of order.
+
+Environment
+    ZP_JOBS   how many tests may run at the same time (default 3).  The tests
+              whose Python side needs a lot of memory run on their own, so
+              raising this only parallelises the light ones.
+"""
+
+import os
+import re
+import sys
+import time
+import socket
+import subprocess
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# --fast uses these; the tests read them in Initial.py (window, save interval)
+# and in their Python driver (window + number of sampled points).  Fewer eval
+# points means fewer scipy_ode segments (faster and a little lighter), but the
+# peak memory is set by the *window* instead -- see FAST_BY_TEST below.
+FAST_T0        = '0'
+FAST_T1        = '2'
+FAST_NEVAL     = '50'
+FAST_SAVEEVERY = '5'
+FAST_ATOL      = '1e-6'   # loosening the Python solver barely moves the metric
+FAST_RTOL      = '1e-4'   # (see handoff.md) but it is what makes --fast quick
+
+# scipy_ode's peak memory grows with the number of solver calls (ZP_NEVAL) --
+# see handoff.md -- so scipy_vs_ARK4_Zand gets a shorter window of its own in
+# fast mode, and SR a small grid plus chunked solver calls (ZP_CHUNK), which is
+# what keeps it inside the RAM budget without making the test trivial.
+FAST_BY_TEST = {'scipy_vs_ARK4_Zand': {'ZP_T1': '1.0', 'ZP_NEVAL': '10'},
+                'SR':                 {'ZP_T1': '2.0', 'ZP_NEVAL': '10',
+                                       'ZP_CHUNK': '10'}}
+
+# Tests whose Python side needs a lot of memory: never run these next to
+# anything else (a concurrent run is OOM-killed with a bare rc=137).
+HEAVY = {'scipy_vs_ARK4_Zand', 'SR'}
+
+# The finished tests.  Keep new ones small (below ~50 orbitals); the large
+# examples (e.g. Rib with 694 orbitals) need more than one workstation core
+# and are deliberately not part of the suite.
+TESTS = ['Croy2009',
+         'PopescuCroy2016',
+         'Honeychurch2018',
+         'scipy_ode_vs_zand',
+         'scipy_ode_vs_AdaptiveRK4',
+         'scipy_vs_ARK4_Zand',
+         'synth_1',
+         'synth_dm',
+         'SR',
+         'ThesisZGNR',
+         os.path.join('examples', 'small_bound'),
+         os.path.join('examples', 'SuperCond')]
+
+# every run.sh exports these itself; the driver spells them out as well
+ENV = dict(os.environ,
+           ZANDPACK_HBAR    = '1.0',
+           OMP_NUM_THREADS  = '1',
+           NUMBA_NUM_THREADS= '1',
+           MPLBACKEND       = 'Agg',
+           RK_method        = 'RK45')
+
+# "scipy_ode - zand   0.01722   0.00232"  ->  the metric rows
+METRIC = re.compile(r'^(\S+) - (\S+)\s+(\S+)\s+(\S+)$')
+
+
+def metrics_block(out):
+    """Pull the two blocks a compare script prints out of its output: the
+    current differences first, then the particle numbers.  Everything else
+    (progress bars, warnings, timing chatter) is left out of the log.
+    """
+    lines, blocks, i = out.splitlines(), [], 0
+    while i < len(lines):
+        if lines[i].startswith('Left current vs'):
+            block = []
+            while i < len(lines) and lines[i].strip():
+                block.append(lines[i])
+                i += 1
+            while i < len(lines) and not lines[i].strip():
+                i += 1
+            if i < len(lines) and lines[i].startswith('Particle number'):
+                while i < len(lines) and lines[i].strip():
+                    block.append(lines[i])
+                    i += 1
+            blocks.append('\n'.join(block))
+        i += 1
+    return '\n\n'.join(blocks)
+
+
+def env_for(test, fast):
+    """The environment one test runs with (its own fast-mode sampling)."""
+    env = dict(ENV)
+    if fast:
+        env.update(ZP_T0 = FAST_T0, ZP_T1 = FAST_T1, ZP_NEVAL = FAST_NEVAL,
+                   ZP_SAVEEVERY = FAST_SAVEEVERY,
+                   ZP_ATOL = FAST_ATOL, ZP_RTOL = FAST_RTOL)
+        env.update(FAST_BY_TEST.get(test, {}))
+    return env
+
+
+def run_test(test, env, script):
+    """Run one test's script and return (status, elapsed, metrics block)."""
+    tdir = os.path.join(HERE, test)
+    if not os.path.isfile(os.path.join(tdir, script)):
+        return 'no %s' % script, 0.0, ''
+    t0     = time.time()
+    proc   = subprocess.run(['sh', script], cwd = tdir, env = env,
+                            stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    dt     = time.time() - t0
+    status = 'ok' if proc.returncode == 0 else 'rc=%d' % proc.returncode
+    return status, dt, metrics_block(proc.stdout.decode('utf-8', 'replace'))
+
+
+def main():
+    args   = sys.argv[1:]
+    fast   = '--fast' in args
+    steady = '--steady' in args
+    args   = [a for a in args if a not in ('--fast', '--steady')]
+    script = 'run_steady.sh' if steady else 'run.sh'
+    outdir = args[0] if args else os.path.join(HERE, 'logs')
+    tests  = args[1:] if len(args) > 1 else TESTS
+    jobs   = max(1, int(os.environ.get('ZP_JOBS', '3')))
+
+    os.makedirs(outdir, exist_ok = True)
+    stamp    = datetime.now()
+    logpath  = os.path.join(outdir, 'run_%s%s%s.log'
+                            % ('fast_' if fast else '',
+                               'steady_' if steady else '',
+                               stamp.strftime('%Y-%m-%d_%H-%M-%S')))
+    log      = open(logpath, 'w')
+
+    def say(text = ''):
+        """Write to both the log (in declared test order) and stdout."""
+        print(text, flush = True)
+        log.write(text + '\n')
+        log.flush()
+
+    def progress(text):
+        """Live progress; stdout only, so the log stays in declared order."""
+        print(text, flush = True)
+
+    say('Zandpack test suite%s%s' % (' -- fast mode' if fast else '',
+                                     ' -- steady state' if steady else ''))
+    say('date      : %s' % stamp.strftime('%Y-%m-%d %H:%M:%S'))
+    say('host      : %s' % socket.gethostname())
+    say('directory : %s' % HERE)
+    say('tests     : %s' % ', '.join(tests))
+    say('script    : %s' % script)
+    say('RK_method : %s' % ENV.get('RK_method'))
+    say('jobs      : %d' % jobs)
+    if fast:
+        say('window    : t = %s .. %s, %s sampling points'
+            % (FAST_T0, FAST_T1, FAST_NEVAL))
+    say('log       : %s' % logpath)
+
+    # Heavy tests go into the queue first: they run alone, so starting them
+    # early keeps them off the critical path.
+    pending = sorted(tests, key = lambda t: t not in HEAVY)
+    results = {}
+    running = {}
+    emitted = 0
+
+    def emit_ready():
+        """Write out every test whose predecessors have all finished."""
+        nonlocal emitted
+        while emitted < len(tests) and tests[emitted] in results:
+            test = tests[emitted]
+            status, dt, block = results[test]
+            say('\n' + '=' * 70)
+            say('%s' % test)
+            say('=' * 70)
+            say('status    : %s' % status)
+            say('elapsed   : %.1f s' % dt)
+            say(block if block else '(no metrics printed -- did the test fail?)')
+            emitted += 1
+
+    jobs_started = time.time()
+    with ThreadPoolExecutor(max_workers = jobs) as pool:
+        while pending or running:
+            # start as many tests as the memory and the job cap allow
+            while pending:
+                heavy_next  = pending[0] in HEAVY
+                heavy_now   = any(t in HEAVY for t in running.values())
+                if heavy_now or (heavy_next and running):
+                    break                      # a heavy test wants the machine
+                if len(running) >= (1 if heavy_next else jobs):
+                    break
+                test = pending.pop(0)
+                progress('[start] %s' % test)
+                running[pool.submit(run_test, test, env_for(test, fast), script)] = test
+            if not running:
+                break
+            done, _ = wait(list(running), return_when = FIRST_COMPLETED)
+            for fut in done:
+                test = running.pop(fut)
+                try:
+                    results[test] = fut.result()
+                except Exception as exc:       # keep the suite going
+                    results[test] = ('error: %s' % exc, 0.0, '')
+                progress('[done ] %-28s %-8s %6.1f s'
+                         % (test, results[test][0], results[test][1]))
+            emit_ready()
+
+    # The compact table: one row per method pair, comparing the runs that
+    # were just made against each other.
+    say('\n' + '=' * 70)
+    say('SUMMARY (differences between the methods, max and rms of |dJ|)')
+    say('=' * 70)
+    say('%-28s %-26s %12s %12s' % ('test', 'pair', 'max|dJ|', 'rms|dJ|'))
+    for test in tests:
+        status, dt, block = results.get(test, ('missing', 0.0, ''))
+        for line in block.splitlines():
+            m = METRIC.match(line)
+            if m:
+                say('%-28s %-26s %12s %12s' % (test, m.group(1) + ' - ' + m.group(2),
+                                               m.group(3), m.group(4)))
+    say('')
+    say('total wall clock: %.1f s' % (time.time() - jobs_started))
+    log.close()
+    print('\nwritten to %s' % logpath)
+
+
+if __name__ == '__main__':
+    main()

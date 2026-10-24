@@ -1,0 +1,45 @@
+/home/aleks/Skrivebord/Code/PythonModules/Zandpack/Zandpack/TimedependentTransport.py:1059: RuntimeWarning: overflow encountered in exp
+  f   = 1/(1 + np.exp((e - mu_dev)/kT_dev))
+Finding eigenvalues and eigenvectors
+Maximum of eigenvalues of Lorentzian Gammas: 155.924473
+Minimum of eigenvalues of Lorentzian Gammas: -0.0
+If the minimum is negative, you should take extra care!
+( if minimum negative Check eigenvalues of $\Gamma$)
+
+----------------
+ Storing 1567503 values of Omega_{axc,a'x'c'}!
+----------------
+
+
+----------------
+ 64.04598526885982% of Omegas are set to zero!
+
+----------------
+ 64.51149425287356% of psis are set to zero!
+
+ Check the ODECheck.txt file lying in the working directory!
+
+
+ The values in the file should be small!
+
+(0.0, np.float64(0.10001))
+(np.float64(0.10001), np.float64(0.50001))
+(np.float64(0.50001), np.float64(1.00001))
+(np.float64(1.00001), np.float64(2.00001))
+(np.float64(2.00001), np.float64(5.00001))
+(np.float64(5.00001), np.float64(10.00001))
+(np.float64(10.00001), np.float64(15.00001))
+(np.float64(15.00001), np.float64(20.00001))
+
+Left current vs scipy_ode at its sample points (coarse grid: max|dJ| only)
+pair                          max|dJ|
+scipy_ode - zand            0.0004022
+scipy_ode - nozand          0.0004022
+zand - nozand               1.221e-12
+
+
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 5.841
+zand      [5.843]
+nozand    [5.843] 
+

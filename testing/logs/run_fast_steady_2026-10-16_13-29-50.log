@@ -1,0 +1,53 @@
+Zandpack test suite -- fast mode -- steady state
+date      : 2026-10-16 13:29:50
+host      : aleks-21kca024cd
+directory : /home/aleks/Skrivebord/ZP_testing/TestRUN
+tests     : examples/small_bound, synth_1
+script    : run_steady.sh
+RK_method : RK45
+jobs      : 3
+window    : t = 0 .. 2, 50 sampling points
+log       : ./logs/run_fast_steady_2026-10-16_13-29-50.log
+
+======================================================================
+examples/small_bound
+======================================================================
+status    : ok
+elapsed   : 123.6 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            0.0007123    0.0003093
+scipy_ode - nozand          0.0007123    0.0003093
+zand - nozand               1.066e-14    4.355e-15
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 10.6432
+zand      [10.6274]
+nozand    [10.6274] 
+
+======================================================================
+synth_1
+======================================================================
+status    : ok
+elapsed   : 88.4 s
+Left current vs scipy_ode (reference)
+pair                          max|dJ|      rms|dJ|
+scipy_ode - zand            1.738e-05    6.743e-06
+scipy_ode - nozand          1.738e-05    6.743e-06
+zand - nozand               8.995e-15    4.007e-15
+Particle number at the end (scipy_ode only keeps k=0)
+scipy_ode 0.9545
+zand      [0.9541]
+nozand    [0.9541] 
+
+======================================================================
+SUMMARY (differences between the methods, max and rms of |dJ|)
+======================================================================
+test                         pair                            max|dJ|      rms|dJ|
+examples/small_bound         scipy_ode - zand              0.0007123    0.0003093
+examples/small_bound         scipy_ode - nozand            0.0007123    0.0003093
+examples/small_bound         zand - nozand                 1.066e-14    4.355e-15
+synth_1                      scipy_ode - zand              1.738e-05    6.743e-06
+synth_1                      scipy_ode - nozand            1.738e-05    6.743e-06
+synth_1                      zand - nozand                 8.995e-15    4.007e-15
+
+total wall clock: 123.6 s
