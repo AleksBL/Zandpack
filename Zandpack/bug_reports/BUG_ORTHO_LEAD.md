@@ -453,3 +453,12 @@ tests around `ortho_lead`.
 - The block orientation in `calc_Sinv_Hl_Sinv` (`Hblock`) is consistent with
   `construct_BTD` given `block_td`'s convention (B = subdiagonal,
   C = superdiagonal) — not related to this bug.
+
+### Comments:
+Low severity bug that was discovered thanks to the new tests. 
+Only affected k-point sampled systems. 
+Fix: commit 21dfbfb
+Date of discovery: Oct 15 2026
+Date of fix:       Oct 24 2026
+
+
