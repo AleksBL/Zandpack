@@ -138,6 +138,18 @@ if options["Wmat"]!="None":
     _no  = H0.shape[-1]
     Wmat = Hlp.approxfield2mat(0.0, ramp_field, orthogonal=True).reshape(_no, _no).copy()
     Wmat*= 0.5
+
+if options["nullify_L"]!="False" and options["nullify_R"]!="False":
+    assert 1 == 0, "Youre nullifying both sides, error"
+
+if options["Wmat"]!="None" and options["nullify_R"]!="False":
+    Wmat += 0.5
+    Wmat *= 0.5
+if options["Wmat"]!="None" and options["nullify_L"]!="False":
+    Wmat -= 0.5
+    Wmat *= 0.5
+
+
 def fermi(e, mu, kT):
     return 1.0 / (1.0 + np.exp(np.clip((e - mu) / kT, -400.0, 400.0)))
 def integrand(e, V, H0, sig_L, sig_R, hw,
@@ -257,6 +269,8 @@ if __name__ == "__main__":
                    aL = ajL / hw[i], aR = -ajR / hw[i],
                    nflq=int(options["NPHOT"]), nphot=int(options["NPHOT"]))
         cur[i, j], err[i, j] = current(float(options["voltage"]), **par)
+        if np.isnan(cur).any():
+            print("Found nan in result: ", np.where(np.isnan(cur)))
         ndone += 1
         print(f"rank {rank}, (srank {_slurm_rank}): local {ndone}, global {t+1}/{ntasks}", flush=True)
     win.Free()

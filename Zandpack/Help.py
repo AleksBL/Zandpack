@@ -80,6 +80,17 @@ class TDHelper:
                                       )[0]
                               for ia in range(self.num_leads)]
             self.pos_elecorbs = [self.orb_pos[idx] for idx in self.orb_elecs]
+            if all([self.pos_elecorbs[i].size==0 for i in range(len(self.orb_elecs))]):
+                for _K in range(3):
+                    print("WARNING: In TDHelper, pos_orbelecs was not found. Using min, max of whatever direction the device is the largest in..")
+                    print("WARNING: 2 electrode standard transport geometry is now assumed. This is a fall-back and you should try to fix your setup.")
+                dxyz = np.max(self.orb_pos, axis=0) - np.min(self.orb_pos, axis=0)
+                _diridx = np.where(dxyz==dxyz.max())[0][0]
+                _Rmin = self.orb_pos[np.where(self.orb_pos[:,_diridx] == self.orb_pos[:,_diridx].min() )]
+                _Rmax = self.orb_pos[np.where(self.orb_pos[:,_diridx] == self.orb_pos[:,_diridx].max() )]
+                self.pos_elecorbs = [_Rmin, _Rmax]
+                print(_Rmin.shape)
+
         except:
             self.orb_pos = None
             try:
