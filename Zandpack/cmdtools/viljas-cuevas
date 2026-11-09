@@ -220,8 +220,8 @@ def integrand(e, V, H0, sig_L, sig_R, hw,
     return total
 def current(V, **kw):
     val,err = quad(lambda e: integrand(e, V, **kw), 0.0, kw["hw"], 
-                   epsabs=float(options["epsabs"]), 
-                   epsrel=float(options["epsrel"]), 
+                   epsabs=float(options["epsabs"]),
+                   epsrel=float(options["epsrel"]),
                    limit=int(options["limit"]))
     val *= 1 / (hbar*2*np.pi)
     err *= 1 / (hbar*2*np.pi)
