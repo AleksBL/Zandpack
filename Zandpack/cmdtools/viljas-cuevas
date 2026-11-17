@@ -291,8 +291,8 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
         fR[il] = fermi(e - l * hw, muR, kT)
     # Construct Sig<,>
     SigLL = np.einsum("lm,ln,l,lij->minj",vL_v,vL_v, 1j* fL    , sigL, optimize=True)
-    SigLG = np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fL) , sigL, optimize=True)
-    SigRL = np.einsum("lm,ln,l,lij->minj",vL_v,vL_v, 1j* fR    , sigR, optimize=True)
+    SigLG = np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL) , sigL, optimize=True)
+    SigRL = np.einsum("lm,ln,l,lij->minj",vR_v,vR_v, 1j* fR    , sigR, optimize=True)
     SigRG = np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR) , sigR, optimize=True)
     SigL  = SigLL + SigRL
     SigG  = SigLG + SigRG
