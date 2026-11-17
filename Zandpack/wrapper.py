@@ -807,7 +807,9 @@ class Control: # Replaces bash scripting
                voltage=0.0, NPHOT=3, outfile="vc_out.npz",
                kT=0.025, epsrel=1e-7, epsabs=1e-7, limit=800,
                Wmat=False, Wmat_fact=1.0, Wideband=False, 
-               Wideband_fact = 1.0, use_ai_se_version=True,slurm_array_rank=0,slurm_array_size=1,
+               Wideband_fact = 1.0, use_ai_se_version=True,
+               slurm_array_rank=0,slurm_array_size=1,
+               mode="current",
                ):
         """
         Arguments:
@@ -826,6 +828,9 @@ class Control: # Replaces bash scripting
             Wideband: bool, If the wideband approximation should be used.
             Wideband_fact: float, scaling of the wideband self energies.
             use_ai_se_version: Used an AI optimized version of the Lorentzian_SE class from the FittedSelfEnergy module.
+            slurm_array_rank : further parallelization, slurm rank
+            slurm_array_size : further parallelization, slurm #ranks
+            mode : current (default) or spectral.
         """
         this_frame = inspect.currentframe()
         arg_values = inspect.getargvalues(this_frame)
@@ -834,7 +839,16 @@ class Control: # Replaces bash scripting
         kwargs["hw"]      = ",".join([str(s) for s in hw])
         kwargs["ampl"]    = ",".join([str(s) for s in ampl])
         ### The Wmat and Wideband keywords are a bit clumsy to set
-        kwargs["Wmat"]    = "Yes" if Wmat else "None"
+        if isinstance(Wmat, bool):
+            if Wmat==True:
+                kwargs["Wmat"]="True"
+            else:
+                kwargs["Wmat"]="None"
+        elif isinstance(Wmat, str):
+            kwargs["Wmat"] = Wmat
+        else:
+            print(Wmat)
+            assert 1 == 0, "Wmat was not recognized. Exiting"
         kwargs["Wideband"]= "True" if Wideband else "False"
         for k in arg_values.args:
             if k=='self':

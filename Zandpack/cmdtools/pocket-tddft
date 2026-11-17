@@ -41,6 +41,7 @@ options = {"proj_inds":"projs.npy",
            "plot_dipole_S":"False",
            'initial_file': "Initial.py",
            'bias_file'   : "Bias.py",
+           'save_dm'     : "False",
            }
 
 for a in args:
@@ -194,17 +195,21 @@ print("TDDFT took : " + str(np.round(_T2 - _T1, 2)) +"secs")
 print(out.y.shape)
 DMf = out.y.T.reshape(len(teval), nk, no,no)
 
-
-
-
-
-
-
-
+if options["save_dm"]!="False":
+    _tono = fractional_matrix_power(Hlp.ncS, 0.5)[0][idx,][:,idx]
+    ht = np.zeros(DMf.shape,dtype=np.complex64)
+    for i in range(len(DMf)):
+        ht[i] = _tono @ dm2h(out.t[i], DMf[i]) @ _tono
+    np.savez_compressed(options["save_dm"],
+                        dm  = DMf,idx = idx,
+                        ht  = ht,
+                        t   = out.t,
+                        S   = Hlp.ncS[:,idx,][:,:,idx],
+                        # S   = S[:, idx,][:,:,idx],
+                        pos = Hlp.orb_pos[idx],
+                        )
 
 # PLOTTING
-
-
 if options["obs"] != "None":
     import matplotlib.pyplot as plt
     from Zandpack.plot import interp_and_fft
@@ -234,9 +239,9 @@ if options["obs"] != "None":
         gauss_s = 0.5
     fb,wb = interp_and_fft(teval, np.array([0.01 * np.exp(-(ti/gauss_s)**2) for ti in teval]), Nt)
     idx_max = np.where(np.abs(fb) <(0.025 * np.abs(fb).max()))[0][0]
-    wmax = wb[idx_max]
-    ii = np.where(w<wmax)[0]
-    y = np.abs(fs[ii]/fb[ii])
+    wmax  = wb[idx_max]
+    ii    = np.where(w<wmax)[0]
+    y     = np.abs(fs[ii]/fb[ii])
     if options["jdos"]=='True':
         plt.plot(hwl,JDOS/JDOS.max() * 2.0 * y.max(),label = 'JDOS')
     label = "Response"
@@ -254,6 +259,8 @@ if options["obs"] != "None":
 
     plt.plot(2 * np.pi * hbar * w[ii], fplot, label = label)
     plt.xlim(0,    2 * np.pi * hbar *  wmax )
+    # plt.xlim(1, 1.5)  # 2 * np.pi * hbar *  wmax )
+
     plt.ylim(0, None)
     plt.legend()
     plt.grid(which='both', linestyle='-', linewidth=0.5, alpha=0.5)
@@ -274,6 +281,9 @@ if options["obs"] != "None":
                             )
 
 sys.exit()
+
+
+##################
 ########DEPRECATED
 def dm2DM(dm):
     ic = 0
