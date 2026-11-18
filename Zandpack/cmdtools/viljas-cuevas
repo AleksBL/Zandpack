@@ -91,8 +91,9 @@ if options["Wideband"]!="True":
             self.kidx = kidx
             self.no   = fitSE.Coeffs.shape[-1]
         def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
-            _E = np.array([E])
-            return self.SE.evaluate(_E, noopt=False)[self.kidx, 0]
+            _E = np.atleast_1d(E)
+            out = self.SE.evaluate(_E, noopt=False)[self.kidx]
+            return out[0] if np.ndim(E) == 0 else out
 else:
     class dummy_se:
         def __init__(self, fitSE, kidx):
@@ -101,8 +102,10 @@ else:
             self.no   = fitSE.Coeffs.shape[-1]
             self.make_gamma()
         def self_energy(self, E, k = np.array([0.0, 0.0, 0.0])):
-            G = self.gamma
-            return (-1j/2) * G
+            res = (-1j/2) * self.gamma
+            if isinstance(E, np.ndarray) and E.size > 1:
+                return np.tile(res, (E.size, 1, 1))    # not broadcast_to: read-only
+            return res
         def make_gamma(self):
             Emin, Emax, N = -5.0, 5.0, 252
             Eg = np.linspace(Emin, Emax,N)
@@ -255,6 +258,10 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
        G^> = G^r Sig^> G^a.
        G^{r/a} is already computed in the integrand function, so we 
        just need to compute Signa^</>.
+       
+       The NEGF identity X^> - X^< = X^r - X^a can be used to obtain some
+       of the quantities from the other ones, since X^a = X^r^dagger
+       is cheap to calculate. END CHOICE: Dont do this, but could be done.
     """
     ms = np.arange(-nflq,  nflq +1)
     ls = np.arange(-nphot, nphot+1)
@@ -263,15 +270,26 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     muL, muR = eF + eta * V, eF - (1.0 - eta) * V
     uL, uR = muL - eF, muR - eF
     # --- retarded Green function ---
-    sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
-    sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+    # sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+    # sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
     vL_v = np.zeros((len(ls), len(ms)))
     vR_v = np.zeros((len(ls), len(ms)))
+    
     for il,l in enumerate(ls):
         vL  = np.array([jv(m + l, aL) for m in ms])
         vR  = np.array([jv(m + l, aR) for m in ms])
         vL_v[il], vR_v[il] = vL, vR
-        sigL[il], sigR[il] = sig_L(e-uL-l*hw), sig_R(e-uR-l*hw)
+        # Moved outside loop, sig_L, sig_R now accepts array input for the energies.
+        # sigL[il], sigR[il] = sig_L(e-uL-l*hw), sig_R(e-uR-l*hw)
+    # This optimization should / could also be applied in the integrand function.
+    # Fast way:
+    _Es_L= e - uL - ls * hw      # (L,), ordered by ls
+    _Es_R= e - uR - ls * hw
+    sigL = sig_L(_Es_L)          # (L, nb, nb), same ordering
+    sigR = sig_R(_Es_R)
+    # assert np.allclose(sigL_fast, sigL), "comp failed"
+    # assert np.allclose(sigR_fast, sigR), "comp failed"
+    
     sig =np.einsum("lm,ln,lij->minj",vL_v,vL_v,sigL,optimize=True)
     sig+=np.einsum("lm,ln,lij->minj",vR_v,vR_v,sigR,optimize=True)
     # Overwrite sigma with gamma
@@ -295,9 +313,9 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     SigLL =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v, 1j* fL   , sigL, optimize=path)
     SigRL =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v, 1j* fR   , sigR, optimize=path)
     # G^> is calculated with the general relation instead
-    # SigLG =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL), sigL, optimize=path)
-    # SigRG =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR), sigR, optimize=path)
-    # SigG  = SigLG + SigRG
+    SigLG =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL), sigL, optimize=path)
+    SigRG =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR), sigR, optimize=path)
+    SigG  = SigLG + SigRG
     
     SigL  = SigLL + SigRL
     _spectral_eta = 0.0 if options["spectral_eta"] == "None" else float(options["spectral_eta"])
@@ -319,9 +337,9 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     Gl = Gr @ SigL.reshape(len(ms)*nb, len(ms)*nb) @ Ga
     # Only three independent functions, last is given from the other three.
     # Use general identity:
-    Gg = Gr-Ga+Gl
+    # Gg = Gr-Ga+Gl
     # Usual way
-    # Gg = Gr @ SigG.reshape(len(ms)*nb, len(ms)*nb) @ Ga
+    Gg = Gr @ SigG.reshape(len(ms)*nb, len(ms)*nb) @ Ga
     
     # Test the general identity:
     #Diff1 = Gr - Ga
