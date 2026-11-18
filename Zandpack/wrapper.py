@@ -809,7 +809,7 @@ class Control: # Replaces bash scripting
                Wmat=False, Wmat_fact=1.0, Wideband=False, 
                Wideband_fact = 1.0, use_ai_se_version=True,
                slurm_array_rank=0,slurm_array_size=1,
-               mode="current",
+               mode="current", energies=None,
                ):
         """
         Arguments:
@@ -838,6 +838,8 @@ class Control: # Replaces bash scripting
         kwargs["device"]  = self.input.name
         kwargs["hw"]      = ",".join([str(s) for s in hw])
         kwargs["ampl"]    = ",".join([str(s) for s in ampl])
+        if energies is not None:
+            kwargs["energies"] = ",".join([str(s) for s in energies])
         ### The Wmat and Wideband keywords are a bit clumsy to set
         if isinstance(Wmat, bool):
             if Wmat==True:
@@ -850,16 +852,9 @@ class Control: # Replaces bash scripting
             print(Wmat)
             assert 1 == 0, "Wmat was not recognized. Exiting"
         kwargs["Wideband"]= "True" if Wideband else "False"
+        _skip=["self","hw","ampl","Wmat","Wideband","energies"]
         for k in arg_values.args:
-            if k=='self':
-                continue
-            elif k == 'hw':
-                continue
-            elif k =='ampl':
-                continue
-            elif k == "Wmat":
-                continue
-            elif k == "Wideband":
+            if k in _skip:
                 continue
             else:
                 kwargs[k] = arg_values.locals[k]
@@ -870,9 +865,6 @@ class Control: # Replaces bash scripting
         else:
             outfile_write = "tg"+self.outlabel+"_sr_"+str(slurm_array_rank)+".out"
         self.run_cmd_standard(exc," >> "+outfile_write, **kwargs)
-        #res   = np.load(self.working_dir + "/"+outfile)
-        #Jrect, Err = res["cur"], res["err"]
-        #return Jrect, Err
     
     def run_cmd_standard(self, CMD, out, **kwargs):
         cmd = CMD + " Dir=$PWD "

@@ -47,7 +47,8 @@ options = {"device":"ABC",
            "slurm_array_rank":"0",
            "slurm_array_size":"1",
            "mode":"current",
-           "energies":"-3,3,100"
+           "energies":"-3,3,100",
+           "spectral_eta":"0.01",
            }
 if "--help" in args:
     for kw in options.keys():
@@ -290,30 +291,43 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
         fL[il] = fermi(e - l * hw, muL, kT)
         fR[il] = fermi(e - l * hw, muR, kT)
     # Construct Sig<,>
-    SigLL = np.einsum("lm,ln,l,lij->minj",vL_v,vL_v, 1j* fL    , sigL, optimize=True)
-    SigLG = np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL) , sigL, optimize=True)
-    SigRL = np.einsum("lm,ln,l,lij->minj",vR_v,vR_v, 1j* fR    , sigR, optimize=True)
-    SigRG = np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR) , sigR, optimize=True)
+    path = np.einsum_path("lm,ln,l,lij->minj",vL_v,vL_v, fL,        sigL, optimize=True)[0]
+    SigLL =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v, 1j* fL   , sigL, optimize=path)
+    SigRL =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v, 1j* fR   , sigR, optimize=path)
+    # G^> is calculated with the general relation instead
+    # SigLG =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL), sigL, optimize=path)
+    # SigRG =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR), sigR, optimize=path)
+    # SigG  = SigLG + SigRG
+    
     SigL  = SigLL + SigRL
-    SigG  = SigLG + SigRG
     Gr    = np.kron(np.diag(e + 0.0j + ms * hw), np.eye(nb))
     for i in range(D):
         Gr[i*nb:(i+1)*nb, i*nb:(i+1)*nb] -= H0
     if Wmat is not None:
         _w = Wmat*((aL-aR)*hw*0.5)
         _wc = _w.T.conj()
-        # Factor of 2 depends on the definition
         for i in range(0, D-1):
             b1 = slice( i*nb,    (i+1)*nb)
             b2 = slice((i+1)*nb, (i+2)*nb)
-            Gr[b1,b2] -= _w  
+            Gr[b1,b2] -= _w
             Gr[b2,b1] -= _wc
     Gr -= sig.reshape(len(ms)*nb, len(ms)*nb)
-    Gr = np.linalg.inv(Gr)
-    Ga = Gr.T.conj()
+    Gr  = np.linalg.inv(Gr)
+    Ga  = Gr.T.conj()
     # Calculate <,> Gfs
     Gl = Gr @ SigL.reshape(len(ms)*nb, len(ms)*nb) @ Ga
-    Gg = Gr @ SigG.reshape(len(ms)*nb, len(ms)*nb) @ Ga
+    # Only three independent functions, last is given from the other three.
+    # Use general identity:
+    Gg = Gr-Ga+Gl
+    # Usual way
+    # Gg = Gr @ SigG.reshape(len(ms)*nb, len(ms)*nb) @ Ga
+    
+    # Test the general identity:
+    #Diff1 = Gr - Ga
+    #Diff2 = Gg - Gl
+    #if not np.allclose(Diff1, Diff2 ):
+    #    print("G^> - G^< = G^r - G^a violation")
+    #    print("maxabsdiff: ", str(np.abs(Diff1-Diff2).max()))
     return Gr, Gl, Gg
 
 def compute_spectral(e, V, H0, sig_L, sig_R, hw,
@@ -323,20 +337,19 @@ def compute_spectral(e, V, H0, sig_L, sig_R, hw,
         Compute the partial traces of retarded, lesser and greater greens functions.
     """
     Gr, Gl, Gg = calc_gfs(e, V, H0, sig_L, sig_R, hw,
-                          aL, aR, nflq, nphot, 
-                          eF, kT, eta)
-    Gr_pt = np.zeros(2 * nphot +1, dtype=complex)
-    Gl_pt = Gr_pt.copy() 
+                          aL=aL, aR = aR, nflq=nflq, nphot=nphot, 
+                          eF=eF, kT=kT, eta=eta)
+    Gr_pt = np.zeros(2*nphot+1, dtype=complex)
+    Gl_pt = Gr_pt.copy()
     Gg_pt = Gr_pt.copy()
-    nb    = H0.shape[0]
-    for i in range(-nphot, nphot +1):
+    nb    = H0.shape[-1]
+    for i in range(2 * nphot + 1):
         for j in range(nb):
             io = i * nb + j
             Gr_pt[i] += Gr[io, io]
             Gl_pt[i] += Gl[io, io]
             Gg_pt[i] += Gg[io, io]
     return Gr_pt, Gl_pt, Gg_pt
-
 
 if __name__ == "__main__" and options["mode"]== "current":
     _slurm_rank, _slurm_size = int(options["slurm_array_rank"]), int(options["slurm_array_size"])
@@ -441,7 +454,8 @@ if __name__ == "__main__" and options["mode"]== "spectral":
         if t >= ntasks:
             break
         i, j, _iE = IJ[t]
-        ajL,ajR = ampl[j],ampl[j]
+        ajL, ajR = ampl[j], ampl[j]
+        hwi =  hw[i]
         if options["nullify_L"] != "False":
             ajL = 0.0
         if options["nullify_R"] != "False":
@@ -449,13 +463,11 @@ if __name__ == "__main__" and options["mode"]== "spectral":
         par = dict(H0=H0[kidx],
                    sig_L=lambda e: SE[0].self_energy(e),
                    sig_R=lambda e: SE[1].self_energy(e),
-                   hw=hw[i], kT=float(options["kT"]),
-                   aL = ajL / hw[i], aR = -ajR / hw[i],
+                   hw=hwi, kT=float(options["kT"]),
+                   aL = ajL / hwi, aR = -ajR / hwi,
                    nflq=NPHOT, nphot=NPHOT)
         gr_pt[_iE,i,j], gl_pt[_iE,i,j], gg_pt[_iE,i,j] = \
-            compute_spectral(_Egrid[_iE],
-                            float(options["voltage"]),
-                            **par)
+            compute_spectral(_Egrid[_iE], float(options["voltage"]), **par)
         if np.isnan(gr_pt[_iE, i,j]).any():
             print("Found nan in result")
         if np.isnan(gg_pt[_iE, i,j]).any():
