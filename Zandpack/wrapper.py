@@ -809,7 +809,7 @@ class Control: # Replaces bash scripting
                Wmat=False, Wmat_fact=1.0, Wideband=False, 
                Wideband_fact = 1.0, use_ai_se_version=True,
                slurm_array_rank=0,slurm_array_size=1,
-               mode="current", energies=None,
+               mode="current", energies=None,spectral_eta=None,
                ):
         """
         Arguments:
@@ -851,8 +851,13 @@ class Control: # Replaces bash scripting
         else:
             print(Wmat)
             assert 1 == 0, "Wmat was not recognized. Exiting"
+        if spectral_eta is None:
+            kwargs["spectral_eta"] = "None"
+        else:
+            kwargs["spectral_eta"] = str(spectral_eta)
         kwargs["Wideband"]= "True" if Wideband else "False"
-        _skip=["self","hw","ampl","Wmat","Wideband","energies"]
+        _skip=["self","hw","ampl","Wmat","Wideband","energies",
+               "spectral_eta"]
         for k in arg_values.args:
             if k in _skip:
                 continue

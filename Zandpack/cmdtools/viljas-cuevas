@@ -48,7 +48,7 @@ options = {"device":"ABC",
            "slurm_array_size":"1",
            "mode":"current",
            "energies":"-3,3,100",
-           "spectral_eta":"0.01",
+           "spectral_eta":"None",
            }
 if "--help" in args:
     for kw in options.keys():
@@ -300,7 +300,8 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     # SigG  = SigLG + SigRG
     
     SigL  = SigLL + SigRL
-    Gr    = np.kron(np.diag(e + 0.0j + ms * hw), np.eye(nb))
+    _spectral_eta = 0.0 if options["spectral_eta"] == "None" else float(options["spectral_eta"])
+    Gr    = np.kron(np.diag(e + _spectral_eta*1j  + ms * hw), np.eye(nb))
     for i in range(D):
         Gr[i*nb:(i+1)*nb, i*nb:(i+1)*nb] -= H0
     if Wmat is not None:
