@@ -945,13 +945,6 @@ def read_overlap_data(tbt, SE_inds, Dev, Hd, Sd):
         Sdk = Sd.Sk(k = kpnt)
         for ie in range(len(Dev.elecs)):
             idx_D, idx_E = SE_inds[ie], elec_orbs[ie]
-            print("---------")
-            print(idx_D, idx_E)
-            print("---------")
-            print(Hd.xyz[Hd.o2a(idx_D)])
-            print("---------")
-            print(Hd.xyz[Hd.o2a(idx_E)])
-            print("---------")
             if len(np.intersect1d(idx_D, idx_E))>0:
                 print("WARNING: Inside Gf_Module.Gf.read_overlap_data: \n\
                       -> Your device indices and electrode indices are overlapping. \n\

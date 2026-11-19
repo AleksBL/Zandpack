@@ -21,7 +21,7 @@ import subprocess
 args = sys.argv[1:]
 options = {'folder':'ABC_save',
            "tol":"0.5e-7",
-           "delete":"False",
+           "delete":"True",
            "interp":"linear",
            "usexz":"True",
            "extremexz":"False",

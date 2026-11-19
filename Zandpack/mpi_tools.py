@@ -218,6 +218,11 @@ def combine_pi(dirs, times_label = 'DMt', prefer_full = True):
         count += 1
     DM  =   np.vstack(DM)
     T   =   np.hstack(T)
+    # PI has no value at the final time of the run, so the DMt axis carries
+    # one surplus entry per directory. Drop it, but only when it is really
+    # there: with n_dm_compress > 1 the stride can already have absorbed it.
+    if len(T) - len(DM) == count:
+        T = T[:-count]
     return T, DM
 
 def closest_dm(times, Dir, dt_avg, times_label = 'DMt'):
