@@ -858,6 +858,8 @@ class Control: # Replaces bash scripting
         kwargs["Wideband"]= "True" if Wideband else "False"
         _skip=["self","hw","ampl","Wmat","Wideband","energies",
                "spectral_eta"]
+        if mode == "spectral":
+            print("Running spectral viljas-cuevas calculation, note only hw[0] is used (first argument of the function, usually a list)")
         for k in arg_values.args:
             if k in _skip:
                 continue
@@ -979,6 +981,8 @@ class Control: # Replaces bash scripting
             folder = self._latest_nozand_calc
         except:
             folder = self.input.name+"_save"
+        outfile = "compressPI"+self.outlabel + ".out"
+        self.systemcall("lossypi           Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > " + outfile)
         outfile = "compressDM"+self.outlabel + ".out"
         self.systemcall("lossydm           Dir=$PWD folder="+folder+" tol="+str(lossy_dm_tol) + " > " + outfile)
         outfile = "compressJ"+self.outlabel + ".out"
@@ -1792,6 +1796,8 @@ def archive_calculation(name, arc_name, keep_psi_omg_in_arc = False, clean_origi
         os.system("rm "+name+"/DM*.npz")
         os.system("rm "+name+"/LossyDensityMatrix.npz")
         os.system("rm "+name+"/LossyDensityMatrix.npz.xz")
+        os.system("rm "+name+"/LossyPI.npz")
+        os.system("rm "+name+"/LossyPI.npz.xz")
         # The current removal was not added before, but the prefer_full=True default value in mpi_tools should(?) make this inconsequencial.
         os.system("rm "+name+"/Currents.npz")
         os.system("rm "+name+"/Currents.npz.xz")

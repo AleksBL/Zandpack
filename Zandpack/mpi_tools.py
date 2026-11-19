@@ -174,9 +174,17 @@ def herm_insert_tril(A):
         for j in range(0,i):
             A[..., i,j] = np.conj(A[..., j,i])
 
-def combine_pi(dirs, times_label = 'DMt'):
+def combine_pi(dirs, times_label = 'DMt', prefer_full = True):
     """
     like combine_currents, but for the PI matrix instead.
+
+    Reads the raw PIa* chunks when they are present (prefer_full=True) and
+    falls back to the LossyPI.npz / LossyPI.npz.xz archive written by the
+    lossypi cmdtool otherwise. Set prefer_full=False to force the archive.
+    The chunks may be plain .npy or savez_compressed .npz, both are read
+    through flexload.
+
+    The archive path returns after the first directory, like combine_dm.
     """
 
     DM = []
@@ -186,12 +194,24 @@ def combine_pi(dirs, times_label = 'DMt'):
     for d in dirs:
         f = ld(d)
         f = [v for v in f if 'PIa' in v]
+        if len(f) > 0 and prefer_full:
+            pass
+        else:
+            if "LossyPI.npz.xz" in ld(d):
+                with lzma.open(d+"/LossyPI.npz.xz", "rb") as fh:
+                    arc = np.load(io.BytesIO(fh.read()))
+            elif "LossyPI.npz" in ld(d):
+                arc = np.load(d+"/LossyPI.npz")
+            else:
+                assert 1 == 0, ("No PIa* chunks and no LossyPI.npz[.xz] in "
+                                + str(d))
+            return arc["tpi"], arc["pi"].transpose(4,0,1,2,3).copy()
+
         f.sort(key=natural_keys)
         tf = [v for v in ld(d) if times_label in v]
         tf.sort(key=natural_keys)
         for ff in f:
-            _dm = np.load(d+'/'+ff)
-            DM += [_dm]
+            DM += [flexload(d+'/'+ff)]
         
         for ff in tf:
             T+=[np.load(d+'/'+ff)]

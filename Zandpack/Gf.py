@@ -945,6 +945,13 @@ def read_overlap_data(tbt, SE_inds, Dev, Hd, Sd):
         Sdk = Sd.Sk(k = kpnt)
         for ie in range(len(Dev.elecs)):
             idx_D, idx_E = SE_inds[ie], elec_orbs[ie]
+            print("---------")
+            print(idx_D, idx_E)
+            print("---------")
+            print(Hd.xyz[Hd.o2a(idx_D)])
+            print("---------")
+            print(Hd.xyz[Hd.o2a(idx_E)])
+            print("---------")
             if len(np.intersect1d(idx_D, idx_E))>0:
                 print("WARNING: Inside Gf_Module.Gf.read_overlap_data: \n\
                       -> Your device indices and electrode indices are overlapping. \n\
@@ -999,6 +1006,11 @@ def pivot_and_sub(SigList, pivot, idxD, no):
     
 
 class ortho_lead:
+
+    # This class needs to be extended with an optional
+    # method that incorporates the possibility for
+    # using the TBT.Device.Atoms keyword into the
+    # calculation. This means an additional set of matrix elements
     def __init__(self, HS, direc):
         Hm, Sm           = sisl2array_min(HS.transform(orthogonal=False))
         self.Hm, self.Sm = Hm, Sm

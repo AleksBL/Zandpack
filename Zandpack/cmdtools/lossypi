@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 14 14:47:00 2022
+
+@author: aleksander
+
+Set the savetime of a calculation specified in
+the two positional arguments
+
+do a lossypi --help to see usage.
+
+"""
+import ctypes
+_me = ctypes.CDLL(None)
+_me.prctl(15, b"lossypi", 0, 0, 0)
+import sys, os, io, lzma
+import numpy as np
+from Zandpack.plot import PI
+import subprocess
+args = sys.argv[1:]
+options = {'folder':'ABC_save',
+           "tol":"0.5e-7",
+           "delete":"False",
+           "interp":"linear",
+           "usexz":"True",
+           "extremexz":"False",
+           "xzlevel":"7",
+           }
+if '--help' in args:
+    print("This tool takes the chunks of the PI (current) matrices produced by zand / nozand and puts them into one file and then compresses it using the built-in numpy savez_compressed, or using the xz tool.")
+    print('Keywords and default values. Assign with "keyword=value" argument after the lossypi command (no spaces!)')
+    for keys,values in options.items():
+        print(keys, ':', values)
+    exit()
+
+path       = args[0].replace(' ', '').split('=')[1]
+os.chdir(path)
+new_folder = os.getcwd()
+sys.path.append(new_folder)
+
+
+for a in args:
+    if 'command' not in a:
+        split = a.replace(' ', '').split('=')
+    else:
+        split = a.split('=')
+    options.update({split[0]:split[1]})
+try:
+    tpi, pi = PI([options["folder"]])
+except Exception:
+    print("Did not find any PI data in the folder. Exiting.")
+    sys.exit()
+# combine_pi concatenates the DMt times and the PIa rows without checking
+# that each chunk has the same number of entries, and it returns the file
+# names instead of the arrays for savez_compressed chunks. Both show up
+# here as a length mismatch, before any decimation can act on it.
+assert len(tpi) == len(pi), ("combine_pi returned " + str(len(tpi))
+                             + " times but " + str(len(pi)) + " PI rows.")
+ti    = tpi[0] + 0.0
+pii   = pi[0].copy()
+tout  = [ti]
+piout = [pii]
+inds  = []
+nt    = len(tpi)
+tol   = float(options["tol"])
+
+if options["interp"]=="step":
+    print("step interpolation")
+    for i in range(1,nt):
+        if np.abs(pii-pi[i]).max()>tol:
+            ti  = tpi[i] + 0.0
+            pii =  pi[i].copy()
+            tout.append(ti)
+            piout.append(pii)
+    tout  = np.array(tout)
+    piout = np.array(piout)
+    
+elif options["interp"]=="linear":
+    print("linear interpolation")
+    from numba import njit
+    @njit
+    def absmax(A, tv, idx):
+        M     = 0.0
+        i0,i1 = idx[0],idx[-1]
+        A0,A1 = A[i0],A[i1]
+        dAdt  = A1 - A0
+        dAdt /= (tv[i1] - tv[i0])
+        for i in range(len(idx)):
+            I    = idx[i]
+            dt   = (tv[I] - tpi[i0])
+            diff = np.abs(A[I] - (A0 + dt * dAdt)).max()
+            M    = max(M, diff)
+        return M
+    n  = len(tpi)
+    i0 = 0
+    while i0 < len(tpi):
+        i1 = i0 +2
+        if i1 >= len(tpi):
+            break
+        idx = np.arange(i0,i1+1)
+        #assert np.abs(absmax(pi, tpi, idx) - np.abs(pi[i0:i1+1] - (pi[i0] + (tpi[i0:i1+1] - tpi[i0])[:, None, None, None, None] * (pi[i1]-pi[i0])/(tpi[i1] - tpi[i0]))
+        #             ).max()) < 1e-10
+        while i1 < n-1 and absmax(pi, tpi, idx) < float(options["tol"]):
+            i1 += 1
+            idx = np.arange(i0,i1+1)
+        i0 = i1  -1
+        if i0 not in inds:
+            # Edge case with last index in the calculatiuon i think
+            inds  += [i0]
+            piout += [pi[i0]]
+            tout  += [tpi[i0]]
+    if len(tpi)-1 not in inds:
+        piout += [pi[len(tpi)-1]]
+        tout  += [tpi[len(tpi)-1]]
+else:
+    assert 1 == 0, "The interp keyword was not recognized."
+
+piout = np.array(piout)
+tout  = np.array(tout)
+print(tout.min(), tout.max())
+print(tpi.min(), tpi.max())
+print("From "+str(nt) + " to " + str(len(tout)) + " points ")
+# Transpose of pi for better time-locality in the data, which means more similar numbers
+if options["usexz"] == "False":
+    np.savez_compressed(options["folder"]+"/LossyPI.npz",
+                        tpi = tout, pi = piout.transpose(1,2,3,4,0),
+                        t_orig = tpi, tol = tol)
+else:
+    npz_path = options["folder"] + "/LossyPI.npz"
+    np.savez(npz_path, # uncompressed, so xz has raw bytes to work with
+             tpi=tout, pi=piout.transpose(1,2,3,4,0),
+             t_orig=tpi, tol=tol)
+    xzlevel = options["xzlevel"]
+    if options["extremexz"]=="True":
+        subprocess.run(["xz", "-"+xzlevel, "-e", "-T0", "-f", npz_path], check=True)
+    else:
+        subprocess.run(["xz", "-"+xzlevel,       "-T0", "-f", npz_path], check=True)
+
+assert ("LossyPI.npz.xz" in os.listdir(options["folder"]) ) or ("LossyPI.npz" in os.listdir(options["folder"]))
+
+# Reload the archive before anything is deleted, so a truncated or corrupt
+# file cannot take the PIa chunks with it.
+if "LossyPI.npz.xz" in os.listdir(options["folder"]):
+    with lzma.open(options["folder"]+"/LossyPI.npz.xz", "rb") as f:
+        _arc = np.load(io.BytesIO(f.read()))
+else:
+    _arc = np.load(options["folder"]+"/LossyPI.npz")
+assert _arc["pi"].shape[-1] == len(tout), ("Archive holds "
+    + str(_arc["pi"].shape[-1]) + " time points, expected " + str(len(tout)))
+
+if options["delete"]=="True":
+    print("Deleting previous PIs from "+options["folder"])
+    os.system("rm -f "+options["folder"]+"/PI*.npz")
+    os.system("rm -f "+options["folder"]+"/PI*.npy")
+

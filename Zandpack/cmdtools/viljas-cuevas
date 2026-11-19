@@ -173,6 +173,7 @@ def integrand(e, V, H0, sig_L, sig_R, hw,
               aL=0.0, aR=0.0, nflq=5, nphot=14, 
               eF=0.0, kT=5e-3, eta=0.5):
     """sum_{k,l} Tr[Gr Gam_R^(k) Ga Gam_L^(l)] (f_L^(l) - f_R^(k)) at energy e."""
+    _use_fast = True # Toggle for the self energy calculation optimization.
     ms = np.arange(-nflq,  nflq +1)
     ls = np.arange(-nphot, nphot+1)
     nb, D = H0.shape[0], len(ms)
@@ -180,15 +181,23 @@ def integrand(e, V, H0, sig_L, sig_R, hw,
     muL, muR = eF + eta * V, eF - (1.0 - eta) * V
     uL, uR = muL - eF, muR - eF
     # --- retarded Green function ---
-    sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
-    sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+    if _use_fast==False:
+        sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
+        sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
     vL_v = np.zeros((len(ls), len(ms)))
     vR_v = np.zeros((len(ls), len(ms)))
     for il,l in enumerate(ls):
         vL  = np.array([jv(m + l, aL) for m in ms])
         vR  = np.array([jv(m + l, aR) for m in ms])
         vL_v[il], vR_v[il] = vL, vR
-        sigL[il], sigR[il] = sig_L(e-uL-l*hw), sig_R(e-uR-l*hw)
+        if _use_fast==False:
+            sigL[il], sigR[il] = sig_L(e-uL-l*hw), sig_R(e-uR-l*hw)
+    if _use_fast:
+        _Es_L= e - uL - ls * hw      # (L,), ordered by ls
+        _Es_R= e - uR - ls * hw
+        sigL = sig_L(_Es_L)          # (L, nb, nb), same ordering
+        sigR = sig_R(_Es_R)
+    
     sig =np.einsum("lm,ln,lij->minj",vL_v,vL_v,sigL,optimize=True)
     sig+=np.einsum("lm,ln,lij->minj",vR_v,vR_v,sigR,optimize=True)
     # Overwrite sigma with gamma
@@ -270,8 +279,6 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     muL, muR = eF + eta * V, eF - (1.0 - eta) * V
     uL, uR = muL - eF, muR - eF
     # --- retarded Green function ---
-    # sigL = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
-    # sigR = np.zeros((2 * nphot +1, nb, nb),dtype=complex)
     vL_v = np.zeros((len(ls), len(ms)))
     vR_v = np.zeros((len(ls), len(ms)))
     
@@ -293,10 +300,8 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     sig =np.einsum("lm,ln,lij->minj",vL_v,vL_v,sigL,optimize=True)
     sig+=np.einsum("lm,ln,lij->minj",vR_v,vR_v,sigR,optimize=True)
     # Overwrite sigma with gamma
-    # Proposed
     fR = np.zeros(len(ls))
     fL = np.zeros(len(ls))
-    
     for il,l in enumerate(ls):
         # In this, we instead make the SigL/R hold the steady state 
         # lesser/greater self energies of the L/R. 
@@ -305,7 +310,6 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
         sigR[il] -= sigR[il].T.conj()
         sigR[il] *= 1j
         # sigL and sigR contains now the levelwidth funcs of left and right
-        # Proposed extension:
         fL[il] = fermi(e - l * hw, muL, kT)
         fR[il] = fermi(e - l * hw, muR, kT)
     # Construct Sig<,>
@@ -316,7 +320,6 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     SigLG =     np.einsum("lm,ln,l,lij->minj",vL_v,vL_v,-1j*(1-fL), sigL, optimize=path)
     SigRG =     np.einsum("lm,ln,l,lij->minj",vR_v,vR_v,-1j*(1-fR), sigR, optimize=path)
     SigG  = SigLG + SigRG
-    
     SigL  = SigLL + SigRL
     _spectral_eta = 0.0 if options["spectral_eta"] == "None" else float(options["spectral_eta"])
     Gr    = np.kron(np.diag(e + _spectral_eta*1j  + ms * hw), np.eye(nb))
@@ -335,40 +338,74 @@ def calc_gfs(e, V, H0, sig_L, sig_R, hw,
     Ga  = Gr.T.conj()
     # Calculate <,> Gfs
     Gl = Gr @ SigL.reshape(len(ms)*nb, len(ms)*nb) @ Ga
-    # Only three independent functions, last is given from the other three.
-    # Use general identity:
-    # Gg = Gr-Ga+Gl
-    # Usual way
+    # Gg = Gr-Ga+Gl # fast way, exact when spectral_eta = 0
     Gg = Gr @ SigG.reshape(len(ms)*nb, len(ms)*nb) @ Ga
     
-    # Test the general identity:
-    #Diff1 = Gr - Ga
-    #Diff2 = Gg - Gl
-    #if not np.allclose(Diff1, Diff2 ):
-    #    print("G^> - G^< = G^r - G^a violation")
-    #    print("maxabsdiff: ", str(np.abs(Diff1-Diff2).max()))
+    # Test the general identity: (obviously only test without the shortcut for Gg)
+    # Diff1 = Gr - Ga
+    # Diff2 = Gg - Gl
+    # if not np.allclose(Diff1, Diff2 ):
+    #     print("G^> - G^< = G^r - G^a violation")
+    #     print("maxabsdiff: ", str(np.abs(Diff1-Diff2).max()))
     return Gr, Gl, Gg
-
-def compute_spectral(e, V, H0, sig_L, sig_R, hw,
-                     aL=0.0, aR=0.0, nflq=5, nphot=14, 
-                     eF=0.0, kT=5e-3, eta=0.5):
+def calc_gr_only(e, V, H0, sig_L, sig_R, hw,
+             aL=0.0, aR=0.0, nflq=5, nphot=14, 
+             eF=0.0, kT=5e-3, eta=0.5,
+             ):
+    """G^r at energy e. 
+       Convert Sigs to their floquet equivs: 
+          Floquet A_{mn} = sum_l J_{m+l}(alpha)J_{n+l}(alpha) a(e - l hw)
+       Here a is the steady state matrix, and A is the Floquet version. 
+       G^< = G^r Sig^< G^a,
+       G^> = G^r Sig^> G^a.
+       G^{r/a} is already computed in the integrand function, so we 
+       just need to compute Signa^</>.
+       
+       The NEGF identity X^> - X^< = X^r - X^a can be used to obtain some
+       of the quantities from the other ones, since X^a = X^r^dagger
+       is cheap to calculate. END CHOICE: Dont do this, but could be done.
+    """
+    ms = np.arange(-nflq,  nflq +1)
+    ls = np.arange(-nphot, nphot+1)
+    nb, D = H0.shape[0], len(ms)
+    muL, muR = eF + eta * V, eF - (1.0 - eta) * V
+    uL, uR = muL - eF, muR - eF
+    vL_v = np.zeros((len(ls), len(ms)))
+    vR_v = np.zeros((len(ls), len(ms)))
+    for il,l in enumerate(ls):
+        vL  = np.array([jv(m + l, aL) for m in ms])
+        vR  = np.array([jv(m + l, aR) for m in ms])
+        vL_v[il], vR_v[il] = vL, vR
+    _Es_L= e - uL - ls * hw      # (L,), ordered by ls
+    _Es_R= e - uR - ls * hw
+    sigL = sig_L(_Es_L)          # (L, nb, nb), same ordering
+    sigR = sig_R(_Es_R)
+    sig =np.einsum("lm,ln,lij->minj",vL_v,vL_v,sigL,optimize=True)
+    sig+=np.einsum("lm,ln,lij->minj",vR_v,vR_v,sigR,optimize=True)
+    _spectral_eta = 0.0 if options["spectral_eta"] == "None" else float(options["spectral_eta"])
+    Gr    = np.kron(np.diag(e + _spectral_eta*1j  + ms * hw), np.eye(nb))
+    for i in range(D):
+        Gr[i*nb:(i+1)*nb, i*nb:(i+1)*nb] -= H0
+    if Wmat is not None:
+        _w = Wmat*((aL-aR)*hw*0.5)
+        _wc = _w.T.conj()
+        for i in range(0, D-1):
+            b1 = slice( i*nb,    (i+1)*nb)
+            b2 = slice((i+1)*nb, (i+2)*nb)
+            Gr[b1,b2] -= _w
+            Gr[b2,b1] -= _wc
+    Gr -= sig.reshape(len(ms)*nb, len(ms)*nb)
+    return np.linalg.inv(Gr)
+def compute_spectral_dos(e, V, H0, sig_L, sig_R, hw,
+                         aL=0.0, aR=0.0, nflq=5, nphot=14, 
+                         eF=0.0, kT=5e-3, eta=0.5):
     """ 
         Compute the partial traces of retarded, lesser and greater greens functions.
     """
-    Gr, Gl, Gg = calc_gfs(e, V, H0, sig_L, sig_R, hw,
-                          aL=aL, aR = aR, nflq=nflq, nphot=nphot, 
-                          eF=eF, kT=kT, eta=eta)
-    Gr_pt = np.zeros(2*nphot+1, dtype=complex)
-    Gl_pt = Gr_pt.copy()
-    Gg_pt = Gr_pt.copy()
-    nb    = H0.shape[-1]
-    for i in range(2 * nphot + 1):
-        for j in range(nb):
-            io = i * nb + j
-            Gr_pt[i] += Gr[io, io]
-            Gl_pt[i] += Gl[io, io]
-            Gg_pt[i] += Gg[io, io]
-    return Gr_pt, Gl_pt, Gg_pt
+    #Gr = calc_gr_only(e, V, H0, sig_L, sig_R, hw,
+    #                      aL=aL, aR = aR, nflq=nflq, nphot=nphot, 
+    #                      eF=eF, kT=kT, eta=eta)
+    
 
 if __name__ == "__main__" and options["mode"]== "current":
     _slurm_rank, _slurm_size = int(options["slurm_array_rank"]), int(options["slurm_array_size"])
@@ -439,14 +476,27 @@ if __name__ == "__main__" and options["mode"]== "current":
                                 ampl=ampl
                                 )
 if __name__ == "__main__" and options["mode"]== "spectral":
+    # ================= spectral mode: DOS from G^r only =================
+    # See Rudner & Lindner 2020 for a reference on the floquet formalism
+    # (in addition to the Viljas & Cuevas paper)
+    hw0     = float(hw[0])  # single photon energy per run, since grid needs to be split in pieces of hw/nE.
     _Egrid  = options["energies"].split(",")
     _E1, _E2, nE = [float(ei) for ei in _Egrid]
-    nE = int(nE)
-    _Egrid  = np.linspace(_E1, _E2, nE)
+    nE      = int(nE)
+    NPHOT   = int(options["NPHOT"])
+    D       = 2*NPHOT + 1
+    ms      = np.arange(-NPHOT, NPHOT+1)
+    nb      = H0[kidx].shape[0]
+    Nsub    = max(1, int(round(hw0*(nE - 1)/(_E2 - _E1))))   # grid pts per photon
+    dE      = hw0/Nsub                                       # m*hw0 = m*Nsub*dE
+    off     = NPHOT*Nsub                                     # padding in grid pts
+    nE_win  = int(round((_E2 - _E1)/dE)) + 1
+    nEext   = nE_win + 2*off
+    _Egrid  = _E1 - off*dE + np.arange(nEext)*dE             # spans [E1-N*hw0, E2+N*hw0]
+
     _slurm_rank, _slurm_size = int(options["slurm_array_rank"]), int(options["slurm_array_size"])
-    IJ = np.array([(i, j, iE) for i in range(hwN) for j in range(amplN) for iE in range(nE)])
+    IJ = np.array([(j, iE) for j in range(amplN) for iE in range(nEext)])
     if _slurm_size > 1:
-        # Further round-robin-like distribution between the outer ranks
         IJ = np.array_split(IJ, _slurm_size)[_slurm_rank]
     ntasks = len(IJ)
     # --- shared task counter on rank 0 -------------------------------------
@@ -462,19 +512,15 @@ if __name__ == "__main__" and options["mode"]== "spectral":
         win.Fetch_and_op(_one, _got, 0, 0, op=MPI.SUM)
         win.Unlock(0)
         return int(_got[0])
-    # --- work loop ---------------------------------------------------------
-    NPHOT = int(options["NPHOT"])
-    gr_pt = np.zeros((nE, hwN, amplN,2*NPHOT+1),dtype=complex)
-    gl_pt = np.zeros((nE, hwN, amplN,2*NPHOT+1),dtype=complex)
-    gg_pt = np.zeros((nE, hwN, amplN,2*NPHOT+1),dtype=complex)
+    # --- work loop: one calc_gr_only per (ampl, E) --------------------------
+    gr_pt = np.zeros((nEext, amplN, D), dtype=complex)
     ndone = 0
     while True:
         t = next_task()
         if t >= ntasks:
             break
-        i, j, _iE = IJ[t]
+        j, _iE = IJ[t]
         ajL, ajR = ampl[j], ampl[j]
-        hwi =  hw[i]
         if options["nullify_L"] != "False":
             ajL = 0.0
         if options["nullify_R"] != "False":
@@ -482,37 +528,38 @@ if __name__ == "__main__" and options["mode"]== "spectral":
         par = dict(H0=H0[kidx],
                    sig_L=lambda e: SE[0].self_energy(e),
                    sig_R=lambda e: SE[1].self_energy(e),
-                   hw=hwi, kT=float(options["kT"]),
-                   aL = ajL / hwi, aR = -ajR / hwi,
+                   hw=hw0, kT=float(options["kT"]),
+                   aL = ajL / hw0, aR = -ajR / hw0,
                    nflq=NPHOT, nphot=NPHOT)
-        gr_pt[_iE,i,j], gl_pt[_iE,i,j], gg_pt[_iE,i,j] = \
-            compute_spectral(_Egrid[_iE], float(options["voltage"]), **par)
-        if np.isnan(gr_pt[_iE, i,j]).any():
-            print("Found nan in result")
-        if np.isnan(gg_pt[_iE, i,j]).any():
-            print("Found nan in result")
-        if np.isnan(gl_pt[_iE, i,j]).any():
+        Gr = calc_gr_only(_Egrid[_iE], float(options["voltage"]), **par)
+        for im, m in enumerate(ms):
+            b = m + NPHOT
+            gr_pt[_iE, j, im] = np.trace(Gr[b*nb:(b+1)*nb, b*nb:(b+1)*nb])
+        if np.isnan(gr_pt[_iE, j]).any():
             print("Found nan in result")
         ndone += 1
         print(f"rank {rank}, (srank {_slurm_rank}): local {ndone}, global {t+1}/{ntasks}", flush=True)
     win.Free()
-    # --- collect: one call, no files, no sleep ------------------------------
-    tot_gr_pt = np.zeros_like(gr_pt) if rank == 0 else None
-    tot_gl_pt = np.zeros_like(gl_pt) if rank == 0 else None
-    tot_gg_pt = np.zeros_like(gg_pt) if rank == 0 else None
-    comm.Reduce(gr_pt, tot_gr_pt, op=MPI.SUM, root=0)
-    comm.Reduce(gl_pt, tot_gl_pt, op=MPI.SUM, root=0)
-    comm.Reduce(gg_pt, tot_gg_pt, op=MPI.SUM, root=0)
+    # --- fold locally, then reduce the D-times-smaller folded array --------
+    A_local = np.zeros((nEext, amplN), dtype=complex)
+    for j in range(amplN):
+        acc = np.zeros(nEext, dtype=complex)
+        for im, m in enumerate(ms):
+            s = m*Nsub                                   # exact integer shift
+            lo, hi = max(0, s), min(nEext, nEext + s)
+            acc[lo:hi] += gr_pt[lo-s:hi-s, j, im]
+        A_local[:, j] = acc
+    A_tot = np.zeros_like(A_local) if rank == 0 else None
+    comm.Reduce(A_local, A_tot, op=MPI.SUM, root=0)
+    # --- save --------------------------------------------------------------
     if rank == 0:
-        if _slurm_size==1:
-            np.savez_compressed(options["outfile"],
-                                tot_gr_pt=tot_gr_pt,
-                                tot_gl_pt=tot_gl_pt,
-                                tot_gg_pt=tot_gg_pt,
-                                hw=hw, ampl=ampl)
+        dos = -(1/np.pi) * (A_tot/D).imag
+        sl  = slice(off, off + nE_win)
+        out = dict(dos=dos[sl], E=_Egrid[sl], hw=hw0, ampl=ampl)
+        if _slurm_size == 1:
+            np.savez_compressed(options["outfile"], **out)
         else:
-            np.savez_compressed("slurm_"+str(_slurm_rank)+"-"+str(_slurm_size)+"_"+options["outfile"],
-                                tot_gr_pt=tot_gr_pt,
-                                tot_gl_pt=tot_gl_pt,
-                                tot_gg_pt=tot_gg_pt,
-                                hw=hw, ampl=ampl)
+            _folder = options["outfile"].replace(".npz", "")
+            os.makedirs(_folder, exist_ok=True)
+            _fname  = "slurm_"+str(_slurm_rank)+"-"+str(_slurm_size)+"_"+options["outfile"]
+            np.savez_compressed(os.path.join(_folder, _fname), **out)
